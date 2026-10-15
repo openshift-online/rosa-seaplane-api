@@ -11,6 +11,10 @@ type ClusterConfiguration struct {
 	// +k8s:openapi-gen=true
 	// +seaplane:write-mode=mutable
 	Authentication *ClusterAuthentication `json:"authentication,omitempty"`
+	// image contains the configuration for internal registry.
+	// +k8s:openapi-gen=true
+	// +seaplane:write-mode=mutable
+	Image *ImageConfiguration `json:"image,omitempty"`
 	// ingress contains the configuration for ingress.
 	// +k8s:openapi-gen=true
 	// +seaplane:write-mode=mutable

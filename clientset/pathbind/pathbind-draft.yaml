@@ -134,6 +134,26 @@ resources:
               operations:
                 - create
                 - update
+            - path: spec.hostedCluster.configuration.image.allowedRegistriesForImport
+              goType: array(object)
+              operations:
+                - create
+                - update
+            - path: spec.hostedCluster.configuration.image.registrySources.allowedRegistries
+              goType: array(string)
+              operations:
+                - create
+                - update
+            - path: spec.hostedCluster.configuration.image.registrySources.blockedRegistries
+              goType: array(string)
+              operations:
+                - create
+                - update
+            - path: spec.hostedCluster.configuration.image.registrySources.insecureRegistries
+              goType: array(string)
+              operations:
+                - create
+                - update
             - path: spec.hostedCluster.configuration.ingress.componentRoutes
               goType: array(object)
               operations:
@@ -318,6 +338,11 @@ resources:
               operations:
                 - create
             - path: spec.properties
+              goType: map
+              operations:
+                - create
+                - update
+            - path: spec.registryAdditionalTrustedCA
               goType: map
               operations:
                 - create

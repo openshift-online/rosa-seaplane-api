@@ -1919,3 +1919,48 @@ func TestClusterHandler_Create_NetworkCIDRValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestClusterHandler_Update_ValidatesMergedRegistryConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, policy, body string
+		status             int
+	}{
+		{"valid registry update", lifecyclePermit, `{"spec":{"hostedCluster":{"configuration":{"image":{"registrySources":{"insecureRegistries":["internal.example.com:5000"]}}}}}}`, http.StatusOK},
+		{"reject combined allowed and blocked registries", lifecyclePermit, `{"spec":{"hostedCluster":{"configuration":{"image":{"registrySources":{"allowedRegistries":["quay.io"]}}}}}}`, http.StatusUnprocessableEntity},
+		{"reject invalid registry CA", lifecyclePermit, `{"spec":{"registryAdditionalTrustedCA":{"registry.example.com":"invalid"}}}`, http.StatusUnprocessableEntity},
+		{"authorize before registry validation", clusterReadPermit, `{"spec":{"registryAdditionalTrustedCA":{"registry.example.com":"invalid"}}}`, http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := testClusterCR("cluster-123", "test-cluster", testAccountID)
+			if err := json.Unmarshal([]byte(`{"image":{"registrySources":{"blockedRegistries":["blocked.example.com"]}}}`), &cluster.Spec.HostedCluster.Configuration); err != nil {
+				t.Fatal(err)
+			}
+			fc := fake.NewClientBuilder().WithScheme(newTestScheme()).WithObjects(cluster).Build()
+			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+			handler := NewClusterHandler(seaplanedb.NewClientFrom(fc, logger), "", 0, clusterAuthorizer(t, tc.policy), logger)
+			req := httptest.NewRequest(http.MethodPut, "/api/v0/clusters/test-cluster", strings.NewReader(tc.body))
+			req = mux.SetURLVars(req.WithContext(testContext(testAccountID)), map[string]string{"id": "test-cluster"})
+			w := httptest.NewRecorder()
+			handler.Update(w, req)
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.status, w.Body.String())
+			}
+			stored, err := handler.db.GetCluster(testContext(testAccountID), "test-cluster")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.status == http.StatusOK {
+				image := stored.Spec.HostedCluster.Configuration.Image
+				if len(image.RegistrySources.InsecureRegistries) != 1 || len(image.RegistrySources.BlockedRegistries) != 1 {
+					t.Fatalf("registry update lost merged configuration: %#v", image)
+				}
+			} else {
+				before, _ := json.Marshal(cluster.Spec)
+				after, _ := json.Marshal(stored.Spec)
+				if !bytes.Equal(before, after) {
+					t.Fatal("rejected registry update modified stored spec")
+				}
+			}
+		})
+	}
+}

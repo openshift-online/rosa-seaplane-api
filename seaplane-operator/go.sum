@@ -157,8 +157,8 @@ github.com/openshift-online/rosa-seaplane-kube-applier v1.0.3 h1:Zi8vf1tdSzkUrbe
 github.com/openshift-online/rosa-seaplane-kube-applier v1.0.3/go.mod h1:Y/l0f1LLaTcGgeLQyrdGqw3oKFrpVTPvQcxac/C0S4U=
 github.com/openshift-online/rosa-seaplane-kube-applier/seaplane-dynamo v1.0.3 h1:IOsCZzNRdrXGuwPRum/wOezIiBIM1g9UxLMeXgplRE8=
 github.com/openshift-online/rosa-seaplane-kube-applier/seaplane-dynamo v1.0.3/go.mod h1:qeDgYlkHgsPU/EBXApDEb7dWXi+tf66s+CBcu03Lqxw=
-github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80 h1:r0S/yoZAI0iWo1JvoIijaIgWGWf/izg4WiV7Wrtz16k=
-github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80/go.mod h1:pyVjK0nZ4sRs4fuQVQ4rubsJdahI1PB94LnQ8sGdvxo=
+github.com/openshift/api v0.0.0-20260930220732-5588d747a72b h1:GBKpMg/gdxTOXyemaxtn4IoO+MeJJdRij2xP/d0kXmg=
+github.com/openshift/api v0.0.0-20260930220732-5588d747a72b/go.mod h1:2oI3aXQFDjjl7l4xA9ZPSkB+l+lyfWLg7P2sWg9yEvM=
 github.com/openshift/hypershift/api v0.0.0-20260625052409-9acec4759a16 h1:QDSh3vkKYq7Fn9utYGlAJadkTdyaRl9IY7Cr6cNDAow=
 github.com/openshift/hypershift/api v0.0.0-20260625052409-9acec4759a16/go.mod h1:Z3lkj5pFqY+KTl3Do9gXdEZdKWLnkUTSDShLD1HE0CM=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=

@@ -1112,6 +1112,16 @@ components:
               description: Properties are arbitrary key-value pairs for customer metadata.
               maxProperties: 100
               type: object
+          registryAdditionalTrustedCA:
+              additionalProperties:
+                  type: string
+              description: |-
+                  RegistryAdditionalTrustedCA is a map of registry hostname to PEM-encoded CA
+                  certificates that should be trusted when pulling images from those registries.
+                  The operator materializes this into a ConfigMap and references it in the
+                  HostedCluster's ImageSpec.
+              maxProperties: 256
+              type: object
           tags:
               additionalProperties:
                   type: string
@@ -2338,6 +2348,62 @@ components:
                                       x-kubernetes-validations:
                                           - message: type must be OIDC when oidcProviders are configured
                                             rule: '!has(self.oidcProviders) || size(self.oidcProviders) == 0 || self.type == ''OIDC'''
+                                  image:
+                                      description: image contains the configuration for internal registry.
+                                      properties:
+                                          allowedRegistriesForImport:
+                                              description: |-
+                                                  allowedRegistriesForImport limits the container image registries from which
+                                                  normal users may import images.
+                                              items:
+                                                  description: RegistryLocation contains configuration for a registry that may be used for image imports.
+                                                  properties:
+                                                      domainName:
+                                                          description: domainName is the registry hostname.
+                                                          maxLength: 255
+                                                          minLength: 1
+                                                          type: string
+                                                      insecure:
+                                                          description: |-
+                                                              insecure indicates whether the registry is accessed over HTTP or with
+                                                              unverified TLS certificates.
+                                                          type: boolean
+                                                  required:
+                                                      - domainName
+                                                  type: object
+                                              maxItems: 256
+                                              type: array
+                                              x-kubernetes-list-type: atomic
+                                          registrySources:
+                                              description: registrySources contains configuration for external registries.
+                                              properties:
+                                                  allowedRegistries:
+                                                      description: |-
+                                                          allowedRegistries: when set, only these registries are permitted to pull images.
+                                                          All other registries are blocked.
+                                                      items:
+                                                          type: string
+                                                      maxItems: 256
+                                                      type: array
+                                                      x-kubernetes-list-type: set
+                                                  blockedRegistries:
+                                                      description: 'blockedRegistries: registries for which image pull should be blocked.'
+                                                      items:
+                                                          type: string
+                                                      maxItems: 256
+                                                      type: array
+                                                      x-kubernetes-list-type: set
+                                                  insecureRegistries:
+                                                      description: |-
+                                                          insecureRegistries: registries for which image pull should allow HTTP or
+                                                          skip TLS certificate verification.
+                                                      items:
+                                                          type: string
+                                                      maxItems: 256
+                                                      type: array
+                                                      x-kubernetes-list-type: set
+                                              type: object
+                                      type: object
                                   ingress:
                                       description: ingress contains the configuration for ingress.
                                       properties:
@@ -4117,6 +4183,16 @@ components:
                       description: Properties are arbitrary key-value pairs for customer metadata.
                       maxProperties: 100
                       type: object
+                  registryAdditionalTrustedCA:
+                      additionalProperties:
+                          type: string
+                      description: |-
+                          RegistryAdditionalTrustedCA is a map of registry hostname to PEM-encoded CA
+                          certificates that should be trusted when pulling images from those registries.
+                          The operator materializes this into a ConfigMap and references it in the
+                          HostedCluster's ImageSpec.
+                      maxProperties: 256
+                      type: object
                   tags:
                       additionalProperties:
                           type: string
@@ -5414,6 +5490,62 @@ components:
                                                   x-kubernetes-validations:
                                                       - message: type must be OIDC when oidcProviders are configured
                                                         rule: '!has(self.oidcProviders) || size(self.oidcProviders) == 0 || self.type == ''OIDC'''
+                                              image:
+                                                  description: image contains the configuration for internal registry.
+                                                  properties:
+                                                      allowedRegistriesForImport:
+                                                          description: |-
+                                                              allowedRegistriesForImport limits the container image registries from which
+                                                              normal users may import images.
+                                                          items:
+                                                              description: RegistryLocation contains configuration for a registry that may be used for image imports.
+                                                              properties:
+                                                                  domainName:
+                                                                      description: domainName is the registry hostname.
+                                                                      maxLength: 255
+                                                                      minLength: 1
+                                                                      type: string
+                                                                  insecure:
+                                                                      description: |-
+                                                                          insecure indicates whether the registry is accessed over HTTP or with
+                                                                          unverified TLS certificates.
+                                                                      type: boolean
+                                                              required:
+                                                                  - domainName
+                                                              type: object
+                                                          maxItems: 256
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      registrySources:
+                                                          description: registrySources contains configuration for external registries.
+                                                          properties:
+                                                              allowedRegistries:
+                                                                  description: |-
+                                                                      allowedRegistries: when set, only these registries are permitted to pull images.
+                                                                      All other registries are blocked.
+                                                                  items:
+                                                                      type: string
+                                                                  maxItems: 256
+                                                                  type: array
+                                                                  x-kubernetes-list-type: set
+                                                              blockedRegistries:
+                                                                  description: 'blockedRegistries: registries for which image pull should be blocked.'
+                                                                  items:
+                                                                      type: string
+                                                                  maxItems: 256
+                                                                  type: array
+                                                                  x-kubernetes-list-type: set
+                                                              insecureRegistries:
+                                                                  description: |-
+                                                                      insecureRegistries: registries for which image pull should allow HTTP or
+                                                                      skip TLS certificate verification.
+                                                                  items:
+                                                                      type: string
+                                                                  maxItems: 256
+                                                                  type: array
+                                                                  x-kubernetes-list-type: set
+                                                          type: object
+                                                  type: object
                                               ingress:
                                                   description: ingress contains the configuration for ingress.
                                                   properties:
@@ -7192,6 +7324,16 @@ components:
                                       type: string
                                   description: Properties are arbitrary key-value pairs for customer metadata.
                                   maxProperties: 100
+                                  type: object
+                              registryAdditionalTrustedCA:
+                                  additionalProperties:
+                                      type: string
+                                  description: |-
+                                      RegistryAdditionalTrustedCA is a map of registry hostname to PEM-encoded CA
+                                      certificates that should be trusted when pulling images from those registries.
+                                      The operator materializes this into a ConfigMap and references it in the
+                                      HostedCluster's ImageSpec.
+                                  maxProperties: 256
                                   type: object
                               tags:
                                   additionalProperties:
@@ -9670,6 +9812,62 @@ components:
               x-kubernetes-validations:
                   - message: type must be OIDC when oidcProviders are configured
                     rule: '!has(self.oidcProviders) || size(self.oidcProviders) == 0 || self.type == ''OIDC'''
+          image:
+              description: image contains the configuration for internal registry.
+              properties:
+                  allowedRegistriesForImport:
+                      description: |-
+                          allowedRegistriesForImport limits the container image registries from which
+                          normal users may import images.
+                      items:
+                          description: RegistryLocation contains configuration for a registry that may be used for image imports.
+                          properties:
+                              domainName:
+                                  description: domainName is the registry hostname.
+                                  maxLength: 255
+                                  minLength: 1
+                                  type: string
+                              insecure:
+                                  description: |-
+                                      insecure indicates whether the registry is accessed over HTTP or with
+                                      unverified TLS certificates.
+                                  type: boolean
+                          required:
+                              - domainName
+                          type: object
+                      maxItems: 256
+                      type: array
+                      x-kubernetes-list-type: atomic
+                  registrySources:
+                      description: registrySources contains configuration for external registries.
+                      properties:
+                          allowedRegistries:
+                              description: |-
+                                  allowedRegistries: when set, only these registries are permitted to pull images.
+                                  All other registries are blocked.
+                              items:
+                                  type: string
+                              maxItems: 256
+                              type: array
+                              x-kubernetes-list-type: set
+                          blockedRegistries:
+                              description: 'blockedRegistries: registries for which image pull should be blocked.'
+                              items:
+                                  type: string
+                              maxItems: 256
+                              type: array
+                              x-kubernetes-list-type: set
+                          insecureRegistries:
+                              description: |-
+                                  insecureRegistries: registries for which image pull should allow HTTP or
+                                  skip TLS certificate verification.
+                              items:
+                                  type: string
+                              maxItems: 256
+                              type: array
+                              x-kubernetes-list-type: set
+                      type: object
+              type: object
           ingress:
               description: ingress contains the configuration for ingress.
               properties:
