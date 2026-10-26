@@ -1,6 +1,6 @@
 module github.com/openshift-online/rosa-seaplane-api/seaplane-operator
 
-go 1.26.3
+go 1.27
 
 replace (
 	github.com/openshift-online/rosa-seaplane-api/api => ../api

@@ -1,6 +1,6 @@
 module github.com/openshift-online/rosa-seaplane-api/clientset
 
-go 1.26.5
+go 1.27
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.43.7
@@ -58,7 +58,7 @@ require (
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.3 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
