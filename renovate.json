@@ -101,13 +101,9 @@
       ]
     },
     {
-      "description": "Sync all module go.mod/go.sum after Go updates (ci/prow/verify)",
+      "description": "Tidy updated Go modules and their local dependents (make verify-mod)",
       "matchManagers": ["gomod"],
-      "postUpgradeTasks": {
-        "commands": ["make mod-tidy"],
-        "executionMode": "branch",
-        "fileFilters": ["**/go.mod", "**/go.sum"]
-      }
+      "postUpdateOptions": ["gomodTidyAll"]
     },
     {
       "description": "Batch + automerge Konflux Tekton reference updates when Prow + Konflux pass",
