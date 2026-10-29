@@ -1,5 +1,14 @@
 # Changes
 
+## 0.1.26 Oct 29 2026
+
+- feat(api): support HCP custom DNS domains
+- ROSAENG-67495: Authorize customer label operations
+- ROSAENG-67492: Simplify authorization
+- ROSAENG-67492: Authorize resource operations
+- Reapply "ROSAENG-67489: Remove legacy authz service"
+
+
 ## 0.1.25 Oct 23 2026
 
 - ROSAENG-68195 | refactor: mirror awsplatform spec to curate fields
