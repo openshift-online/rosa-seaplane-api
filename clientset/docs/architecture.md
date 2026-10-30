@@ -104,12 +104,12 @@ func Install(scheme *runtime.Scheme) {
 
 The platform API differs from a standard Kubernetes API in three ways that require hand-written code:
 
-| Difference                                               | Solution                                                                                                                                  |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Requests are signed with AWS SigV4                       | `transport/sigv4.go` — custom RoundTripper                                                                                                |
-| Account identity and storage namespace are separate       | `AccountID` in SDK config supplies the signed `X-Amz-Account-Id`; seaplane-api derives `account-<accountID>` and sets the stored namespace, while an optional request namespace is validated |
-| Pagination uses `offset` rather than Kubernetes `continue` | `transport/bridge.go` — query adapter                                                                                                      |
-| NodePool parent and account scope differ                  | `NodePools()` hides account namespace plumbing; the `<cluster>.<child>` prefix resolves the parent, while its UID is stored in the server-set ownerReference and label |
+| Difference                                                 | Solution                                                                                                                                                                                     |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Requests are signed with AWS SigV4                         | `transport/sigv4.go` — custom RoundTripper                                                                                                                                                   |
+| Account identity and storage namespace are separate        | `AccountID` in SDK config supplies the signed `X-Amz-Account-Id`; seaplane-api derives `account-<accountID>` and sets the stored namespace, while an optional request namespace is validated |
+| Pagination uses `offset` rather than Kubernetes `continue` | `transport/bridge.go` — query adapter                                                                                                                                                        |
+| NodePool parent and account scope differ                   | `NodePools()` hides account namespace plumbing; the `<cluster>.<child>` prefix resolves the parent, while its UID is stored in the server-set ownerReference and label                       |
 
 ### `rest/config.go` — SDK configuration
 

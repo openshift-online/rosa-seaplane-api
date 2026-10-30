@@ -27,7 +27,7 @@ graph LR
 
 ### Failure Modes & Recovery
 
-| Dimension                               | Seaplane-API (CLM)                                                                                                                                              | Direct-to-Postgres                                                                                                                                                                           |
+| Dimension                               | Seaplane-API (CLM)                                                                                                                                                | Direct-to-Postgres                                                                                                                                                                           |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Component count in write path**       | 3-4 (API caller -> API server -> GORM -> PG)                                                                                                                      | 2 (controller -> PG, single atomic txn)                                                                                                                                                      |
 | **Component count in reconcile loop**   | 5+ (Sentinel polls API -> CloudEvent -> Adapter fetches full state from API -> Adapter acts -> Adapter PUTs status to API)                                        | 2 (controller watches PG -> controller acts -> controller writes PG)                                                                                                                         |
@@ -61,7 +61,7 @@ The direct-to-Postgres design is significantly more reliable because:
 
 ### Write Path
 
-| Metric                    | Seaplane-API (CLM)                                                                                                | Direct-to-Postgres                                                                                                                                                                  |
+| Metric                    | Seaplane-API (CLM)                                                                                                  | Direct-to-Postgres                                                                                                                                                                  |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Write hops**            | HTTP request -> JSON parse -> GORM -> SQL -> PG                                                                     | Single stored procedure call (`pgctl_write()`: suppress + counter + upsert) + external doorbell                                                                                     |
 | **Latency (write)**       | HTTP overhead + GORM reflection + connection pool wait. 30s request timeout under pressure; 500s on pool exhaustion | p50=3.0ms, p99=4.3ms (RDS, small payloads); p50=6.3ms, p99=29ms (Aurora I/O Optimized, realistic 15-20KB payloads). Measured with autocommit stored procedure on db.m6g/r6g.8xlarge |
@@ -71,7 +71,7 @@ The direct-to-Postgres design is significantly more reliable because:
 
 ### Read Path
 
-| Metric                   | Seaplane-API (CLM)                                                                                                                         | Direct-to-Postgres                                                                                                                                       |
+| Metric                   | Seaplane-API (CLM)                                                                                                                           | Direct-to-Postgres                                                                                                                                       |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Read model**           | HTTP GET -> GORM query (no transaction). Status conditions synthesized per-request from `adapter_statuses` table                             | Direct PG read (~1-5ms). Or controller-runtime cache fed by watch stream (~0ms, up to 5s stale)                                                          |
 | **List performance**     | GORM with pagination. Count and items are separate queries (no snapshot consistency)                                                         | Single `REPEATABLE READ` txn: counters + filtered scan (excludes fully-deleted tombstones, includes dying objects with finalizers)                       |
@@ -80,7 +80,7 @@ The direct-to-Postgres design is significantly more reliable because:
 
 ### End-to-End Reconciliation Latency
 
-| Phase                           | Seaplane-API (CLM)                                                                                                     | Direct-to-Postgres                                                |
+| Phase                           | Seaplane-API (CLM)                                                                                                       | Direct-to-Postgres                                                |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
 | **Spec change -> detection**    | Sentinel poll interval (configurable, likely seconds to minutes)                                                         | Doorbell: ~100ms typical; poll fallback: <=5s                     |
 | **Detection -> adapter action** | CloudEvent publish + delivery + Adapter GET from API                                                                     | Controller reconcile loop (already watching)                      |
@@ -120,15 +120,15 @@ The CLM pattern isn't without advantages:
 
 ## 4. Summary
 
-| Dimension                                 | Winner               | Magnitude                                                 |
-| ----------------------------------------- | -------------------- | --------------------------------------------------------- |
-| **Reliability -- data correctness**       | Direct-to-Postgres   | Large. Formal invariants vs. convention-based             |
-| **Reliability -- failure recovery**       | Direct-to-Postgres   | Large. Fewer components, zero-loss failover, self-healing |
-| **Reliability -- split-brain protection** | Direct-to-Postgres   | Critical. CLM has none                                    |
-| **Performance -- write latency**          | Direct-to-Postgres   | ~5-10x (tens of ms vs. hundreds)                          |
-| **Performance -- event delivery**         | Direct-to-Postgres   | ~10-100x (100ms vs. seconds-minutes)                      |
-| **Performance -- connection efficiency**  | Direct-to-Postgres   | ~5-10x fewer connections                                  |
-| **Performance -- no-op suppression**      | Direct-to-Postgres   | CLM has no equivalent                                     |
+| Dimension                                 | Winner             | Magnitude                                                 |
+| ----------------------------------------- | ------------------ | --------------------------------------------------------- |
+| **Reliability -- data correctness**       | Direct-to-Postgres | Large. Formal invariants vs. convention-based             |
+| **Reliability -- failure recovery**       | Direct-to-Postgres | Large. Fewer components, zero-loss failover, self-healing |
+| **Reliability -- split-brain protection** | Direct-to-Postgres | Critical. CLM has none                                    |
+| **Performance -- write latency**          | Direct-to-Postgres | ~5-10x (tens of ms vs. hundreds)                          |
+| **Performance -- event delivery**         | Direct-to-Postgres | ~10-100x (100ms vs. seconds-minutes)                      |
+| **Performance -- connection efficiency**  | Direct-to-Postgres | ~5-10x fewer connections                                  |
+| **Performance -- no-op suppression**      | Direct-to-Postgres | CLM has no equivalent                                     |
 | **Operational simplicity**                | CLM (Seaplane-API) | Moderate. Standard REST patterns                          |
 | **Consumer accessibility**                | CLM (Seaplane-API) | Moderate. HTTP + curl vs. pgx                             |
 | **Ecosystem maturity**                    | CLM (Seaplane-API) | Significant. Already built and deployed                   |

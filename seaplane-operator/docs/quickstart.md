@@ -73,12 +73,12 @@ helm install seaplane-operator charts/seaplane-operator \
 
 ### Optional Values
 
-| Value                        | Default                                        | Description                        |
-| ---------------------------- | ---------------------------------------------- | ---------------------------------- |
+| Value                        | Default                                      | Description                        |
+| ---------------------------- | -------------------------------------------- | ---------------------------------- |
 | `image.repository`           | `quay.io/cbusse_openshift/seaplane-operator` | Container image                    |
-| `image.tag`                  | `latest`                                       | Image tag                          |
-| `serviceAccount.annotations` | `{}`                                           | SA annotations (set IAM role ARN)  |
-| `replicaCount`               | `1`                                            | Number of replicas (= shard count) |
+| `image.tag`                  | `latest`                                     | Image tag                          |
+| `serviceAccount.annotations` | `{}`                                         | SA annotations (set IAM role ARN)  |
+| `replicaCount`               | `1`                                          | Number of replicas (= shard count) |
 
 ## 5. Create a ManagementCluster
 

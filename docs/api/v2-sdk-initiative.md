@@ -121,14 +121,14 @@ The minimum surface the v2 SDK must cover:
 The v1 SDK exposes 12 service areas through the OCM API. The Seaplane Platform API replaces a subset of these with a smaller, focused surface.
 The v2 SDK only needs to cover the Seaplane equivalents.
 
-| V1 OCM Service            | V1 Path                    | V2 Seaplane Equivalent                                             | Phase     |
-| ------------------------- | -------------------------- | -------------------------------------------------------------------- | --------- |
-| ClustersMgmt (clusters)   | `/api/clusters_mgmt`       | **Cluster** CRD                                                      | Immediate |
-| ClustersMgmt (node pools) | `/api/clusters_mgmt`       | **NodePool** CRD                                                     | Immediate |
+| V1 OCM Service            | V1 Path                    | V2 Seaplane Equivalent                                                             | Phase     |
+| ------------------------- | -------------------------- | ---------------------------------------------------------------------------------- | --------- |
+| ClustersMgmt (clusters)   | `/api/clusters_mgmt`       | **Cluster** CRD                                                                    | Immediate |
+| ClustersMgmt (node pools) | `/api/clusters_mgmt`       | **NodePool** CRD                                                                   | Immediate |
 | AccountsMgmt              | `/api/accounts_mgmt`       | Authz: accounts, policies, attachments (see [authz-design.md](../authz-design.md)) | Future    |
 | Authorizations            | `/api/authorizations`      | Authz: check endpoint (see [authz-design.md](../authz-design.md))                  | Future    |
-| AccessTransparency        | `/api/access_transparency` | TBD — likely needed - SRE flows                                      | Future    |
-| ServiceLogs               | `/api/service_logs`        | Per-cluster logs — mechanism TBD                                     | Future    |
+| AccessTransparency        | `/api/access_transparency` | TBD — likely needed - SRE flows                                                    | Future    |
+| ServiceLogs               | `/api/service_logs`        | Per-cluster logs — mechanism TBD                                                   | Future    |
 
 The v2 SDK architecture must accommodate adding new resource types (authz, logs, etc.) as the Platform API grows, but the initial implementation covers only Cluster and NodePool.
 
@@ -228,11 +228,11 @@ Because the generated core already produces the typed `Spec`/`Status` models fro
 
 ### Target Clients
 
-| Client                                           | Priority | Rationale                                                              |
-| ------------------------------------------------ | -------- | ---------------------------------------------------------------------- |
+| Client                                         | Priority | Rationale                                                              |
+| ---------------------------------------------- | -------- | ---------------------------------------------------------------------- |
 | **rosa CLI** (`rosa-seaplane-cli` / `rosactl`) | P0       | Primary user-facing tool, exercises full lifecycle                     |
-| **terraform-provider-rhcs**                      | P1       | Key IaC consumer, many enterprise customers depend on it               |
-| **CAPA** (Cluster API Provider AWS)              | P2       | Lower priority for initial initiative; evaluate after rosa + terraform |
+| **terraform-provider-rhcs**                    | P1       | Key IaC consumer, many enterprise customers depend on it               |
+| **CAPA** (Cluster API Provider AWS)            | P2       | Lower priority for initial initiative; evaluate after rosa + terraform |
 
 ### In Scope
 
@@ -285,19 +285,19 @@ These tests in `test/e2e-cli/` exercise the full lifecycle through `rosactl`:
 
 The `test/e2e-api/` tests exercise the Platform API directly:
 
-| Test file           | What it exercises      |
-| ------------------- | ---------------------- |
-| `e2e_test.go`       | Basic API connectivity |
+| Test file     | What it exercises      |
+| ------------- | ---------------------- |
+| `e2e_test.go` | Basic API connectivity |
 
 ### Acceptance Criteria for V2 SDK
 
 Each test suite below must pass against **both** the v1 SDK (ocm-sdk-go, baseline) and the v2 SDK (`clientset/`). The v1 run establishes the expected baseline; the v2 run proves parity. The initiative is not complete until both columns are green and behavioral parity is validated.
 
-| #   | Test suite                                                                                                                                                                           | v1 SDK (baseline)                                                           | v2 SDK                                                                            |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| 1   | **Rosa CLI HCP tests** (`hcp_cluster_test.go`, `hcp_machine_pool_test.go`): create HCP cluster, CRUD node pools, delete cluster                                                      | Must pass against ocm-sdk-go to establish baseline behavior                 | Must pass against `clientset/` with identical observable outcomes                 |
+| #   | Test suite                                                                                                                                                                         | v1 SDK (baseline)                                                           | v2 SDK                                                                            |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1   | **Rosa CLI HCP tests** (`hcp_cluster_test.go`, `hcp_machine_pool_test.go`): create HCP cluster, CRUD node pools, delete cluster                                                    | Must pass against ocm-sdk-go to establish baseline behavior                 | Must pass against `clientset/` with identical observable outcomes                 |
 | 2   | **Seaplane CLI lifecycle** (`test/e2e-cli/cluster_test.go` labels: `setup`, `create`, `monitor`, `cleanup`): full VPC → IAM → cluster → node pool → teardown cycle through rosactl | Must pass against ocm-sdk-go to establish baseline behavior                 | Must pass against `clientset/` with identical observable outcomes                 |
-| 3   | **Terraform basic lifecycle**: `terraform apply` + `terraform destroy` of an HCP cluster with node pools                                                                             | Must pass with provider backed by ocm-sdk-go to establish baseline behavior | Must pass with provider backed by `clientset/` with identical observable outcomes |
+| 3   | **Terraform basic lifecycle**: `terraform apply` + `terraform destroy` of an HCP cluster with node pools                                                                           | Must pass with provider backed by ocm-sdk-go to establish baseline behavior | Must pass with provider backed by `clientset/` with identical observable outcomes |
 
 **Behavioral-parity validation**: For each test suite, the v1 and v2 runs must produce the same observable outcomes — identical resource states, API response codes, and CLI/Terraform output (excluding endpoint URLs and auth-mechanism differences). Any behavioral divergence must be documented and justified before the initiative is declared complete.
 
