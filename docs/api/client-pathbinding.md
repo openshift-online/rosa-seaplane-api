@@ -650,21 +650,21 @@ func (h *seaplaneClusterCreate) Prompt(ctx context.Context, r *rosa.Runtime, cmd
 
 ### Client expectations summary
 
-| What                                             | Automatic                          | Manual                          |
-| ------------------------------------------------ | ---------------------------------- | ------------------------------- |
+| What                                             | Automatic                        | Manual                          |
+| ------------------------------------------------ | -------------------------------- | ------------------------------- |
 | New struct field in `ClusterCreateInput`         | ✓ after `make generate-seaplane` |                                 |
-| New cobra flag with auto-derived name            | ✓                                  |                                 |
-| Interactive prompt for `required: true` fields   | ✓ via `GeneratedXxxPrompt`         |                                 |
-| Flag name / description customization            |                                    | ✓ `pathbind-overrides.yaml`     |
-| Mark field as required                           |                                    | ✓ `required: true` in overrides |
-| Suppress a field from exposure                   |                                    | ✓ `flag: ""` in overrides       |
-| Input validation                                 |                                    | ✓ `PreRequest`                  |
-| Field derived from another input                 |                                    | ✓ `PreRequest`                  |
-| Custom interactive prompting for optional fields |                                    | ✓ override `Prompt`             |
-| Enum constant or computed struct                 |                                    | ✓ `PostExpand`                  |
-| Help section membership (Platform API vs Shared) | ✓ via annotation                   |                                 |
-| Dependency bump                                  |                                    | ✓ `go get` + `go mod vendor`    |
-| Consumer code regeneration                       |                                    | ✓ `make generate-seaplane`    |
+| New cobra flag with auto-derived name            | ✓                                |                                 |
+| Interactive prompt for `required: true` fields   | ✓ via `GeneratedXxxPrompt`       |                                 |
+| Flag name / description customization            |                                  | ✓ `pathbind-overrides.yaml`     |
+| Mark field as required                           |                                  | ✓ `required: true` in overrides |
+| Suppress a field from exposure                   |                                  | ✓ `flag: ""` in overrides       |
+| Input validation                                 |                                  | ✓ `PreRequest`                  |
+| Field derived from another input                 |                                  | ✓ `PreRequest`                  |
+| Custom interactive prompting for optional fields |                                  | ✓ override `Prompt`             |
+| Enum constant or computed struct                 |                                  | ✓ `PostExpand`                  |
+| Help section membership (Platform API vs Shared) | ✓ via annotation                 |                                 |
+| Dependency bump                                  |                                  | ✓ `go get` + `go mod vendor`    |
+| Consumer code regeneration                       |                                  | ✓ `make generate-seaplane`      |
 
 ---
 
