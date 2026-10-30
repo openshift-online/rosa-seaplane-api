@@ -80,9 +80,9 @@ var mirrorTypeMappings = []MirrorTypeMapping{
 	// Add more mirror types here as needed when types diverge between CRD and REST
 	// Example:
 	// {
-	//     FieldName:          "Kubelet",
-	//     SeaplaneType:     "v1alpha1.KubeletConfig",
-	//     HyperShiftType:     "v1beta1.KubeletConfig",
+	//     FieldName:          "MachineConfig",
+	//     SeaplaneType:     "v1alpha1.MachineConfigSpec",
+	//     HyperShiftType:     "v1beta1.MachineConfigSpec",
 	//     ConversionStrategy: "json-roundtrip",
 	// },
 }

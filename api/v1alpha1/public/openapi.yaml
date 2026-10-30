@@ -2386,49 +2386,6 @@ components:
                                                   - name
                                               x-kubernetes-list-type: map
                                       type: object
-                                  kubelet:
-                                      description: kubelet contains the configuration for kubelet on nodes.
-                                      properties:
-                                          containerLogMaxFiles:
-                                              format: int32
-                                              type: integer
-                                          containerLogMaxSize:
-                                              type: string
-                                          imageGCHighThresholdPercent:
-                                              format: int32
-                                              type: integer
-                                          imageGCLowThresholdPercent:
-                                              format: int32
-                                              type: integer
-                                          imageMinimumGCAge:
-                                              type: string
-                                          kubeReserved:
-                                              additionalProperties:
-                                                  type: string
-                                              maxProperties: 32
-                                              type: object
-                                          maxPods:
-                                              format: int32
-                                              type: integer
-                                          podPidsLimit:
-                                              format: int64
-                                              type: integer
-                                          registryBurst:
-                                              format: int32
-                                              type: integer
-                                          registryPullQPS:
-                                              format: int32
-                                              type: integer
-                                          serializeImagePulls:
-                                              type: boolean
-                                          streamingConnectionIdleTimeout:
-                                              type: string
-                                          systemReserved:
-                                              additionalProperties:
-                                                  type: string
-                                              maxProperties: 32
-                                              type: object
-                                      type: object
                                   machineConfig:
                                       description: machineConfig contains the configuration for machine-level settings.
                                       properties:
@@ -5504,49 +5461,6 @@ components:
                                                               - namespace
                                                               - name
                                                           x-kubernetes-list-type: map
-                                                  type: object
-                                              kubelet:
-                                                  description: kubelet contains the configuration for kubelet on nodes.
-                                                  properties:
-                                                      containerLogMaxFiles:
-                                                          format: int32
-                                                          type: integer
-                                                      containerLogMaxSize:
-                                                          type: string
-                                                      imageGCHighThresholdPercent:
-                                                          format: int32
-                                                          type: integer
-                                                      imageGCLowThresholdPercent:
-                                                          format: int32
-                                                          type: integer
-                                                      imageMinimumGCAge:
-                                                          type: string
-                                                      kubeReserved:
-                                                          additionalProperties:
-                                                              type: string
-                                                          maxProperties: 32
-                                                          type: object
-                                                      maxPods:
-                                                          format: int32
-                                                          type: integer
-                                                      podPidsLimit:
-                                                          format: int64
-                                                          type: integer
-                                                      registryBurst:
-                                                          format: int32
-                                                          type: integer
-                                                      registryPullQPS:
-                                                          format: int32
-                                                          type: integer
-                                                      serializeImagePulls:
-                                                          type: boolean
-                                                      streamingConnectionIdleTimeout:
-                                                          type: string
-                                                      systemReserved:
-                                                          additionalProperties:
-                                                              type: string
-                                                          maxProperties: 32
-                                                          type: object
                                                   type: object
                                               machineConfig:
                                                   description: machineConfig contains the configuration for machine-level settings.
@@ -9262,7 +9176,7 @@ components:
       description: |-
           ClusterConfiguration specifies configuration for individual OCP components in the cluster.
           This is a Seaplane-owned mirror of hypershiftv1beta1.ClusterConfiguration that allows
-          us to add granular markers to nested fields like kubelet config.
+          us to add granular markers to nested fields like machineConfig.
       properties:
           authentication:
               description: authentication contains configuration for the cluster authentication.
@@ -9804,8 +9718,6 @@ components:
                           - name
                       x-kubernetes-list-type: map
               type: object
-          kubelet:
-              $ref: '#/components/schemas/KubeletConfig'
           machineConfig:
               $ref: '#/components/schemas/MachineConfigSpec'
           proxy:
@@ -9837,49 +9749,6 @@ components:
                           - HighNodeUtilization
                           - NoScoring
                       type: string
-              type: object
-      type: object
-    KubeletConfig:
-      description: KubeletConfig specifies kubelet configuration with granular markers for customer control.
-      properties:
-          containerLogMaxFiles:
-              format: int32
-              type: integer
-          containerLogMaxSize:
-              type: string
-          imageGCHighThresholdPercent:
-              format: int32
-              type: integer
-          imageGCLowThresholdPercent:
-              format: int32
-              type: integer
-          imageMinimumGCAge:
-              type: string
-          kubeReserved:
-              additionalProperties:
-                  type: string
-              maxProperties: 32
-              type: object
-          maxPods:
-              format: int32
-              type: integer
-          podPidsLimit:
-              format: int64
-              type: integer
-          registryBurst:
-              format: int32
-              type: integer
-          registryPullQPS:
-              format: int32
-              type: integer
-          serializeImagePulls:
-              type: boolean
-          streamingConnectionIdleTimeout:
-              type: string
-          systemReserved:
-              additionalProperties:
-                  type: string
-              maxProperties: 32
               type: object
       type: object
     MachineConfigSpec:

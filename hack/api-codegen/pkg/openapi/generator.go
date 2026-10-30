@@ -176,7 +176,6 @@ var typeToRegistryPrefix = map[string]string{
 	"NodePoolPlatform":             "",
 	"AWSPlatformSpec":              "aws",
 	"AWSNodePoolPlatform":          "aws",
-	"KubeletConfig":                "kubelet",
 	"MachineConfigSpec":            "machineConfig",
 }
 
@@ -330,7 +329,7 @@ var refTargets = map[string]map[string]string{
 	"NodePoolSpec":                 {"nodePool": "NodePoolSpecPassthrough"},
 	"HostedClusterSpecPassthrough": {"configuration": "ClusterConfiguration", "platform": "PlatformSpec", "capabilities": "Capabilities"},
 	"NodePoolSpecPassthrough":      {"platform": "NodePoolPlatform"},
-	"ClusterConfiguration":         {"kubelet": "KubeletConfig", "machineConfig": "MachineConfigSpec"},
+	"ClusterConfiguration":         {"machineConfig": "MachineConfigSpec"},
 }
 
 // collapsePassthroughTypes replaces inlined nested type properties with
