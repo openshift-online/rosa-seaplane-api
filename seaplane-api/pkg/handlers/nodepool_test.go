@@ -30,8 +30,8 @@ func testNodePoolCR(npName string, parent *seaplanev1alpha1.Cluster) *seaplanev1
 			Namespace: parent.Namespace,
 			UID:       types.UID(npName + "-uid"),
 			Labels: map[string]string{
-				"seaplane.io/account-id": parent.Labels["seaplane.io/account-id"],
-				clusterUIDLabel:          string(parent.UID),
+				seaplanev1alpha1.AccountIDLabel: parent.Labels[seaplanev1alpha1.AccountIDLabel],
+				clusterUIDLabel:                 string(parent.UID),
 			},
 			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(parent, seaplanev1alpha1.GroupVersion.WithKind("Cluster"))},
 		},
@@ -89,7 +89,9 @@ func TestNodePoolHandler_Create_SetsAccountOwnership(t *testing.T) {
 		"metadata": map[string]any{
 			"name":      "parent.workers",
 			"namespace": "account-" + testAccountID,
-			"labels":    map[string]any{"seaplane.io/account-id": "999999999999"},
+			"labels": map[string]any{
+				seaplanev1alpha1.AccountIDLabel: "999999999999",
+			},
 		},
 		"spec": map[string]any{"nodePool": map[string]any{"replicas": 2}, "accountId": "999999999999"},
 	})
@@ -106,8 +108,11 @@ func TestNodePoolHandler_Create_SetsAccountOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Spec.AccountID != testAccountID || stored.Labels["seaplane.io/account-id"] != testAccountID {
-		t.Errorf("stored ownership = (%q, %q), want caller account %q", stored.Spec.AccountID, stored.Labels["seaplane.io/account-id"], testAccountID)
+	if stored.Spec.AccountID != testAccountID || stored.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
+		t.Errorf("stored ownership = (%q, %q), want caller account %q", stored.Spec.AccountID, stored.Labels[seaplanev1alpha1.AccountIDLabel], testAccountID)
+	}
+	if stored.Labels[clusterUIDLabel] != clusterID {
+		t.Errorf("cluster UID shard label = %q, want parent UID %q", stored.Labels[clusterUIDLabel], clusterID)
 	}
 }
 
@@ -116,7 +121,7 @@ func TestNodePoolHandler_CrossAccountOperations(t *testing.T) {
 	parent := testClusterCR(clusterID, "foreign", "999999999999")
 	foreign := testNodePoolCR("foreign.workers", parent)
 	foreign.Namespace = "account-" + testAccountID
-	foreign.Labels["seaplane.io/account-id"] = testAccountID
+	foreign.Labels[seaplanev1alpha1.AccountIDLabel] = testAccountID
 	handler := newTestNodePoolHandler(t, parent, foreign)
 
 	tests := []struct {
@@ -166,8 +171,8 @@ func TestNodePoolHandler_SameAccountOperations(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if stored.Labels["seaplane.io/account-id"] != testAccountID {
-					t.Errorf("stored account label = %q, want %q", stored.Labels["seaplane.io/account-id"], testAccountID)
+				if stored.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
+					t.Errorf("stored account label = %q, want %q", stored.Labels[seaplanev1alpha1.AccountIDLabel], testAccountID)
 				}
 			}
 		})
@@ -657,7 +662,7 @@ func TestNodePoolHandler_Create_AcceptsOptionalEC2InstanceMetadataHttpTokens(t *
 		Name:      "my-cluster",
 		Namespace: "account-" + testAccountID,
 		UID:       types.UID("550e8400-e29b-41d4-a716-446655440000"),
-		Labels:    map[string]string{"seaplane.io/account-id": testAccountID},
+		Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: testAccountID},
 	}}
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))

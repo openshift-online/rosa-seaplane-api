@@ -47,6 +47,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 	v1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1/public"
 	amhelper "github.com/openshift-online/rosa-seaplane-api/test/helpers/alertmanager"
 	awstest "github.com/openshift-online/rosa-seaplane-api/test/helpers/aws"
@@ -722,7 +723,7 @@ var _ = Describe("ROSACTL CLI E2E Tests", Ordered, func() {
 			foundNodePool := false
 			for _, np := range list.Items {
 				// NodePools are account-scoped; parent UID is recorded in the owner label.
-				if np.Labels["seaplane.io/cluster-uid"] != id {
+				if np.Labels[seaplanev1alpha1.ClusterUIDLabel] != id {
 					continue
 				}
 				foundNodePool = true

@@ -16,8 +16,8 @@ import (
 )
 
 // TestI7_PartitionCompleteness verifies that 4 shards with Mod=4 form a
-// complete, disjoint partition of the namespace space. We write 50 resources
-// across random namespaces, run 4 sharded watchers (one per residue), and
+// complete, disjoint partition of the namespace/UID key space. We write 50
+// resources across distinct namespaces, run 4 sharded watchers (one per residue), and
 // assert:
 //   - The union of events from all watchers equals the full set (no gaps).
 //   - Pairwise intersections are empty (no duplicates across shards).
@@ -40,13 +40,14 @@ func TestI7_PartitionCompleteness(t *testing.T) {
 	type written struct {
 		Namespace string
 		Name      string
+		UID       string
 	}
 	allWritten := make([]written, 0, numObjects)
 
 	for i := range numObjects {
 		ns := fmt.Sprintf("ns-%08d", i)
 		name := fmt.Sprintf("obj-%d", i)
-		_, err := wr.Write(ctx, model.WriteRequest{
+		result, err := wr.Write(ctx, model.WriteRequest{
 			GVK:       gvk,
 			Namespace: ns,
 			Name:      name,
@@ -55,14 +56,15 @@ func TestI7_PartitionCompleteness(t *testing.T) {
 			Metadata:  json.RawMessage(`{}`),
 		})
 		require.NoError(t, err)
-		allWritten = append(allWritten, written{Namespace: ns, Name: name})
+		allWritten = append(allWritten, written{Namespace: ns, Name: name, UID: result.UID.String()})
 	}
 
-	// Build lookup of expected residue for each namespace.
+	// Build lookup of expected residue for each row UID.
 	residueConn := freshConn(t)
-	expectedResidue := make(map[string]int, numObjects)
+	type key struct{ Namespace, Name string }
+	expectedResidue := make(map[key]int, numObjects)
 	for _, w := range allWritten {
-		expectedResidue[w.Namespace] = hashtextResidue(t, residueConn, w.Namespace, mod)
+		expectedResidue[key{w.Namespace, w.Name}] = hashtextResidue(t, residueConn, w.Namespace+"/"+w.UID, mod)
 	}
 
 	// Start 4 sharded watchers, one per residue.
@@ -129,7 +131,6 @@ func TestI7_PartitionCompleteness(t *testing.T) {
 	}
 
 	// Assert: union equals the full set.
-	type key struct{ Namespace, Name string }
 	allSeen := make(map[key]int) // key -> shard that saw it
 	for shard, events := range shardEvents {
 		for _, ev := range events {
@@ -144,15 +145,15 @@ func TestI7_PartitionCompleteness(t *testing.T) {
 
 	// Every written object must appear exactly once.
 	for _, w := range allWritten {
-		k := key(w)
+		k := key{w.Namespace, w.Name}
 		shard, found := allSeen[k]
 		if !assert.True(t, found, "object (%s, %s) not seen by any shard", w.Namespace, w.Name) {
 			continue
 		}
 		// Verify the shard assignment matches the hash.
-		assert.Equal(t, expectedResidue[w.Namespace], shard,
+		assert.Equal(t, expectedResidue[k], shard,
 			"object (%s, %s) delivered to shard %d but hashtext residue is %d",
-			w.Namespace, w.Name, shard, expectedResidue[w.Namespace])
+			w.Namespace, w.Name, shard, expectedResidue[k])
 	}
 
 	assert.Equal(t, numObjects, len(allSeen),

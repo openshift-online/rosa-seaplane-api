@@ -20,14 +20,14 @@ graph LR
 
 ### PostgreSQL (pgruntime)
 
-The operator uses [fleetdb](../../../seaplane-db/) to implement the controller-runtime `client.Client`, `cache.Cache`, and `manager.Manager` interfaces backed by PostgreSQL. This replaces a traditional Kubernetes API server (etcd) with a relational database, providing fenced writes, stored procedures, composite resource versions, and deterministic lease management.
+The operator uses [fleetdb](../../seaplane-db/) to implement the controller-runtime `client.Client`, `cache.Cache`, and `manager.Manager` interfaces backed by PostgreSQL. It is controller-runtime-compatible storage, not a Kubernetes API server: it has no admission or CRD validation, Kubernetes garbage collection, or transactions across resources. Updates and deletes use per-object UID and resource-version checks; informer List/Watch streams are poll-based and sharded, while direct reads see the full dataset. See the [seaplane-db guidelines](../../docs/seaplane-db-guidelines.md) and [compatibility notes](../../seaplane-db/docs/COMPATIBILITY.md) for the storage contract.
 
 ### CRDs
 
 CRDs are under API group `seaplane.io/v1alpha1`. Most are **namespace-scoped** — the namespace is `account-<accountID>`, with the account ID also stored in the `seaplane.io/account-id` label. **ManagementCluster** is the exception: it is **cluster-scoped** and declared as an `UnshardedGVK` so every operator pod sees all ManagementClusters regardless of its shard assignment.
 
 - **Cluster** — represents a ROSA HCP cluster. `metadata.Name` is a client-chosen DNS label; `metadata.Namespace` is `account-<accountID>`. Spec contains all the configuration needed to create a HostedCluster on a management cluster.
-- **NodePool** — represents a set of worker nodes for a Cluster. Named `<cluster>.<child>` in the same account namespace. Parent ownership is tracked via an ownerReference and `seaplane.io/cluster-uid` label.
+- **NodePool** — represents a set of worker nodes for a Cluster. Named `<cluster>.<child>` in the same account namespace. Parent ownership and shard affinity use an ownerReference and `seaplane.io/cluster-uid` label.
 - **Placement** — binds a Cluster to a management cluster. Created automatically by the Placement controller. In the same account namespace.
 - **DNSReservation** — customer-facing resource that reserves a DNS prefix and base domain. It can be created before a Cluster for shared-VPC flows. Claimed by a Cluster via the `seaplane.io/claimed-by-cluster-uid` label.
 - **OidcConfig** — represents an OIDC issuer configuration for cluster identity.
@@ -82,7 +82,7 @@ ManagementCluster CRs in PostgreSQL serve as the registry of available managemen
 
 ## Deployment
 
-The operator runs as a StatefulSet, deployed via a Helm chart through ArgoCD. It connects to PostgreSQL for CR storage and to DynamoDB for desire management. The StatefulSet provides stable pod ordinals used for [namespace-hash sharding](sharding.md).
+The operator runs as a StatefulSet, deployed via a Helm chart through ArgoCD. It connects to PostgreSQL for CR storage and to DynamoDB for desire management. The StatefulSet provides stable pod ordinals used for [Cluster-UID sharding](sharding.md).
 
 ```
 charts/seaplane-operator/
@@ -103,6 +103,6 @@ Required configuration:
 - `baseDomain` — DNS base domain for hosted clusters
 - `POSTGRES_DSN` — PostgreSQL connection string
 
-## Horizontal Scaling via Namespace-Hash Sharding
+## Horizontal Scaling via Cluster-UID Sharding
 
-The operator scales horizontally via namespace-hash sharding. The pgruntime cache partitions its List/Watch streams using `abs(hashtext(namespace)::bigint) % replicaCount`, giving account-level affinity — all account-namespaced resources for one AWS account land in the same shard (cluster-scoped resources like ManagementCluster are unsharded). Each StatefulSet replica owns a single shard equal to its pod ordinal. See [Sharding](sharding.md) for configuration and scaling details.
+The operator partitions cache List/Watch streams using namespace plus `seaplane.io/cluster-uid` when present, or namespace plus the row's own database UID otherwise. The Cluster falls back to its UID; NodePools and Placements carry that UID label and share its shard. Account-level resources without the label shard by their own UIDs within the namespace. ManagementCluster is unsharded. Each StatefulSet replica owns one shard equal to its pod ordinal. See [Sharding](sharding.md) for the exact predicate and scaling limits.

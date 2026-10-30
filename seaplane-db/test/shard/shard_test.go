@@ -2,7 +2,6 @@ package shard_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -51,33 +50,13 @@ func runWatcher(w *reader.Watcher, ctx context.Context) <-chan error {
 	return done
 }
 
-// hashtextResidue returns the shard residue for a namespace using the same
-// formula as the SQL shard clause: abs(hashtext(ns)::bigint) % mod.
-func hashtextResidue(t *testing.T, conn *pgx.Conn, ns string, mod int) int {
+// hashtextResidue returns the shard residue for a key using the same formula
+// as the SQL shard clause: abs(hashtext(key)::bigint) % mod.
+func hashtextResidue(t *testing.T, conn *pgx.Conn, key string, mod int) int {
 	t.Helper()
 	var residue int
 	err := conn.QueryRow(context.Background(),
-		"SELECT abs(hashtext($1)::bigint) % $2", ns, mod).Scan(&residue)
+		"SELECT abs(hashtext($1)::bigint) % $2", key, mod).Scan(&residue)
 	require.NoError(t, err)
 	return residue
-}
-
-// findNamespacesForShards returns a map from each residue in [0, mod) to a
-// namespace string that hashes to that residue. Generates random UUID-like
-// strings until all residues are covered.
-func findNamespacesForShards(t *testing.T, conn *pgx.Conn, mod int) map[int]string {
-	t.Helper()
-	result := make(map[int]string, mod)
-	// Use a deterministic naming scheme and check residues until all shards covered.
-	for i := 0; len(result) < mod; i++ {
-		ns := fmt.Sprintf("shard-probe-%d", i)
-		r := hashtextResidue(t, conn, ns, mod)
-		if _, exists := result[r]; !exists {
-			result[r] = ns
-		}
-		if i > 10000 {
-			t.Fatalf("could not find namespaces for all %d shards after %d tries", mod, i)
-		}
-	}
-	return result
 }

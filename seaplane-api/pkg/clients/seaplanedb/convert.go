@@ -232,7 +232,7 @@ func customerObjectMeta(meta metav1.ObjectMeta, accountID string) metav1.ObjectM
 			delete(meta.Annotations, key)
 		}
 	}
-	meta.Labels = map[string]string{"seaplane.io/account-id": accountID}
+	meta.Labels = map[string]string{seaplanev1alpha1.AccountIDLabel: accountID}
 	meta.Namespace = accountNamespace(accountID)
 	meta.UID = ""
 	meta.ResourceVersion = ""

@@ -148,8 +148,8 @@ func additionalTrustBundle(clusterID, ns, bundle string) Resource {
 				Name:      additionalTrustBundleName,
 				Namespace: ns,
 				Labels: map[string]string{
-					"seaplane.io/cluster-id":    clusterID,
-					"seaplane.io/resource-type": "additional-trust-bundle",
+					clusterIDLabel:    clusterID,
+					resourceTypeLabel: "additional-trust-bundle",
 				},
 			},
 			Data: map[string]string{"ca-bundle.crt": bundle},

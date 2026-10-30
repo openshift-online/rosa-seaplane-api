@@ -7,7 +7,7 @@ ROSA Seaplane API — ROSA HCP regional cluster management.
 Three components:
 
 - **seaplane-api/** — Stateless REST gateway for API Gateway SigV4-authenticated AWS callers; Cedar authorization (`docs/authz.md`)
-- **seaplane-operator/** — Kubernetes operator (Cluster, ClusterNetworking, DNSReservation, Index, ManagementCluster, Manifest, NodePool, OIDCConfig, Placement, UpgradePolicies CRDs)
+- **seaplane-operator/** — Kubernetes operator (Cluster, ClusterNetworking, DNSReservation, Index, ManagementCluster, Manifest, NodePool, OIDCConfig, Placement, UpgradePolicies CRDs); DNSReservation is customer-facing and can be created before a Cluster to reserve its DNS prefix
 - **seaplane-db/** — PostgreSQL-backed controller-runtime library
 
 ## Build & Test
@@ -70,6 +70,31 @@ Cross-module refs use permanent `replace` directives to sibling dirs.
 - OpenAPI-first API design
 - CRD types in standalone `api/` module, imported by seaplane-operator and seaplane-api
 - golangci-lint v2 with custom logcheck plugin
+
+## Target Resource Identity and Lifecycle
+
+- Customer resources use the authenticated account namespace, `account-<id>`;
+  names are immutable, and a Cluster child is named `<cluster>.<child>`.
+- seaplane-db assigns each resource UID. References and ownership use UIDs:
+  ownerReference plus `seaplane.io/cluster-uid` for Cluster-owned children.
+- List/Watch sharding hashes the namespace plus `seaplane.io/cluster-uid` when
+  present, otherwise the namespace plus the row's own UID. A Cluster uses its
+  database UID; its owned children use that same UID label, so they share a
+  shard without a second label. Account-level resources without `cluster-uid`
+  use their own UID within the namespace.
+- Labels are platform-owned. Customer metadata belongs in validated annotations.
+  Finalizers clean up resources and claims; reconcilers must be idempotent.
+- DNSReservation is a customer-created, account-scoped claim that may precede a
+  Cluster. Its controller allocates a unique DNS prefix using an `Index` held by
+  the reservation UID and publishes the base domain in status. Cluster creation
+  binds the reservation by UID and records the holder in
+  `seaplane.io/claimed-by-cluster-uid`; Cluster deletion releases it through its
+  finalizer.
+- Do not make cross-Cluster decisions from a shard-local count. Use an `Index`
+  claim or an optimistic update on a shared record for scarce shared capacity.
+
+See [seaplane-db guidelines](docs/seaplane-db-guidelines.md) and the
+[resource identity implementation plan](seaplane-db/docs/RESOURCE_IDENTITY_IMPLEMENTATION_PLAN.md).
 
 ## seaplane-db Guidelines
 

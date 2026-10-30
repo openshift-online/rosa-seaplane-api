@@ -16,18 +16,14 @@ import (
 )
 
 // TestS6_CrossShardNamespaceMove verifies that when a resource is "moved"
-// between namespaces that hash to different shards (by deleting from one and
-// creating in the other), each sharded watcher sees exactly the events
-// belonging to its shard, and the two creates have different UIDs.
+// between namespaces (by deleting from one and creating in the other), sharded
+// watchers route the two incarnations by their namespace-scoped UIDs.
 //
 // Sequence:
-//  1. Find two namespaces ns-A and ns-B that hash to different residues (mod 2).
-//  2. Create resource (ns-A, "mover").
-//  3. Delete it (set deletion_timestamp).
-//  4. Create resource (ns-B, "mover") — same name, different namespace.
-//  5. Shard-0 watcher sees exactly the events for namespaces in its shard.
-//  6. Shard-1 watcher sees exactly the events for namespaces in its shard.
-//  7. The UIDs of the two creates differ.
+//  1. Create a resource in ns-A and delete it.
+//  2. Create the same name in ns-B, retrying the UID if necessary to get a
+//     different shard from the first incarnation.
+//  3. The two namespace/UID-derived shard residues differ.
 func TestS6_CrossShardNamespaceMove(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires postgres")
@@ -40,14 +36,12 @@ func TestS6_CrossShardNamespaceMove(t *testing.T) {
 		mod  = 2
 		gvk  = "apps/v1/Deployment"
 		name = "mover"
+		nsA  = "account-a"
+		nsB  = "account-b"
 	)
 
-	// Find namespaces that hash to shard 0 and shard 1.
 	probeConn := freshConn(t)
-	nsByResidue := findNamespacesForShards(t, probeConn, mod)
-	nsA := nsByResidue[0] // hashes to shard 0
-	nsB := nsByResidue[1] // hashes to shard 1
-	t.Logf("ns-A=%q (shard 0), ns-B=%q (shard 1)", nsA, nsB)
+	t.Logf("resource namespace transition: ns-A=%q to ns-B=%q", nsA, nsB)
 
 	// Step 1: Create resource in ns-A.
 	wr := writer.New(freshConn(t), nil)
@@ -60,6 +54,7 @@ func TestS6_CrossShardNamespaceMove(t *testing.T) {
 	require.True(t, resA.Changed)
 	uidA := resA.UID
 	t.Logf("created in ns-A: uid=%s, version=%d", uidA, resA.ObjectVersion)
+	shardA := hashtextResidue(t, probeConn, nsA+"/"+uidA.String(), mod)
 
 	// Step 2: Delete resource in ns-A (set deletion_timestamp).
 	now := time.Now()
@@ -74,7 +69,8 @@ func TestS6_CrossShardNamespaceMove(t *testing.T) {
 	require.True(t, delResult.Changed)
 	t.Logf("deleted in ns-A: version=%d", delResult.ObjectVersion)
 
-	// Step 3: Create resource in ns-B (same name, different namespace).
+	// Create the same name in ns-B. Retry the new incarnation until its
+	// namespace-scoped UID key hashes to the other shard.
 	resB, err := wr.Write(ctx, model.WriteRequest{
 		GVK: gvk, Namespace: nsB, Name: name,
 		Spec: json.RawMessage(`{"phase":"B"}`), Status: json.RawMessage(`{}`),
@@ -83,6 +79,26 @@ func TestS6_CrossShardNamespaceMove(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resB.Changed)
 	uidB := resB.UID
+	shardB := hashtextResidue(t, probeConn, nsB+"/"+uidB.String(), mod)
+	for attempt := 0; shardB == shardA && attempt < 100; attempt++ {
+		now := time.Now()
+		_, err = wr.Write(ctx, model.WriteRequest{
+			GVK: gvk, Namespace: nsB, Name: name,
+			Spec: json.RawMessage(`{"phase":"B"}`), Status: json.RawMessage(`{}`),
+			Metadata: json.RawMessage(`{}`), DeletionTimestamp: &now,
+			ExpectedVersion: resB.ObjectVersion,
+		})
+		require.NoError(t, err)
+		resB, err = wr.Write(ctx, model.WriteRequest{
+			GVK: gvk, Namespace: nsB, Name: name,
+			Spec: json.RawMessage(`{"phase":"B"}`), Status: json.RawMessage(`{}`),
+			Metadata: json.RawMessage(`{}`),
+		})
+		require.NoError(t, err)
+		uidB = resB.UID
+		shardB = hashtextResidue(t, probeConn, nsB+"/"+uidB.String(), mod)
+	}
+	require.NotEqual(t, shardA, shardB, "the two incarnations should exercise different namespace/UID shards")
 	t.Logf("created in ns-B: uid=%s, version=%d", uidB, resB.ObjectVersion)
 
 	// UIDs must differ — these are distinct objects.
@@ -151,38 +167,26 @@ func TestS6_CrossShardNamespaceMove(t *testing.T) {
 		shardEvents[r.shard] = r.events
 	}
 
-	// Shard 0 should see: ADDED (ns-A) then DELETED (ns-A) — both belong to ns-A.
-	shard0 := shardEvents[0]
-	t.Logf("shard 0 events: %d", len(shard0))
-	for i, ev := range shard0 {
-		t.Logf("  [%d] %s ns=%s name=%s uid=%s", i, ev.Type, ev.Resource.Namespace, ev.Resource.Name, ev.Resource.UID)
-	}
-
-	// Shard 1 should see: ADDED (ns-B) — belongs to ns-B.
-	shard1 := shardEvents[1]
-	t.Logf("shard 1 events: %d", len(shard1))
-	for i, ev := range shard1 {
-		t.Logf("  [%d] %s ns=%s name=%s uid=%s", i, ev.Type, ev.Resource.Namespace, ev.Resource.Name, ev.Resource.UID)
-	}
-
-	// Shard 0 assertions: should see events only for ns-A.
+	// The first UID's shard sees the deleted source row.
+	shardAEvents := shardEvents[shardA]
 	// The watcher polls from hwm=0, so it picks up the final state of the row.
 	// Since PK is (gvk, namespace, name) and ns-A's row has deletion_timestamp set,
 	// the watcher sees exactly one DELETED event for ns-A.
-	require.Len(t, shard0, 1, "shard 0 should see exactly 1 event (DELETED in ns-A)")
-	assert.Equal(t, reader.EventDeleted, shard0[0].Type)
-	assert.Equal(t, nsA, shard0[0].Resource.Namespace)
-	assert.Equal(t, name, shard0[0].Resource.Name)
+	require.Len(t, shardAEvents, 1, "the first UID shard should see the deleted source row")
+	assert.Equal(t, reader.EventDeleted, shardAEvents[0].Type)
+	assert.Equal(t, nsA, shardAEvents[0].Resource.Namespace)
+	assert.Equal(t, name, shardAEvents[0].Resource.Name)
+	assert.Equal(t, uidA, shardAEvents[0].Resource.UID)
 
-	// Shard 1 assertions: should see events only for ns-B.
-	require.Len(t, shard1, 1, "shard 1 should see exactly 1 event (ADDED in ns-B)")
-	assert.Equal(t, reader.EventAdded, shard1[0].Type)
-	assert.Equal(t, nsB, shard1[0].Resource.Namespace)
-	assert.Equal(t, name, shard1[0].Resource.Name)
-	assert.Equal(t, uidB, shard1[0].Resource.UID,
-		"shard 1's ADDED event should carry the UID from the second create")
+	// The second UID's shard sees the recreated row.
+	shardBEvents := shardEvents[shardB]
+	require.Len(t, shardBEvents, 1, "the second UID shard should see the recreated row")
+	assert.Equal(t, reader.EventAdded, shardBEvents[0].Type)
+	assert.Equal(t, nsB, shardBEvents[0].Resource.Namespace)
+	assert.Equal(t, name, shardBEvents[0].Resource.Name)
+	assert.Equal(t, uidB, shardBEvents[0].Resource.UID)
 
 	// Cross-shard: the UIDs must differ.
-	assert.NotEqual(t, shard0[0].Resource.UID, shard1[0].Resource.UID,
+	assert.NotEqual(t, shardAEvents[0].Resource.UID, shardBEvents[0].Resource.UID,
 		"UIDs across the two shards must differ (different objects)")
 }

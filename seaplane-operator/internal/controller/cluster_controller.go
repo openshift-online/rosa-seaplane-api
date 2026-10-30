@@ -52,13 +52,13 @@ const (
 	taskKey                  = "seaplane-operator"
 
 	// accountIDLabel records the AWS account that owns a resource.
-	accountIDLabel = "seaplane.io/account-id"
+	accountIDLabel = seaplanev1alpha1.AccountIDLabel
 	// clusterUIDLabel records the database UID of the owning Cluster.
-	clusterUIDLabel = "seaplane.io/cluster-uid"
+	clusterUIDLabel = seaplanev1alpha1.ClusterUIDLabel
 	// claimedByClusterUIDLabel records the Cluster UID holding a claim.
-	claimedByClusterUIDLabel = "seaplane.io/claimed-by-cluster-uid"
+	claimedByClusterUIDLabel = seaplanev1alpha1.ClaimedByClusterUIDLabel
 	// ownerUIDLabel records the UID that owns an internal Index.
-	ownerUIDLabel    = "seaplane.io/owner-uid"
+	ownerUIDLabel    = seaplanev1alpha1.OwnerUIDLabel
 	metadataUIDField = "metadata.uid"
 	// accountNSPrefix prefixes the per-account namespace name.
 	accountNSPrefix = "account-"

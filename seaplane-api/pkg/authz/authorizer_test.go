@@ -9,6 +9,7 @@ import (
 	"time"
 
 	cedar "github.com/cedar-policy/cedar-go"
+	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 )
 
 // grant is one policy attached to one principal. Empty policy reuses the ID,
@@ -192,7 +193,7 @@ func TestCheckRejectsResource(t *testing.T) {
 		{"wrong action kind", ListClusters, testCluster()},
 		{"unknown action", Action("UnimplementedAction"), testCluster()},
 		{"collection labels", ListClusters, Resource{Kind: Collection, AccountID: accountID, Labels: map[string]string{"team": "blue"}}},
-		{"contradictory account label", DescribeCluster, Resource{Kind: Cluster, ID: "id", AccountID: accountID, Labels: map[string]string{"seaplane.io/account-id": "210987654321"}}},
+		{"contradictory account label", DescribeCluster, Resource{Kind: Cluster, ID: "id", AccountID: accountID, Labels: map[string]string{seaplanev1alpha1.AccountIDLabel: "210987654321"}}},
 		{"foreign node pool parent", DescribeNodePool, foreignParent},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

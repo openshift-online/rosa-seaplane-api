@@ -108,13 +108,13 @@ func resourceRequest(srv *Server, method, path, body string) *httptest.ResponseR
 	return w
 }
 func resourceFixtures() []client.Object {
-	labels := map[string]string{"seaplane.io/account-id": resourceTestAccount}
+	labels := map[string]string{v1.AccountIDLabel: resourceTestAccount}
 	tags := map[string]string{"team": "blue"}
 	parent := &v1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "parent", Namespace: "account-" + resourceTestAccount, UID: types.UID(resourceTestClusterID), Labels: labels, Annotations: tags}}
 	pool := &v1.NodePool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "parent.workers", Namespace: parent.Namespace, UID: "pool-uid",
-			Labels:          map[string]string{"seaplane.io/account-id": resourceTestAccount, "seaplane.io/cluster-uid": resourceTestClusterID},
+			Labels:          map[string]string{v1.AccountIDLabel: resourceTestAccount, v1.ClusterUIDLabel: resourceTestClusterID},
 			Annotations:     map[string]string{"team": "blue"},
 			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(parent, v1.GroupVersion.WithKind("Cluster"))},
 		},

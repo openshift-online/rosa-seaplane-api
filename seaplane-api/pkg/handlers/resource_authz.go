@@ -25,7 +25,7 @@ func (h *ClusterHandler) clusterResource(cr *v1.Cluster) authz.Resource {
 	return authz.Resource{
 		Kind:      authz.Cluster,
 		ID:        string(cr.UID),
-		AccountID: cr.Labels["seaplane.io/account-id"],
+		AccountID: cr.Labels[v1.AccountIDLabel],
 		Labels:    maps.Clone(cr.Annotations),
 	}
 }
@@ -44,8 +44,8 @@ func (h *NodePoolHandler) nodePoolResource(ctx context.Context, np *v1.NodePool)
 	if err != nil {
 		return authz.Resource{}, &authz.Failure{Stage: authz.StageResourceLoading, Err: err}
 	}
-	return authz.Resource{Kind: authz.NodePool, ID: string(np.UID), AccountID: np.Labels["seaplane.io/account-id"], Labels: maps.Clone(np.Annotations),
-		ParentCluster: &authz.ParentCluster{ID: string(parent.UID), AccountID: parent.Labels["seaplane.io/account-id"], Labels: maps.Clone(parent.Annotations)}}, nil
+	return authz.Resource{Kind: authz.NodePool, ID: string(np.UID), AccountID: np.Labels[v1.AccountIDLabel], Labels: maps.Clone(np.Annotations),
+		ParentCluster: &authz.ParentCluster{ID: string(parent.UID), AccountID: parent.Labels[v1.AccountIDLabel], Labels: maps.Clone(parent.Annotations)}}, nil
 }
 
 // nodePoolNotFound is each loaded-pool operation's response when the parent check hides the pool.

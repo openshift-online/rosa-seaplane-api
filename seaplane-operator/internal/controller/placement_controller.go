@@ -76,13 +76,14 @@ func (r *PlacementReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, fmt.Errorf("select management cluster: %w", err)
 		}
 		log.Info("Creating Placement for Cluster", "cluster", cluster.Name, "mc", mc)
+		labels := map[string]string{
+			clusterUIDLabel: string(cluster.UID),
+		}
 		placement = seaplanev1alpha1.Placement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      placementName,
 				Namespace: cluster.Namespace,
-				Labels: map[string]string{
-					clusterUIDLabel: string(cluster.UID),
-				},
+				Labels:    labels,
 			},
 			Spec: seaplanev1alpha1.PlacementSpec{
 				ClusterName:       cluster.Name,

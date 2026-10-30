@@ -67,7 +67,9 @@ func authzResourceOperations(t *testing.T, p *authzProcess, store client.Client)
 		replicas := int32(3)
 		np := &v1.NodePool{ObjectMeta: metav1.ObjectMeta{
 			Name: fixture.cluster + ".workers", Namespace: parent.Namespace,
-			Labels:          map[string]string{authzAccountLabel: fixture.account, "seaplane.io/cluster-uid": string(parent.UID)},
+			Labels: map[string]string{
+				authzAccountLabel: fixture.account, v1.ClusterUIDLabel: string(parent.UID),
+			},
 			Annotations:     map[string]string{authzTeamLabel: fixture.team},
 			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(&parent, v1.GroupVersion.WithKind("Cluster"))},
 		}, Spec: v1.NodePoolSpec{AccountID: fixture.account}}
@@ -142,7 +144,7 @@ func authzResourceOperations(t *testing.T, p *authzProcess, store client.Client)
 		})
 	}
 	var deniedOC v1.OidcConfig
-	if err := store.Get(ctx, client.ObjectKey{Namespace: "account-" + authzAccount, Name: "a-config"}, &deniedOC); err != nil || deniedOC.Labels["seaplane.io/claimed-by-cluster-uid"] != "" {
+	if err := store.Get(ctx, client.ObjectKey{Namespace: "account-" + authzAccount, Name: "a-config"}, &deniedOC); err != nil || deniedOC.Labels[v1.ClaimedByClusterUIDLabel] != "" {
 		t.Fatalf("denied CreateCluster claimed OIDC: %+v %v", deniedOC, err)
 	}
 

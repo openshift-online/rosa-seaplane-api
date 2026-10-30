@@ -16,7 +16,7 @@ func TestProjectDNSReservation(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-reservation",
 			Namespace: "account-123456789012",
-			Labels:    map[string]string{"seaplane.io/account-id": "123456789012"},
+			Labels:    map[string]string{internal.AccountIDLabel: "123456789012"},
 		},
 		Status: internal.DNSReservationStatus{
 			Phase:                     internal.DNSReservationPhaseReady,

@@ -12,7 +12,7 @@ sequenceDiagram
     participant KA as kube-applier-aws
     participant MC as Management Cluster
 
-    API->>PG: Create NodePool CR (ownerRef + cluster-uid label set by API)
+    API->>PG: Create NodePool CR (ownerRef and cluster-uid owner/shard label)
     NPC->>PG: Watch detects new NodePool
     NPC->>PG: Add finalizer (seaplane.io/nodepool), requeue
     NPC->>PG: Resolve parent Cluster via ownerReference name, compare UID → get PlacementRef

@@ -44,7 +44,7 @@ instrumentation with zero overhead.
   low relative to doorbell.
 - **Sharding:** no new metrics are introduced for sharding. When running a
   sharded fleet, expect `poll_events_delivered` to frequently report zero events
-  for individual shards — a shard only sees changes to its owned namespaces, so
+  for individual shards — a shard only sees changes to its owned namespace+UID keys, so
   empty polls are normal and not a sign of doorbell failure. Use `baseline_catches_total`
   (not zero-event polls) to diagnose doorbell health.
 

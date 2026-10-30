@@ -307,8 +307,8 @@ func TestNodePoolResourceLabels(t *testing.T) {
 	}
 	np := r.Object.(*hypershiftv1beta1.NodePool)
 
-	if np.Labels["seaplane.io/cluster-id"] != "abc12345" {
-		t.Errorf("cluster-id label = %q, want %q", np.Labels["seaplane.io/cluster-id"], "abc12345")
+	if np.Labels[clusterIDLabel] != "abc12345" {
+		t.Errorf("cluster-id label = %q, want %q", np.Labels[clusterIDLabel], "abc12345")
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	cedar "github.com/cedar-policy/cedar-go"
 	"github.com/cedar-policy/cedar-go/x/exp/schema/resolved"
 	"github.com/cedar-policy/cedar-go/x/exp/schema/validate"
+	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 )
 
 type evaluator func(*cedar.PolicySet, cedar.EntityMap, cedar.Request) (cedar.Decision, cedar.Diagnostic, error)
@@ -206,7 +207,7 @@ func (p *Prepared) validateResourceIdentity(action Action, resource Resource) (R
 	if resource.AccountID != p.identity.AccountID {
 		return "", fmt.Errorf("resource ownership does not match identity account")
 	}
-	if owner, exists := resource.Labels["seaplane.io/account-id"]; exists && owner != resource.AccountID {
+	if owner, exists := resource.Labels[seaplanev1alpha1.AccountIDLabel]; exists && owner != resource.AccountID {
 		return "", fmt.Errorf("resource account label contradicts ownership")
 	}
 	if resource.Kind != NodePool && resource.ParentCluster != nil {
@@ -242,7 +243,7 @@ func (p *Prepared) resourceEntities(action Action, resource Resource) (cedar.Ent
 		if parent == nil || !idPattern.MatchString(parent.ID) || parent.AccountID != resource.AccountID {
 			return nil, cedar.EntityUID{}, fmt.Errorf("node pool requires its owned stored parent")
 		}
-		if owner, exists := parent.Labels["seaplane.io/account-id"]; exists && owner != parent.AccountID {
+		if owner, exists := parent.Labels[seaplanev1alpha1.AccountIDLabel]; exists && owner != parent.AccountID {
 			return nil, cedar.EntityUID{}, fmt.Errorf("parent account label contradicts ownership")
 		}
 		clusterCollection := entityUID("Collection", parent.AccountID+"/"+p.region+"/clusters")

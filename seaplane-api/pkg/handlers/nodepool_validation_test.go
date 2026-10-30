@@ -111,7 +111,7 @@ func TestNodePoolHandlerUpdateRejectsNegativeReplicas(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      poolName,
 			Namespace: "account-" + accountID,
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 		},
 	}
 	handler := newNodePoolValidationTestHandler(t, object)
@@ -154,7 +154,7 @@ func TestNodePoolHandlerUpdateRejectsEC2InstanceMetadataHttpTokensChanges(t *tes
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      poolName,
 					Namespace: "account-" + accountID,
-					Labels:    map[string]string{"seaplane.io/account-id": accountID},
+					Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 				},
 				Spec: seaplanev1alpha1.NodePoolSpec{
 					EC2InstanceMetadataHttpTokens: seaplanev1alpha1.EC2InstanceMetadataHttpTokensRequired,
@@ -191,7 +191,7 @@ func TestNodePoolHandlerUpdateAllowsUnchangedEC2InstanceMetadataHttpTokens(t *te
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       poolName,
 			Namespace:  "account-" + accountID,
-			Labels:     map[string]string{"seaplane.io/account-id": accountID},
+			Labels:     map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 			Generation: 3,
 		},
 		Spec: seaplanev1alpha1.NodePoolSpec{
@@ -231,7 +231,7 @@ func TestNodePoolHandlerUpdateReturnsMultipleValidationErrors(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      poolName,
 			Namespace: "account-" + accountID,
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 		},
 		Spec: seaplanev1alpha1.NodePoolSpec{
 			NodePool: seaplanev1alpha1.NodePoolSpecPassthrough{
@@ -336,7 +336,7 @@ func TestNodePoolHandlerCreateAllowsRootVolumeSizeOnly(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: "account-" + accountID,
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 		},
 	}
 	handler := newNodePoolValidationTestHandler(t, cluster)
@@ -374,7 +374,7 @@ func TestNodePoolHandlerUpdateRejectsRootVolumeSizeChangesAndClears(t *testing.T
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      poolName,
 					Namespace: "account-" + accountID,
-					Labels:    map[string]string{"seaplane.io/account-id": accountID},
+					Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 				},
 				Spec: seaplanev1alpha1.NodePoolSpec{
 					NodePool: seaplanev1alpha1.NodePoolSpecPassthrough{
@@ -416,7 +416,7 @@ func TestNodePoolHandlerUpdateRejectsExplicitNullRootVolume(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      poolName,
 			Namespace: "account-" + accountID,
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 		},
 		Spec: seaplanev1alpha1.NodePoolSpec{
 			NodePool: seaplanev1alpha1.NodePoolSpecPassthrough{
@@ -468,7 +468,7 @@ func TestNodePoolHandlerUpdateAllowsOmittedRootVolume(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      poolName,
 			Namespace: "account-" + accountID,
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 		},
 		Spec: seaplanev1alpha1.NodePoolSpec{
 			NodePool: seaplanev1alpha1.NodePoolSpecPassthrough{
@@ -529,7 +529,7 @@ func TestNodePoolHandlerUpdateRejectsExplicitNullAtParentLevels(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      poolName,
 					Namespace: "account-" + accountID,
-					Labels:    map[string]string{"seaplane.io/account-id": accountID},
+					Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 				},
 				Spec: seaplanev1alpha1.NodePoolSpec{
 					NodePool: seaplanev1alpha1.NodePoolSpecPassthrough{
@@ -587,7 +587,7 @@ func newNodePoolValidationTestHandler(t *testing.T, objects ...client.Object) *N
 			}
 		case *seaplanev1alpha1.NodePool:
 			resource.UID = "validation-pool"
-			parent := testClusterCR("validation-parent", resource.Name, resource.Labels["seaplane.io/account-id"])
+			parent := testClusterCR("validation-parent", resource.Name, resource.Labels[seaplanev1alpha1.AccountIDLabel])
 			resource.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(parent, seaplanev1alpha1.GroupVersion.WithKind("Cluster"))}
 			resource.Labels[clusterUIDLabel] = string(parent.UID)
 			resource.Spec.NodePool.ClusterName = parent.Name
@@ -629,7 +629,7 @@ func TestNodePoolHandlerUpdateRejectsClearedImageType(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      poolName,
 					Namespace: "account-" + accountID,
-					Labels:    map[string]string{"seaplane.io/account-id": accountID},
+					Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 				},
 				Spec: seaplanev1alpha1.NodePoolSpec{
 					NodePool: seaplanev1alpha1.NodePoolSpecPassthrough{
@@ -680,7 +680,7 @@ func TestNodePoolHandlerUpdateAllowsOmittedImageType(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      poolName,
 			Namespace: "account-" + accountID,
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 		},
 		Spec: seaplanev1alpha1.NodePoolSpec{
 			NodePool: seaplanev1alpha1.NodePoolSpecPassthrough{

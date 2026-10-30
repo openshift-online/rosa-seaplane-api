@@ -37,7 +37,7 @@ const (
 	authzAccount      = "111111111111"
 	authzOtherAccount = "222222222222"
 	authzRegion       = "us-east-1"
-	authzAccountLabel = "seaplane.io/account-id"
+	authzAccountLabel = seaplanev1.AccountIDLabel
 	authzTeamLabel    = "example.com/team"
 	authzFaultLabel   = "example.com/fault"
 	authzFaultValue   = "fault-detail-secret"

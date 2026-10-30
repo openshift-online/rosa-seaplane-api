@@ -52,7 +52,7 @@ func spotUnitTestCluster(clusterName string) *seaplanev1alpha1.Cluster {
 			Name:      clusterName,
 			UID:       types.UID(clusterName),
 			Namespace: "account-" + spotUnitTestAccountID,
-			Labels:    map[string]string{"seaplane.io/account-id": spotUnitTestAccountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: spotUnitTestAccountID},
 		},
 		Spec: seaplanev1alpha1.ClusterSpec{
 			HostedCluster: seaplanev1alpha1.HostedClusterSpecPassthrough{

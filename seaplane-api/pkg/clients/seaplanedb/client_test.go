@@ -580,7 +580,7 @@ func TestClient_OidcConfigAndIssuerIndexOperations(t *testing.T) {
 	if err != nil || byName.Status.LastUsedTimestamp == nil || !byName.Status.LastUsedTimestamp.Equal(&timestamp) {
 		t.Fatalf("lastUsedTimestamp = %v, err = %v", byName.Status.LastUsedTimestamp, err)
 	}
-	byName.Labels["seaplane.io/claimed-by-cluster-uid"] = "cluster-uid"
+	byName.Labels[seaplanev1alpha1.ClaimedByClusterUIDLabel] = "cluster-uid"
 	if err := c.UpdateOidcConfigObject(ctx, byName); err != nil {
 		t.Fatalf("UpdateOidcConfigObject: %v", err)
 	}

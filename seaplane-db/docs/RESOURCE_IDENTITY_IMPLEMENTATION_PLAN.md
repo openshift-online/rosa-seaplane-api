@@ -24,9 +24,9 @@ closes each gap is listed under [Remaining work](#remaining-work).
 | 4. Labels belong to the platform   | Partial | Client `seaplane.io/*` labels are discarded; NodePool and Placement carry an ownerReference and `cluster-uid`; claims use `owner-uid` and `claimed-by-cluster-uid`. | Customer labels outside `seaplane.io/` are stored; annotations aren't validated; Cedar reads labels; the storage client sets the namespace and account label instead of checking them (Phase 6). |
 | 5. Every controller cleans up      | Partial | The Cluster finalizer deletes its children by `cluster-uid`, waits for them, and releases its DNS and OIDC claims; DNSReservation releases its own Indexes.         | No generic collector for orphaned children (Phase 3). No finalizer releases the Spot queue claim; it is reclaimed after a timeout (Phase 6).                                                     |
 | 6. Uniqueness from name or `Index` | Partial | Duplicate Create returns `AlreadyExists` (409); DNS prefixes and OIDC issuer URLs are `Index` claims held by a UID.                                                 | The Spot queue `Index` is held by a name (Phase 6).                                                                                                                                              |
-| 7. Business rules in code          | Done    | The only schema addition is the non-unique GIN labels index.                                                                                                        | `architecture.md` still describes fenced writes and stored procedures (Phase 5).                                                                                                                 |
+| 7. Business rules in code          | Done    | The only schema addition is the non-unique GIN labels index; architecture docs describe optimistic per-object writes.                                                  | None.                                                                                                                                                                                            |
 | 8. Write what you checked          | Partial | Updates re-read, re-validate, and write the read snapshot on each retry; DNSReservation and OidcConfig deletes write the checked snapshot.                          | Cluster and NodePool deletes re-read by name in the storage client (Phase 6).                                                                                                                    |
-| 9. Reconcilers are idempotent      | Partial | DNSReservation allocation recovers its prefix on retry and removes duplicate Indexes after overlapping reconciles.                                                  | Sharding hashes the namespace, not `cluster-uid`, so a cluster and its children aren't kept on one replica (Phase 5). The rest of the operator hasn't been reviewed against this rule (Phase 7). |
+| 9. Reconcilers are idempotent      | Partial | DNSReservation allocation recovers its prefix on retry and removes duplicate Indexes after overlapping reconciles. Sharding uses namespace plus `seaplane.io/cluster-uid`, falling back to namespace plus row UID. | The rest of the operator hasn't been reviewed against this rule (Phase 7).                                                                                                                        |
 
 Guidelines §4 also says not to re-check parents on reads, and recommends batching
 instead of calling `Get` inside loops. Read paths haven't been reviewed against
@@ -34,9 +34,10 @@ either yet (Phase 7). List endpoints still paginate in memory (Phase 4).
 
 ## Remaining work
 
-Phases 1 and 2 are implemented. Every gap above belongs to one of the phases below.
-Phases 3–5 are detailed in [§5](#5-implementation-phases); phases 6 and 7 are only
-listed here until they are designed.
+Phases 1, 2, and 5 are implemented. Phase 5 closes the sharding and documentation
+work only; it does not complete the identity roadmap. Phases 3, 4, 6, and 7 remain
+future work. Phases 3–5 are detailed in [§5](#5-implementation-phases); phases 6
+and 7 are only listed here until they are designed.
 
 **Phase 3 — Garbage collection**
 
@@ -52,9 +53,11 @@ listed here until they are designed.
 - SDK helper that builds `<cluster>.<child>`.
 - SDK waiters treat a changed UID as the object being gone.
 
-**Phase 5 — Sharding and docs**
+**Phase 5 — Cluster-UID sharding and docs (implemented)**
 
-- Shard by `cluster-uid`, falling back to the row's own UID.
+- Shard by namespace plus `seaplane.io/cluster-uid` when present; otherwise
+  fall back to namespace plus the row's database UID. A Cluster uses its own UID,
+  and owned children use the same UID from their ownership label.
 - Remove fenced writes and stored procedures from `architecture.md` and
   `sharding.md`.
 
@@ -108,9 +111,12 @@ listed here until they are designed.
    versions, and atomic single-row writes, but no admission or multi-object
    transactions. Reconcilers converge through retries and are safe to run more than
    once.
-9. **Sharding follows ownership.** Cache List/Watch work is keyed by
-   `seaplane.io/cluster-uid`, falling back to the row UID when there is no Cluster
-   owner. Reads through the direct client remain unsharded.
+9. **Sharding follows the owning Cluster UID within the account namespace.** Cache
+   List/Watch work is keyed by namespace plus `seaplane.io/cluster-uid` when present
+   and otherwise by namespace plus the row's database UID. The Cluster has no
+   owner-UID label and therefore hashes by its namespace and own UID; its children
+   carry that UID label and share its shard. Claim labels do not change an
+   account-level row's key. Reads through the direct client remain unsharded.
 
 On the management cluster, Cluster resources use namespace `cluster-<cluster UID>`.
 New Clusters persist the UID-derived `spec.hostedClusterName`, sized so the
@@ -156,9 +162,10 @@ claim, not an internal mirror that can be deleted from the product flow:
   UID. An unclaimed reservation can be explicitly deleted by its customer.
 
 DNSReservation is a claim resource, not an ownerReference child of the Cluster.
-Its Cluster binding label does not change its sharding key; without
-`cluster-uid`, it remains keyed by its own database UID. The generic garbage
-collector initially applies to Cluster-owned NodePool and Placement objects.
+Its `claimed-by-cluster-uid` binding label does not change its sharding key;
+without `cluster-uid`, it remains keyed by its own database UID within the account
+namespace. The generic garbage collector initially applies to Cluster-owned NodePool
+and Placement objects.
 
 ## 2. Current implementation status after PR 1
 
@@ -172,7 +179,7 @@ collector initially applies to Cluster-owned NodePool and Placement objects.
 | Operator ownership    | Cluster, NodePool, and OidcConfig finalizers exist.                                                                                                                                                                                                                                                                                     | No generic garbage collector or Cluster ownerReferences/UID labels are set. NodePool parent lookup lists by namespace and selects the first Cluster. Cluster deletion manually deletes children by namespace. |
 | DNS/OIDC claims       | `Index` uses seaplane-db's primary-key uniqueness; issuer URLs are normalized and hashed. The operator has an internal DNSReservation type.                                                                                                                                                                                             | DNSReservation is currently created by the Cluster reconciler after the Index claim; there is no customer-facing reservation API. DNS and OIDC claim ownership uses namespace/name labels rather than UIDs.   |
 | Clientset             | SigV4 signing and polling waiters exist.                                                                                                                                                                                                                                                                                                | Namespace paths currently influence account headers and NodePool `clusterId`; updates route by UID; waiters do not treat a changed UID as gone.                                                               |
-| Sharding/docs         | List/Watch sharding and unsharded GVKs are implemented.                                                                                                                                                                                                                                                                                 | Sharding hashes namespace. Docs still describe namespace hashing and claim rescale overlap is safe because of fenced writes.                                                                                  |
+| Sharding/docs         | List/Watch sharding and unsharded GVKs are implemented. Rows use namespace plus `cluster-uid` when present and otherwise namespace plus their own UID; direct reads are unsharded.                                                                                                   | None for the Phase 5 sharding target.                                                                                                                                                                      |
 
 The conversion layer already projects ObjectMeta on reads, so returning labels and
 ownerReferences is partly supported once the correct metadata is stored. The required
@@ -340,8 +347,8 @@ This phase is coordinated across `api`, `seaplane-api`, `seaplane-operator`, and
   `owner-uid` matches its own database UID. An unclaimed reservation can be
   explicitly deleted by its customer.
 - Treat DNSReservation as a claim resource, not a Cluster-owned child: it remains
-  sharded by its own UID before and after claim, and is cleaned up through the
-  Cluster's stored reservation UID. Do not change its shard key by adding
+  sharded by its namespace and own UID before and after claim, and is cleaned up
+  through the Cluster's stored reservation UID. Do not change its shard key by adding
   `cluster-uid` at bind time.
 - Remove the current ClusterReconciler's internal “Index then DNSReservation”
   second-write mirror. Keep the DNSReservation capability as the customer-first API
@@ -437,25 +444,30 @@ SDK helper tests.
 - Update OpenAPI route parameter names/descriptions to describe names, not legacy
   IDs.
 
-### Phase 5 — UID-based sharding and docs (PR 5)
+### Phase 5 — Cluster-UID sharding and docs (implemented)
 
 **Primary files:** `seaplane-db/internal/reader/shard.go`, shard tests,
-`seaplane-operator/docs/sharding.md`, architecture docs, and root `CLAUDE.md`.
+`seaplane-db/labels.go`, `api/v1alpha1/labels.go`,
+`seaplane-operator/cmd/manager/main.go`, `seaplane-operator/docs/sharding.md`,
+architecture docs, and root `CLAUDE.md`.
 
 - Use the same shard key for List and Watch:
 
   ```sql
-  abs(hashtext(COALESCE(
+  abs(hashtext(namespace || '/' || COALESCE(
       metadata->'labels'->>'seaplane.io/cluster-uid',
       uid::text
   ))::bigint) % $mod = ANY($owned)
   ```
 
-- Update shard unit, integration, and manager tests. Prove that a Cluster and all
-  children with its UID label share a shard even when multiple Clusters have the
-  same account namespace; unlabeled rows use their own UID; direct reads remain
-  unsharded; `UnshardedGVKs` remain visible to every replica.
-- Rewrite sharding docs to explain why ownership-based affinity is needed, the
+- Update shard unit, integration, and manager tests. Prove that a Cluster row and
+  children carrying its UID label share a shard within one account namespace;
+  account-level rows without that label shard by their own UIDs within the account
+  namespace; direct reads remain unsharded; `UnshardedGVKs` remain visible to every
+  replica.
+- Reuse `cluster-uid` for ownership, cleanup, selectors, and child shard affinity;
+  the Cluster row falls back to its database UID.
+- Rewrite sharding docs to explain why Cluster affinity is needed, the
   rescale overlap, no failover while a pod is down, and avoiding cross-Cluster
   decisions from local counts.
 - Remove unsupported “fenced writes” claims from `sharding.md` and

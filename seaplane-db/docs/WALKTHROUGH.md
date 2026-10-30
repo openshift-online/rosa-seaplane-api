@@ -640,20 +640,25 @@ judge in production are the same program, so passing the tests means something.
 
 ---
 
-## 11. Namespace-hash sharding
+## 11. UID and label sharding
 
 When a single replica's informer cache grows too large or poll load needs
-distributing, you can shard the cache by namespace hash. Each replica declares
-which hash residues it owns, and only those namespaces appear in its
-informer-backed List/Watch queries.
+distributing, you can shard its List/Watch streams by namespace plus database UID.
+A configured `KeyLabel` lets related rows share a label-value key within that
+namespace; rows without the label fall back to their own database UID. For
+Seaplane resources, `cluster-uid` groups Cluster-owned children with their Cluster,
+whose row falls back to its own UID.
+Each replica declares which hash residues it owns, and only those shard keys
+appear in its informer-backed List/Watch queries.
 
 ```go
 mgr, _ := pgruntime.NewManager(pgruntime.Options{
     Scheme: scheme,
     DSN:    dsn,
     Shard: &pgruntime.ShardConfig{
-        Mod:   2,
-        Owned: []int{0},  // this replica owns even-hash namespaces
+        Mod:      2,
+        Owned:    []int{0},  // this replica owns even-hash keys
+        KeyLabel: "seaplane.io/cluster-uid",
         UnshardedGVKs: []schema.GroupVersionKind{
             {Group: "example.com", Version: "v1", Kind: "ManagementCluster"},
         },
@@ -661,10 +666,11 @@ mgr, _ := pgruntime.NewManager(pgruntime.Options{
 })
 ```
 
-The SQL predicate appended to each poll is
-`abs(hashtext(namespace)::bigint) % 2 = ANY('{0}')` — using PostgreSQL's
-built-in `hashtext()` with a cast to `bigint` before `abs()` to avoid `INT_MIN` overflow. A second
-replica with `Owned: []int{1}` covers the other half.
+The SQL predicate appended to each poll hashes the account namespace plus the
+configured label value or, when that label is absent, the row UID:
+`abs(hashtext(namespace || '/' || COALESCE(metadata->'labels'->>'seaplane.io/cluster-uid', uid::text))::bigint) % 2 = ANY('{0}')`.
+PostgreSQL's built-in `hashtext()` is cast to `bigint` before `abs()` to avoid
+`INT_MIN` overflow. A second replica with `Owned: []int{1}` covers the other half.
 
 The direct client (`GetClient()`, `GetAPIReader()`) is **never sharded** — point
 reads and direct `List` calls always see the full dataset. Only the informer
@@ -673,9 +679,9 @@ cache (the watch stream feeding reconcile triggers) is partitioned.
 config — useful for cluster-scoped configuration resources that all replicas
 need.
 
-To scale, change `Mod` and rolling-restart. The transient overlap (some
-namespaces watched by both old and new replicas) is benign — just duplicate
-reconciles, deduplicated by the informer cache.
+To scale, change `Mod` and rolling-restart. The transient overlap (some shard
+keys watched by both old and new replicas) is benign — just duplicate reconciles,
+deduplicated by the informer cache.
 
 ---
 

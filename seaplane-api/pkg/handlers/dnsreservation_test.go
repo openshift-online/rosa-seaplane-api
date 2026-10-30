@@ -22,7 +22,7 @@ import (
 )
 
 const dnsReservationTestAccountID = "123456789012"
-const dnsReservationTestAccountLabel = "seaplane.io/account-id"
+const dnsReservationTestAccountLabel = seaplanev1alpha1.AccountIDLabel
 
 func newDNSReservationTestHandler(t *testing.T, objects ...*seaplanev1alpha1.DNSReservation) (*DNSReservationHandler, *seaplanedb.Client) {
 	t.Helper()

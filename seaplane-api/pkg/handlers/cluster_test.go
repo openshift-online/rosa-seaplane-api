@@ -76,7 +76,7 @@ func testDNSReservationCR(accountID string) *seaplanev1alpha1.DNSReservation {
 			Name:      "test-reservation",
 			Namespace: "account-" + accountID,
 			UID:       types.UID(testDNSReservationUID),
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 		},
 		Status: seaplanev1alpha1.DNSReservationStatus{
 			Phase:      seaplanev1alpha1.DNSReservationPhaseReady,
@@ -116,7 +116,9 @@ func testClusterCR(clusterID, clusterName, accountID string) *seaplanev1alpha1.C
 			Name:      clusterName,
 			Namespace: "account-" + accountID,
 			UID:       types.UID(clusterID),
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels: map[string]string{
+				seaplanev1alpha1.AccountIDLabel: accountID,
+			},
 		},
 		Spec: seaplanev1alpha1.ClusterSpec{
 			DNSReservationID: testDNSReservationUID,
@@ -321,7 +323,7 @@ func TestClusterHandler_Create_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"metadata": map[string]any{
 			"name":   "my-cluster",
-			"labels": map[string]any{"seaplane.io/account-id": "999999999999"},
+			"labels": map[string]any{seaplanev1alpha1.AccountIDLabel: "999999999999"},
 		},
 		"spec": spec,
 	})
@@ -349,8 +351,14 @@ func TestClusterHandler_Create_Success(t *testing.T) {
 	if err := fc.Get(req.Context(), client.ObjectKey{Namespace: "account-" + testAccountID, Name: "my-cluster"}, &stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored.Spec.AccountID != testAccountID || stored.Labels["seaplane.io/account-id"] != testAccountID {
-		t.Errorf("stored ownership = (%q, %q), want caller account %q", stored.Spec.AccountID, stored.Labels["seaplane.io/account-id"], testAccountID)
+	if stored.Spec.AccountID != testAccountID || stored.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
+		t.Errorf("stored ownership = (%q, %q), want caller account %q", stored.Spec.AccountID, stored.Labels[seaplanev1alpha1.AccountIDLabel], testAccountID)
+	}
+	if len(stored.Labels) != 1 || stored.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
+		t.Errorf("stored Cluster labels = %v, want only the account label", stored.Labels)
+	}
+	if _, ok := stored.Labels[seaplanev1alpha1.ClusterUIDLabel]; ok {
+		t.Errorf("Cluster must fall back to its database UID for sharding, got cluster UID label %q", stored.Labels[seaplanev1alpha1.ClusterUIDLabel])
 	}
 }
 
@@ -1131,8 +1139,8 @@ func TestClusterHandler_Create_DerivesIssuerURLAndUpdatesLastUsed(t *testing.T) 
 	if updated.Status.LastUsedTimestamp == nil {
 		t.Error("expected status.lastUsedTimestamp to be set after cluster creation")
 	}
-	if updated.Labels["seaplane.io/account-id"] != testAccountID {
-		t.Errorf("OIDC account label = %q, want %q", updated.Labels["seaplane.io/account-id"], testAccountID)
+	if updated.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
+		t.Errorf("OIDC account label = %q, want %q", updated.Labels[seaplanev1alpha1.AccountIDLabel], testAccountID)
 	}
 }
 
@@ -1283,7 +1291,7 @@ func TestClusterHandler_Update_Success(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"metadata": map[string]any{
-			"labels": map[string]any{"seaplane.io/account-id": "999999999999"},
+			"labels": map[string]any{seaplanev1alpha1.AccountIDLabel: "999999999999"},
 		},
 		"spec": map[string]any{
 			"properties": map[string]string{"environment": "test"},
@@ -1315,8 +1323,8 @@ func TestClusterHandler_Update_Success(t *testing.T) {
 	if err := fc.Get(req.Context(), client.ObjectKeyFromObject(cr), &stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored.Labels["seaplane.io/account-id"] != testAccountID {
-		t.Errorf("stored account label = %q, want %q", stored.Labels["seaplane.io/account-id"], testAccountID)
+	if stored.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
+		t.Errorf("stored account label = %q, want %q", stored.Labels[seaplanev1alpha1.AccountIDLabel], testAccountID)
 	}
 }
 
