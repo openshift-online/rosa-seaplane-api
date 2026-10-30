@@ -173,11 +173,11 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 		apiServer: &http.Server{
 			Addr:              fmt.Sprintf("%s:%d", cfg.Server.APIBindAddress, cfg.Server.APIPort),
 			Handler:           apiHandler,
-			ReadHeaderTimeout: 10 * time.Second, // prevent Slowloris — header must arrive within 10s
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       60 * time.Second,
-			MaxHeaderBytes:    1 << 14, // 16 KiB — sufficient for SigV4 auth headers
+			ReadHeaderTimeout: min(durationOrDefault(cfg.Server.ReadHeaderTimeout, 10*time.Second), durationOrDefault(cfg.Server.ReadTimeout, 30*time.Second)),
+			ReadTimeout:       durationOrDefault(cfg.Server.ReadTimeout, 30*time.Second),
+			WriteTimeout:      durationOrDefault(cfg.Server.WriteTimeout, 30*time.Second),
+			IdleTimeout:       durationOrDefault(cfg.Server.IdleTimeout, 60*time.Second),
+			MaxHeaderBytes:    intOrDefault(cfg.Server.MaxHeaderBytes, 1<<14),
 		},
 		healthServer: &http.Server{
 			Addr:              fmt.Sprintf("%s:%d", cfg.Server.HealthBindAddress, cfg.Server.HealthPort),
@@ -268,6 +268,20 @@ func (s *Server) shutdown() error {
 
 	s.logger.Info("all servers stopped")
 	return nil
+}
+
+func durationOrDefault(d, def time.Duration) time.Duration {
+	if d <= 0 {
+		return def
+	}
+	return d
+}
+
+func intOrDefault(n, def int) int {
+	if n <= 0 {
+		return def
+	}
+	return n
 }
 
 // allowlistAccounts marks requests from accounts outside the bundle that are on the
