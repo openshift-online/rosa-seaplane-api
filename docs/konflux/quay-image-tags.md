@@ -2,8 +2,8 @@
 
 This repository builds container images on Konflux (`rosa-tenant` on `kflux-prd-rh02`). Builds are defined under [`.tekton/`](../../.tekton/).
 
-| Component             | Quay repository                                                 | PipelineRun names                                                              |
-| --------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Component                | Quay repository                                                    | PipelineRun names                                                          |
+| ------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | `rosa-seaplane-api`      | `quay.io/redhat-user-workloads/rosa-tenant/rosa-seaplane-api`      | `rosa-seaplane-api-on-pull-request`, `rosa-seaplane-api-on-push`           |
 | `rosa-seaplane-operator` | `quay.io/redhat-user-workloads/rosa-tenant/rosa-seaplane-operator` | `rosa-seaplane-operator-on-pull-request`, `rosa-seaplane-operator-on-push` |
 
@@ -13,12 +13,12 @@ Each Quay repository is named after its Konflux **component** (`rosa-seaplane-ap
 
 ## When pipelines run
 
-| Pipeline                                   | Trigger (summary)                                                                                               |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `rosa-seaplane-api-on-push`              | Every push to `main`                                                                                            |
-| `rosa-seaplane-api-on-pull-request`      | Pull requests targeting `main`                                                                                  |
+| Pipeline                                 | Trigger (summary)                                                                                           |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `rosa-seaplane-api-on-push`              | Every push to `main`                                                                                        |
+| `rosa-seaplane-api-on-pull-request`      | Pull requests targeting `main`                                                                              |
 | `rosa-seaplane-operator-on-push`         | Push to `main` only when `seaplane-operator/`, `seaplane-db/`, or related Tekton/Containerfile paths change |
-| `rosa-seaplane-operator-on-pull-request` | Same path filter on pull requests                                                                               |
+| `rosa-seaplane-operator-on-pull-request` | Same path filter on pull requests                                                                           |
 
 A commit SHA tag for `rosa-seaplane-operator` exists on Quay **only if** that commit triggered the operator on-push (or on-pull-request) pipeline. A `seaplane-api`-only merge still produces a new `rosa-seaplane-api:<sha>` image on every push to `main`, but does not necessarily rebuild the operator image at that SHA.
 
