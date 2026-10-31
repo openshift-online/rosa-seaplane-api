@@ -306,44 +306,43 @@ func (c *pgClient) Delete(ctx context.Context, obj client.Object, opts ...client
 		return fmt.Errorf("parse UID: %w", err)
 	}
 
-	var spec, status, metadata json.RawMessage
-	var existingDeletionTimestamp *time.Time
-	if expectedVersion == 0 {
-		current, err := readCurrentResource(ctx, conn, gvkStr, ns, name)
-		if err != nil {
-			return err
-		}
-		if current == nil {
-			return apierrors.NewNotFound(groupResource(gvk), name)
-		}
-		if expectedUID != nil && current.UID != *expectedUID {
-			return apierrors.NewConflict(groupResource(gvk), name,
-				fmt.Errorf("object UID changed from %s to %s", *expectedUID, current.UID))
-		}
-		expectedVersion = current.ObjectVersion
-		expectedUID = &current.UID
-		spec = current.Spec
-		status = current.Status
-		metadata = current.Metadata
-		existingDeletionTimestamp = current.DeletionTimestamp
-	} else {
-		spec, status, err = extractSpecStatus(obj)
-		if err != nil {
-			return err
-		}
-		metadata, err = extractMetadata(obj)
-		if err != nil {
-			return err
-		}
-		if expectedUID == nil {
-			return apierrors.NewBadRequest("metadata.uid is required when deleting with resourceVersion")
-		}
+	if expectedVersion > 0 && expectedUID == nil {
+		return apierrors.NewBadRequest("metadata.uid is required when deleting with resourceVersion")
 	}
 
-	deletionTS := existingDeletionTimestamp
+	current, err := readCurrentResource(ctx, conn, gvkStr, ns, name)
+	if err != nil {
+		return err
+	}
+	if current == nil {
+		return apierrors.NewNotFound(groupResource(gvk), name)
+	}
+	if expectedUID != nil && current.UID != *expectedUID {
+		return apierrors.NewConflict(groupResource(gvk), name,
+			fmt.Errorf("object UID changed from %s to %s", *expectedUID, current.UID))
+	}
+
+	// Like the Kubernetes apiserver, the caller's object only supplies
+	// preconditions (UID, resourceVersion); the stored row is what gets marked
+	// deleted. The write is version-checked against that row.
+	if expectedVersion == 0 {
+		expectedVersion = current.ObjectVersion
+	}
+	expectedUID = &current.UID
+	metadata := current.Metadata
+
+	deletionTS := current.DeletionTimestamp
 	if deletionTS == nil {
 		now := time.Now()
 		deletionTS = &now
+		// Like the Kubernetes apiserver, starting a delete bumps generation so
+		// generation-based predicates see it.
+		if gen := currentGeneration(metadata); gen > 0 {
+			metadata, err = setGeneration(metadata, gen+1)
+			if err != nil {
+				return fmt.Errorf("bump generation: %w", err)
+			}
+		}
 	}
 
 	w := writer.New(conn, nil)
@@ -351,8 +350,8 @@ func (c *pgClient) Delete(ctx context.Context, obj client.Object, opts ...client
 		GVK:               gvkStr,
 		Namespace:         ns,
 		Name:              name,
-		Spec:              spec,
-		Status:            status,
+		Spec:              current.Spec,
+		Status:            current.Status,
 		Metadata:          metadata,
 		DeletionTimestamp: deletionTS,
 		ExpectedVersion:   expectedVersion,
@@ -593,6 +592,21 @@ func currentGeneration(metadata json.RawMessage) int64 {
 		return 0
 	}
 	return sm.Generation
+}
+
+// setGeneration sets metadata.generation. Other metadata keys are preserved
+// as given.
+func setGeneration(metadata json.RawMessage, gen int64) (json.RawMessage, error) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(metadata, &m); err != nil {
+		return nil, err
+	}
+	next, err := json.Marshal(gen)
+	if err != nil {
+		return nil, err
+	}
+	m["generation"] = next
+	return json.Marshal(m)
 }
 
 func uidFromUUID(u [16]byte) apitypes.UID {
