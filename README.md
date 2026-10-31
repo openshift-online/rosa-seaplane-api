@@ -32,6 +32,7 @@ seaplane-api/go.mod              ← requires: seaplane-db, api
 
 ## Docs
 
+- [Platform API Helm chart](platform-api/charts/README.md)
 - [OpenAPI spec](api/v1alpha1/public/openapi.yaml)
 - [Authorization](docs/authz.md) ([target design](docs/authz-design.md))
 - [Konflux / Quay image tags](docs/konflux/quay-image-tags.md)
