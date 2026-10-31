@@ -34,6 +34,7 @@ import (
 
 	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-operator/internal/dynamo"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-operator/internal/render"
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 )
 
@@ -72,7 +73,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should add a finalizer on first reconcile", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			np := newTestNodePool(cluster)
 			Expect(k8sClient.Create(ctx, np)).To(Succeed())
@@ -97,7 +98,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should set WaitingForCluster when parent Cluster has no PlacementRef", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			np := newTestNodePool(cluster)
 			Expect(k8sClient.Create(ctx, np)).To(Succeed())
@@ -124,7 +125,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should create ApplyDesire when parent Cluster has a Bound Placement", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			// Set placementRef on the cluster status.
 			cluster.Status.PlacementRef = &seaplanev1alpha1.PlacementReference{
@@ -157,7 +158,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should flip desire to Type=Delete in-place, wait for confirmation, and remove finalizer on deletion", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			cluster.Status.PlacementRef = &seaplanev1alpha1.PlacementReference{
 				Name:              clusterName + ".placement",
@@ -226,7 +227,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should create ReadDesire alongside ApplyDesire", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			cluster.Status.PlacementRef = &seaplanev1alpha1.PlacementReference{
 				Name:              clusterName + ".placement",
@@ -260,7 +261,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should set Phase=Ready when ReadDesire reports Ready=True", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			cluster.Status.PlacementRef = &seaplanev1alpha1.PlacementReference{
 				Name:              clusterName + ".placement",
@@ -340,7 +341,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should clean up ApplyDesire and ReadDesire specs after deletion confirmed", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			cluster.Status.PlacementRef = &seaplanev1alpha1.PlacementReference{
 				Name:              clusterName + ".placement",
@@ -408,7 +409,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should remove the finalizer when the referenced Cluster no longer exists", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			nodePool := newTestNodePool(cluster)
 			nodePool.Finalizers = []string{nodePoolFinalizer}
@@ -429,7 +430,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should remove the finalizer without MC cleanup when the Cluster has no PlacementRef", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			nodePool := newTestNodePool(cluster)
 			nodePool.Finalizers = []string{nodePoolFinalizer}
@@ -449,7 +450,7 @@ var _ = Describe("NodePool Controller", func() {
 
 		It("should propagate non-NotFound Cluster lookup errors during deletion", func() {
 			cluster := newTestCluster(clusterName)
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+			createNodePoolTestCluster(ctx, cluster)
 
 			nodePool := newTestNodePool(cluster)
 			nodePool.Finalizers = []string{nodePoolFinalizer}
@@ -524,4 +525,11 @@ func newTestNodePool(parents ...*seaplanev1alpha1.Cluster) *seaplanev1alpha1.Nod
 		nodePool.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(parent, seaplanev1alpha1.GroupVersion.WithKind("Cluster"))}
 	}
 	return nodePool
+}
+
+func createNodePoolTestCluster(ctx context.Context, cluster *seaplanev1alpha1.Cluster) {
+	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+	// Rendered NodePools are stored in a namespace derived from the Cluster UID.
+	// envtest requires that namespace to exist before the rendered resource is created.
+	ensureNamespace(ctx, render.ManagementNamespace(string(cluster.UID)))
 }

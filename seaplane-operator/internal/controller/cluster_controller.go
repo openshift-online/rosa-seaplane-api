@@ -448,22 +448,38 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
+	return r.reconcilePlacedCluster(ctx, req, &cluster, &placement, baseDomain)
+}
+
+func (r *ClusterReconciler) reconcilePlacedCluster(ctx context.Context, req ctrl.Request, cluster *seaplanev1alpha1.Cluster, placement *seaplanev1alpha1.Placement, baseDomain string) (ctrl.Result, error) {
 	mc := placement.Spec.ManagementCluster
 	specsPrefix := dynamo.SpecsPrefix(mc)
 	statusPrefix := dynamo.StatusPrefix(mc)
 
 	// Render resources and build common structures used by both paths.
-	oidcSigningKeyExternal, err := r.oidcSigningKeyExternal(ctx, &cluster)
+	oidcSigningKeyExternal, err := r.oidcSigningKeyExternal(ctx, cluster)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("resolve oidc signing key mode: %w", err)
 	}
-	resources, err := render.ClusterResources(&cluster, oidcSigningKeyExternal, baseDomain, r.RegionalConfig.ControlPlaneOperatorImage)
+	resources, err := render.ClusterResources(cluster, oidcSigningKeyExternal, baseDomain, r.RegionalConfig.ControlPlaneOperatorImage)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("render cluster resources: %w", err)
 	}
+	for _, resource := range resources {
+		if resource.Resource == "hostedclusters" {
+			hostedCluster, ok := resource.Object.(*hypershiftv1beta1.HostedCluster)
+			if !ok {
+				return ctrl.Result{}, fmt.Errorf("rendered HostedCluster has unexpected type %T", resource.Object)
+			}
+			if err := r.upsertRenderedHostedCluster(ctx, hostedCluster); err != nil {
+				return ctrl.Result{}, err
+			}
+			break
+		}
+	}
 
 	clusterID := string(cluster.UID)
-	hcName := render.HostedClusterName(&cluster)
+	hcName := render.HostedClusterName(cluster)
 	hcNs := render.ManagementNamespace(clusterID)
 	readDocID := dynamo.NewDocumentID(taskKey+"-read", "hypershift.openshift.io", "v1beta1", "hostedclusters", hcNs, hcName)
 
@@ -555,7 +571,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Read status feedback from DynamoDB and update Cluster status.
 	// Phase transitions (Provisioning, Ready) are handled inside updateStatusFromDynamo
 	// to avoid clobbering Ready with a stale in-memory phase check.
-	r.updateStatusFromDynamo(ctx, &cluster, statusPrefix, readDocID, applyEntries)
+	r.updateStatusFromDynamo(ctx, cluster, statusPrefix, readDocID, applyEntries)
 
 	requeueAfter := statusRefreshDelay
 	if cluster.Spec.ExpirationTimestamp != nil && !cluster.Spec.ExpirationTimestamp.IsZero() {
@@ -589,6 +605,9 @@ func (r *ClusterReconciler) reconcileDelete(ctx context.Context, cluster *seapla
 		}
 	}
 	if mc == "" {
+		if err := r.deleteRenderedHostedCluster(ctx, string(cluster.UID), render.HostedClusterName(cluster)); err != nil {
+			return ctrl.Result{}, err
+		}
 		return r.cleanupAndRemoveFinalizer(ctx, cluster)
 	}
 
@@ -698,15 +717,27 @@ func (r *ClusterReconciler) reconcileDelete(ctx context.Context, cluster *seapla
 	}
 
 	// All MC resources deleted — clean up desire specs from DynamoDB.
+	var desireCleanupErr error
 	readDocID := dynamo.NewDocumentID(taskKey+"-read", "hypershift.openshift.io", "v1beta1", "hostedclusters", ns, hcName)
 	if err := r.Dynamo.DeleteDesireSpec(ctx, specsPrefix, "-readdesires", readDocID); err != nil {
 		log.Error(err, "failed to clean up ReadDesire spec", "hostedcluster", hcName)
+		desireCleanupErr = fmt.Errorf("delete ReadDesire spec for HostedCluster %s: %w", hcName, err)
 	}
 	for _, m := range resources {
 		docID := dynamo.NewDocumentID(taskKey, m.Group, m.Version, m.Resource, m.Namespace, m.Name)
 		if err := r.Dynamo.DeleteDesireSpec(ctx, specsPrefix, "-applydesires", docID); err != nil {
 			log.Error(err, "failed to clean up ApplyDesire spec", "resource", m.Name)
+			if desireCleanupErr == nil {
+				desireCleanupErr = fmt.Errorf("delete ApplyDesire spec for %s: %w", m.Name, err)
+			}
 		}
+	}
+	if desireCleanupErr != nil {
+		return ctrl.Result{}, desireCleanupErr
+	}
+
+	if err := r.deleteRenderedHostedCluster(ctx, clusterID, hcName); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	return r.cleanupAndRemoveFinalizer(ctx, cluster)

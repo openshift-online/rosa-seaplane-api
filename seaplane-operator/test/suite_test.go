@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/gomega"
 	seaplanedb "github.com/openshift-online/rosa-seaplane-api/seaplane-db"
 
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -181,6 +182,7 @@ var _ = BeforeSuite(func() {
 	By("creating pgruntime manager")
 	scheme := runtime.NewScheme()
 	Expect(seaplanev1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(hypershiftv1beta1.AddToScheme(scheme)).To(Succeed())
 
 	var mgrErr error
 	mgr, mgrErr = seaplanedb.NewManager(seaplanedb.Options{
