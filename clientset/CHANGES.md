@@ -1,5 +1,10 @@
 # Changes
 
+## 0.1.25 Oct 29 2026
+
+- feat(api): support HCP custom DNS domains
+
+
 ## 0.1.24 Oct 26 2026
 
 - ROSAENG-68147 | feat(pathbind): support Terraform partial updates
