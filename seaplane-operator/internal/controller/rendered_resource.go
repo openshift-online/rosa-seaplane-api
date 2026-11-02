@@ -16,28 +16,37 @@ func upsertRenderedResource(
 	c client.Client,
 	desired client.Object,
 	newObject func() client.Object,
+	storageNamespace string,
+	storageName string,
+	storageLabels map[string]string,
 ) error {
-	key := client.ObjectKeyFromObject(desired)
+	key := client.ObjectKey{Namespace: storageNamespace, Name: storageName}
+	snapshot, ok := desired.DeepCopyObject().(client.Object)
+	if !ok {
+		return fmt.Errorf("deep-copy rendered resource %T: result is not a client object", desired)
+	}
+	snapshot.SetNamespace(storageNamespace)
+	snapshot.SetName(storageName)
+	labels := snapshot.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	for name, value := range storageLabels {
+		labels[name] = value
+	}
+	snapshot.SetLabels(labels)
 	current := newObject()
 	if err := c.Get(ctx, key, current); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("get rendered resource %s/%s: %w", key.Namespace, key.Name, err)
 		}
 
-		snapshot, ok := desired.DeepCopyObject().(client.Object)
-		if !ok {
-			return fmt.Errorf("deep-copy rendered resource %T: result is not a client object", desired)
-		}
 		if err := c.Create(ctx, snapshot); err != nil {
 			return fmt.Errorf("create rendered resource %s/%s: %w", key.Namespace, key.Name, err)
 		}
 		return nil
 	}
 
-	snapshot, ok := desired.DeepCopyObject().(client.Object)
-	if !ok {
-		return fmt.Errorf("deep-copy rendered resource %T: result is not a client object", desired)
-	}
 	snapshot.SetUID(current.GetUID())
 	snapshot.SetResourceVersion(current.GetResourceVersion())
 	if err := c.Update(ctx, snapshot); err != nil {

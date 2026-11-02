@@ -24,6 +24,9 @@ func TestRenderedNodePoolLifecycle(t *testing.T) {
 
 	store := fake.NewClientBuilder().WithScheme(scheme).Build()
 	reconciler := &NodePoolReconciler{Client: store}
+	source := &seaplanev1alpha1.NodePool{ObjectMeta: metav1.ObjectMeta{
+		Name: "marcorosa.workers", Namespace: "account-123",
+	}}
 	nodePool := &hypershiftv1beta1.NodePool{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "hypershift.openshift.io/v1beta1",
@@ -38,7 +41,7 @@ func TestRenderedNodePoolLifecycle(t *testing.T) {
 			ClusterName: "marcorosa",
 		},
 	}
-	if err := reconciler.upsertRenderedNodePool(ctx, nodePool); err != nil {
+	if err := reconciler.upsertRenderedNodePool(ctx, source, nodePool); err != nil {
 		t.Fatalf("create rendered NodePool: %v", err)
 	}
 	if nodePool.UID != "" || nodePool.ResourceVersion != "" {
@@ -46,12 +49,21 @@ func TestRenderedNodePoolLifecycle(t *testing.T) {
 	}
 
 	var got hypershiftv1beta1.NodePool
-	key := client.ObjectKeyFromObject(nodePool)
+	key := client.ObjectKey{Namespace: "account-123", Name: "marcorosa.workers"}
 	if err := store.Get(ctx, key, &got); err != nil {
 		t.Fatalf("get rendered NodePool: %v", err)
 	}
 	if got.Spec.ClusterName != "marcorosa" {
 		t.Fatalf("ClusterName = %q, want marcorosa", got.Spec.ClusterName)
+	}
+	if got.Namespace != "account-123" || got.Name != "marcorosa.workers" {
+		t.Fatalf("stored identity = %s/%s, want account-123/marcorosa.workers", got.Namespace, got.Name)
+	}
+	if got.Labels["seaplane.io/rendered-namespace"] != "cluster-cluster-uid" || got.Labels["seaplane.io/rendered-name"] != "workers" {
+		t.Fatalf("stored rendered identity labels = %#v", got.Labels)
+	}
+	if nodePool.Namespace != "cluster-cluster-uid" || nodePool.Name != "workers" {
+		t.Fatalf("desired identity mutated = %s/%s", nodePool.Namespace, nodePool.Name)
 	}
 
 	databaseSnapshot := got.DeepCopy()
@@ -63,7 +75,7 @@ func TestRenderedNodePoolLifecycle(t *testing.T) {
 	updatedNodePool.Spec.ClusterName = "updated-marcorosa"
 	updatedNodePool.UID = ""
 	updatedNodePool.ResourceVersion = ""
-	if err := updateReconciler.upsertRenderedNodePool(ctx, updatedNodePool); err != nil {
+	if err := updateReconciler.upsertRenderedNodePool(ctx, source, updatedNodePool); err != nil {
 		t.Fatalf("update rendered NodePool: %v", err)
 	}
 	if updatedNodePool.UID != "" || updatedNodePool.ResourceVersion != "" {
@@ -79,30 +91,10 @@ func TestRenderedNodePoolLifecycle(t *testing.T) {
 		t.Fatalf("database identity = UID=%q, resourceVersion=%q, want database UID and resource version", got.UID, got.ResourceVersion)
 	}
 
-	if err := updateReconciler.deleteRenderedNodePool(ctx, "cluster-uid", "workers"); err != nil {
+	if err := updateReconciler.deleteRenderedNodePool(ctx, "account-123", "marcorosa.workers"); err != nil {
 		t.Fatalf("delete rendered NodePool: %v", err)
 	}
 	if err := updateStore.Get(ctx, key, &got); !apierrors.IsNotFound(err) {
 		t.Fatalf("get after delete error = %v, want NotFound", err)
-	}
-}
-
-func TestRenderedNodePoolIdentity(t *testing.T) {
-	nodePool := &seaplanev1alpha1.NodePool{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "marcorosa.workers",
-			OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: seaplanev1alpha1.GroupVersion.String(),
-				Kind:       "Cluster",
-				Name:       "marcorosa",
-				UID:        types.UID("cluster-uid"),
-				Controller: func() *bool { value := true; return &value }(),
-			}},
-		},
-	}
-
-	clusterUID, renderedName, ok := renderedNodePoolIdentity(nodePool)
-	if !ok || clusterUID != "cluster-uid" || renderedName != "workers" {
-		t.Fatalf("identity = (%q, %q, %t), want (cluster-uid, workers, true)", clusterUID, renderedName, ok)
 	}
 }
