@@ -43,15 +43,15 @@ type StoredPolicy struct {
 	Kind                                  PolicyKind
 }
 
-// StoreConfig is trusted deployment/caller configuration, never a request body.
-// WriterRegion is fixed for AccountID. AWS permission enforcement is additional.
+// StoreConfig identifies an account's authorization tables, local region, and assigned writer region.
+// It contains trusted configuration, not request input.
 type StoreConfig struct {
 	AccountID, Region, WriterRegion         string
 	PolicyTable, GlobalTable, RegionalTable string
 }
 
-// Store owns account-scoped DynamoDB access; it does not authenticate callers.
-// Construct it only after verifying the caller's account and management authority.
+// Store reads and writes DynamoDB authorization records for one account.
+// Callers are responsible for authentication and management authorization.
 type Store struct {
 	client    *dynamodb.Client
 	config    StoreConfig
@@ -92,7 +92,7 @@ func isRevision(revision string) bool {
 	return revision != uuid.Nil.String() && uuid.Validate(revision) == nil
 }
 
-// Keys and revision are separate attributes so DynamoDB can condition mutations.
+// storeKey builds a DynamoDB partition and sort key.
 func storeKey(pk, sk string) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: pk}, "sk": &types.AttributeValueMemberS{Value: sk}}
 }
@@ -129,7 +129,7 @@ func decodeItem(item map[string]types.AttributeValue, record any) (string, error
 	return revision.Value, nil
 }
 
-// readItem returns the raw record so callers can check its key against the payload.
+// readItem reads a record with strong local consistency and checks its key.
 func (s *Store) readItem(ctx context.Context, table, pk, sk string) (map[string]types.AttributeValue, error) {
 	out, err := s.client.GetItem(ctx, &dynamodb.GetItemInput{TableName: &table, Key: storeKey(pk, sk), ConsistentRead: aws.Bool(true)})
 	if err != nil {
@@ -144,7 +144,7 @@ func (s *Store) readItem(ctx context.Context, table, pk, sk string) (map[string]
 	return out.Item, nil
 }
 
-// Conditional failures are caller conflicts; unrelated AWS failures stay errors.
+// storeError maps failed write conditions to ErrConflict and preserves other errors.
 func storeError(err error) error {
 	var conflict *types.ConditionalCheckFailedException
 	if errors.As(err, &conflict) {

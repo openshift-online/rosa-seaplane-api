@@ -9,8 +9,7 @@ import (
 	cedar "github.com/cedar-policy/cedar-go"
 )
 
-// bindPolicy accepts native policies or principal ==/in ?principal templates.
-// Only the scope syntax is normalized; identities are bound through Cedar's AST.
+// bindPolicy validates a Cedar policy and binds any ?principal template slot to the supplied principal.
 func (s *Store) bindPolicy(content, id string, principal principalARN) (*cedar.Policy, error) {
 	if len(content) > maxPolicyBytes {
 		return nil, fmt.Errorf("policy exceeds %d bytes", maxPolicyBytes)
@@ -44,8 +43,8 @@ func (s *Store) bindPolicy(content, id string, principal principalARN) (*cedar.P
 	return bound, nil
 }
 
-// Scan only the principal header, respecting strings, comments and annotations.
-// The native parser validates the entire remaining statement and rejects extra slots.
+// templateScope locates a principal == ?principal or principal in ?principal header.
+// It skips annotations and comments and rejects other principal template forms.
 func templateScope(content string) (int, int, string, error) {
 	var scan scanner.Scanner
 	scan.Init(strings.NewReader(content))

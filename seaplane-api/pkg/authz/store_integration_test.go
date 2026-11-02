@@ -29,8 +29,7 @@ const (
 // endpoint is shared by every test; localStores isolates tables per test.
 var endpoint = os.Getenv("AUTHZ_DYNAMODB_ENDPOINT")
 
-// TestMain starts one disposable DynamoDB Local container, like the operator
-// suite, unless AUTHZ_DYNAMODB_ENDPOINT names a running instance.
+// TestMain runs the tests against AUTHZ_DYNAMODB_ENDPOINT or a disposable DynamoDB Local container.
 func TestMain(m *testing.M) {
 	if endpoint == "" {
 		container, err := startDynamoDB()
@@ -38,7 +37,7 @@ func TestMain(m *testing.M) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		defer func() { _ = exec.Command("podman", "stop", container).Run() }()
+		defer stopDynamoDB(container)
 	}
 	m.Run()
 }
@@ -68,8 +67,14 @@ func startDynamoDB() (string, error) {
 			return container, nil
 		}
 	}
-	_ = exec.Command("podman", "stop", container).Run()
+	stopDynamoDB(container)
 	return "", fmt.Errorf("DynamoDB Local not ready at %s: %w", endpoint, err)
+}
+
+func stopDynamoDB(container string) {
+	if err := exec.Command("podman", "stop", container).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "stop DynamoDB Local container %s: %v\n", container, err)
+	}
 }
 
 // localClient uses dummy credentials, which DynamoDB Local accepts.
@@ -90,7 +95,11 @@ func localStores(t *testing.T) (*authz.Store, *authz.Store, *dynamodb.Client, au
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _, _ = client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{TableName: &name}) })
+		t.Cleanup(func() {
+			if _, err := client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{TableName: &name}); err != nil {
+				t.Errorf("delete table %s: %v", name, err)
+			}
+		})
 	}
 	east, err := authz.NewStore(client, cfg)
 	if err != nil {

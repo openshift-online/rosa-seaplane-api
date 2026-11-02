@@ -11,14 +11,15 @@ import (
 
 func TestStoredBindingSemantics(t *testing.T) {
 	for _, scenario := range []struct {
-		name, content, principal, caller, team string
-		allowed                                bool
+		name, content, principal, caller, team, userAgent string
+		allowed                                           bool
 	}{
-		{"role membership", `permit(principal in ?principal, action == Seaplane::Action::"DescribeCluster", resource);`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "", true},
-		{"role equality stays equality", `permit(principal == ?principal, action == Seaplane::Action::"DescribeCluster", resource);`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "", false},
-		{"user equality", `permit(principal == ?principal, action == Seaplane::Action::"DescribeCluster", resource);`, "arn:aws:iam::111111111111:user/alice", "arn:aws:iam::111111111111:user/alice", "", true},
-		{"conditions preserved", `@note("?principal") permit(principal in ?principal, action == Seaplane::Action::"DescribeCluster", resource) when { resource.hasTag("Team") && resource.getTag("Team") == "blue\"team" } unless { context.userAgent == "blocked" };`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "blue\"team", true},
-		{"conditions still deny", `permit(principal in ?principal, action == Seaplane::Action::"DescribeCluster", resource) when { resource.hasTag("Team") && resource.getTag("Team") == "blue" };`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "red", false},
+		{"role membership", `permit(principal in ?principal, action == Seaplane::Action::"DescribeCluster", resource);`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "", "", true},
+		{"role equality stays equality", `permit(principal == ?principal, action == Seaplane::Action::"DescribeCluster", resource);`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "", "", false},
+		{"user equality", `permit(principal == ?principal, action == Seaplane::Action::"DescribeCluster", resource);`, "arn:aws:iam::111111111111:user/alice", "arn:aws:iam::111111111111:user/alice", "", "", true},
+		{"conditions preserved", `@note("?principal") permit(principal in ?principal, action == Seaplane::Action::"DescribeCluster", resource) when { resource.hasTag("Team") && resource.getTag("Team") == "blue\"team" } unless { context.userAgent == "blocked" };`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "blue\"team", "", true},
+		{"unless still denies", `permit(principal in ?principal, action == Seaplane::Action::"DescribeCluster", resource) unless { context.userAgent == "blocked" };`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "", "blocked", false},
+		{"conditions still deny", `permit(principal in ?principal, action == Seaplane::Action::"DescribeCluster", resource) when { resource.hasTag("Team") && resource.getTag("Team") == "blue" };`, "arn:aws:iam::111111111111:role/developer", "arn:aws:sts::111111111111:assumed-role/developer/alice", "red", "", false},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			store, _, _, _ := localStores(t)
@@ -29,7 +30,7 @@ func TestStoredBindingSemantics(t *testing.T) {
 			if _, err := store.CreateAttachment(t.Context(), authz.AttachmentSpec{Policy: authz.PolicyRef{ID: policy.ID, Kind: policy.Kind}, PrincipalARN: scenario.principal, Scope: authz.GlobalScope}); err != nil {
 				t.Fatal(err)
 			}
-			prepared, err := store.Prepare(t.Context(), authz.Identity{AccountID: account, CallerARN: scenario.caller}, authz.RequestContext{RequestTime: time.Now()})
+			prepared, err := store.Prepare(t.Context(), authz.Identity{AccountID: account, CallerARN: scenario.caller}, authz.RequestContext{UserAgent: scenario.userAgent, RequestTime: time.Now()})
 			if err != nil {
 				t.Fatal(err)
 			}

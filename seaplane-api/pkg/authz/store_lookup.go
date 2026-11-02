@@ -9,7 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// Use only base-table queries, retaining every page and no result on failure.
+// queryItems reads every page for a partition key with strong local consistency.
+// It returns an error instead of partial results if a query fails.
 func (s *Store) queryItems(ctx context.Context, table, pk string) ([]map[string]types.AttributeValue, error) {
 	input := &dynamodb.QueryInput{TableName: &table, ConsistentRead: aws.Bool(true), Limit: aws.Int32(storePageSize), KeyConditionExpression: aws.String("pk = :pk"), ExpressionAttributeValues: map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: pk}}}
 	items := []map[string]types.AttributeValue{}

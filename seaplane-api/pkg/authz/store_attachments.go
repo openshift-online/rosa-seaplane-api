@@ -59,7 +59,7 @@ func (s *Store) checkAttachment(binding StoredAttachment) error {
 	return nil
 }
 
-// Role lookup keys deliberately omit paths, matching the existing STS semantics.
+// principalKey builds an account-scoped lookup key for a principal.
 func principalKey(principal principalARN) string {
 	if principal.kind == "role" {
 		return roleKey(principal)
@@ -67,8 +67,8 @@ func principalKey(principal principalARN) string {
 	return "ACCOUNT#" + principal.account + "#EXACT#" + principal.original
 }
 
-// roleKey is shared by role writes and session lookups. If the two drift,
-// role forbids silently stop resolving.
+// roleKey builds the same lookup key for an IAM role and its assumed-role sessions.
+// Role paths are omitted because STS session ARNs do not include them.
 func roleKey(principal principalARN) string {
 	return "ACCOUNT#" + principal.account + "#ROLE#" + principal.roleAlias()
 }
@@ -99,7 +99,7 @@ func (s *Store) GetAttachment(ctx context.Context, scope AttachmentScope, id str
 	return binding, nil
 }
 
-// IDs are minted here so independent regions do not share client-selected names.
+// CreateAttachment creates a policy attachment with a generated ID and revision.
 func (s *Store) CreateAttachment(ctx context.Context, spec AttachmentSpec) (StoredAttachment, error) {
 	binding := StoredAttachment{AttachmentSpec: spec, ID: uuid.NewString(), OwnerAccountID: s.config.AccountID, Revision: uuid.NewString()}
 	if spec.Scope == RegionalScope {
@@ -120,7 +120,8 @@ func (s *Store) UpdateAttachment(ctx context.Context, scope AttachmentScope, id,
 	return s.writeAttachment(ctx, binding, expected)
 }
 
-// Keep the management row and the complete principal lookup row in one transaction.
+// writeAttachment saves an attachment and its principal lookup record in one transaction.
+// It checks the attachment's expected revision and the referenced policy's revision.
 func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment, expected string) (StoredAttachment, error) {
 	table, err := s.attachmentTable(binding.Scope)
 	if err != nil {
@@ -138,7 +139,7 @@ func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment, e
 	if err != nil {
 		return StoredAttachment{}, err
 	}
-	// Reads skip content validation, so attaching must check the policy can still bind.
+	// Validate the policy content before attaching it.
 	if err := s.checkContent(policy.Content, policy.ID); err != nil {
 		return StoredAttachment{}, err
 	}

@@ -9,9 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// PublishManagedPolicy is a platform provisioning operation, not tenant CRUD.
-// Deployment must supply a dedicated publisher credential; runtime roles must
-// lack catalog write permission. Existing entries cannot be replaced or deleted.
+// PublishManagedPolicy adds a managed policy without replacing an existing entry.
+// It requires dedicated publisher credentials, separate from runtime roles.
 func PublishManagedPolicy(ctx context.Context, client *dynamodb.Client, table, id, content string) (StoredPolicy, error) {
 	if client == nil || table == "" || !isStoreID(id) {
 		return StoredPolicy{}, fmt.Errorf("invalid catalog publication")

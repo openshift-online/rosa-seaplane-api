@@ -14,8 +14,8 @@ type ResolvedAttachment struct {
 	Policy     StoredPolicy
 }
 
-// Resolve reads all applicable bindings and references, returning no partial set.
-// It is an uncached store capability, not wired to live resource authorization.
+// Resolve reads a caller's global and local regional attachments and their policies.
+// It returns an error instead of partial results if any read or validation fails.
 func (s *Store) Resolve(ctx context.Context, id Identity) ([]ResolvedAttachment, error) {
 	caller, err := checkedIdentity(id)
 	if err != nil {
@@ -74,8 +74,8 @@ func (s *Store) Resolve(ctx context.Context, id Identity) ([]ResolvedAttachment,
 	return resolved, nil
 }
 
-// Batch distinct references in groups of DynamoDB's 100-key service limit.
-// Bound unprocessed-key retries so throttling cannot yield an incomplete success.
+// loadPolicies reads distinct policy references in batches of up to 100 keys.
+// It retries unprocessed keys and returns an error if a batch remains incomplete.
 func (s *Store) loadPolicies(ctx context.Context, bindings []StoredAttachment) (map[PolicyRef]StoredPolicy, error) {
 	const batchSize = 100
 	const batchAttempts = 4
@@ -130,7 +130,7 @@ func bindingDiagnosticID(binding StoredAttachment) string {
 	return string(binding.Scope) + "/" + binding.Region + "/" + binding.ID
 }
 
-// Prepare reuses the shipped evaluator without modifying the startup resolver.
+// Prepare loads and binds stored policies for one caller and request.
 func (s *Store) Prepare(ctx context.Context, id Identity, req RequestContext) (*Prepared, error) {
 	resolved, err := s.Resolve(ctx, id)
 	if err != nil {

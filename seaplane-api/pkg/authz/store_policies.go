@@ -24,15 +24,14 @@ func (s *Store) policyOwner(ref PolicyRef) (string, error) {
 	}
 }
 
+// checkContent validates a policy or template using a sample principal.
 func (s *Store) checkContent(content, id string) error {
-	// Validate before storage without persisting a binding to the sample identity.
 	_, err := s.bindPolicy(content, id, principalARN{kind: "user", original: "template-validation"})
 	return err
 }
 
-// decodePolicy rejects records whose key, owner or revision disagree with the payload.
-// Content is not re-validated: a policy a schema change invalidates must stay
-// listable and deletable. Binding still rejects it before evaluation.
+// decodePolicy checks a stored policy's key, owner, and revision against its payload.
+// It does not validate policy content.
 func (s *Store) decodePolicy(item map[string]types.AttributeValue) (StoredPolicy, error) {
 	var policy StoredPolicy
 	revision, err := decodeItem(item, &policy)
@@ -69,7 +68,8 @@ func (s *Store) UpdatePolicy(ctx context.Context, id, revision, content string) 
 	return s.writePolicy(ctx, id, revision, content)
 }
 
-// Tenant mutations always address custom records, never catalog entries.
+// writePolicy creates or updates a custom policy in the assigned writer region.
+// Updates require the expected revision.
 func (s *Store) writePolicy(ctx context.Context, id, expected, content string) (StoredPolicy, error) {
 	if err := s.requireWriter(); err != nil {
 		return StoredPolicy{}, err
