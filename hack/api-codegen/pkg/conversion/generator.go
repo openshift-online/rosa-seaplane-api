@@ -344,8 +344,6 @@ func (g *Generator) parseField(typeName string, field *ast.Field, name *ast.Iden
 
 func (g *Generator) buildFieldPath(typeName, jsonName string) string {
 	switch typeName {
-	case "KubeletConfig":
-		return "kubelet." + jsonName
 	case "MachineConfigSpec":
 		return "machineConfig." + jsonName
 	case "ClusterConfiguration":
@@ -658,7 +656,7 @@ func (g *Generator) generateRESTTypes() error {
 	}
 
 	// Transitively expand restTypeSet with all local (non-external) types referenced
-	// by types already in the set. This ensures KubeletConfig, MachineConfigSpec, etc.
+	// by types already in the set. This ensures MachineConfigSpec, etc.
 	// are included so qualifyTypeForREST emits them without a package qualifier.
 	g.expandRestTypeSetTransitively(restTypeSet)
 

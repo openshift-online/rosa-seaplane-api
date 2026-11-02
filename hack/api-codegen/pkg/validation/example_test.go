@@ -85,16 +85,16 @@ func ExampleValidator_Validate_featureGate() {
 		Operation:    validation.OperationCreate,
 		ResourceType: "Cluster",
 		Fields: map[string]any{
-			"spec.hostedCluster.configuration.kubelet.registryPullQPS": 10,
+			"spec.hostedCluster.configuration.machineConfig.allowedKernelArguments": []string{"nosmt"},
 		},
-		FeatureSet: featuregate.Default, // Advanced kubelet config requires TechPreview
+		FeatureSet: featuregate.Default, // Machine config requires TechPreview
 	}
 
 	err := v.Validate(req)
 	fmt.Printf("Error: %v\n", err)
 	// Output:
 	// Error: validation failed:
-	//   field spec.hostedCluster.configuration.kubelet.registryPullQPS: requires feature gate SeaplaneKubeletAdvanced which is not enabled in Default feature set
+	//   field spec.hostedCluster.configuration.machineConfig.allowedKernelArguments: requires feature gate SeaplaneMachineConfig which is not enabled in Default feature set
 }
 
 // Example of feature gate allowing access
@@ -106,7 +106,7 @@ func ExampleValidator_Validate_featureGateAllowed() {
 		Operation:    validation.OperationCreate,
 		ResourceType: "Cluster",
 		Fields: map[string]any{
-			"spec.hostedCluster.configuration.kubelet.registryPullQPS": 10,
+			"spec.hostedCluster.configuration.machineConfig.allowedKernelArguments": []string{"nosmt"},
 		},
 		FeatureSet: featuregate.TechPreviewNoUpgrade,
 	}
@@ -115,8 +115,8 @@ func ExampleValidator_Validate_featureGateAllowed() {
 		log.Fatalf("Validation failed: %v", err)
 	}
 
-	fmt.Println("TechPreview customer can use advanced kubelet config")
-	// Output: TechPreview customer can use advanced kubelet config
+	fmt.Println("TechPreview customer can use machine config")
+	// Output: TechPreview customer can use machine config
 }
 
 // Example of checking field access
@@ -124,20 +124,20 @@ func ExampleValidator_ValidateFieldAccess() {
 	v := validation.NewValidator()
 
 	// Check if a customer can access a gated field
-	err := v.ValidateFieldAccess("Cluster", "spec.hostedCluster.configuration.kubelet.registryPullQPS", featuregate.Default)
+	err := v.ValidateFieldAccess("Cluster", "spec.hostedCluster.configuration.machineConfig.allowedKernelArguments", featuregate.Default)
 	if err != nil {
-		fmt.Println("Default customer cannot access advanced kubelet config")
+		fmt.Println("Default customer cannot access machine config")
 	}
 
 	// TechPreview customer can access it
-	err = v.ValidateFieldAccess("Cluster", "spec.hostedCluster.configuration.kubelet.registryPullQPS", featuregate.TechPreviewNoUpgrade)
+	err = v.ValidateFieldAccess("Cluster", "spec.hostedCluster.configuration.machineConfig.allowedKernelArguments", featuregate.TechPreviewNoUpgrade)
 	if err == nil {
-		fmt.Println("TechPreview customer can access advanced kubelet config")
+		fmt.Println("TechPreview customer can access machine config")
 	}
 
 	// Output:
-	// Default customer cannot access advanced kubelet config
-	// TechPreview customer can access advanced kubelet config
+	// Default customer cannot access machine config
+	// TechPreview customer can access machine config
 }
 
 // Example of getting field metadata

@@ -484,7 +484,7 @@ func (t TypedFieldRegistry) Validate() error {
 // generateSyntheticPaths creates full nested paths for upstream-reduced types embedded in CRDs.
 // For example: if Cluster embeds ClusterConfiguration which maps to hypershiftv1beta1.ClusterConfiguration,
 // this duplicates all ClusterConfiguration fields under Cluster with full paths like
-// spec.hostedCluster.configuration.kubelet.maxPods
+// spec.hostedCluster.configuration.machineConfig.kernelArguments
 func (s *MarkerScanner) generateSyntheticPaths(byOwner map[string][]templateField) {
 	s.logf("  generating synthetic paths for upstream-reduced types")
 	s.logf("    embedded upstream-reduced types found: %d", len(s.embeddedUpstreamTypes))
@@ -509,7 +509,7 @@ func (s *MarkerScanner) generateSyntheticPaths(byOwner map[string][]templateFiel
 		}
 
 		// Generate synthetic paths for each field in the local type
-		// e.g., containerPath="spec.hostedCluster.configuration", field="kubelet.maxPods" → "spec.hostedCluster.configuration.kubelet.maxPods"
+		// e.g., containerPath="spec.hostedCluster.configuration", field="machineConfig.kernelArguments" → "spec.hostedCluster.configuration.machineConfig.kernelArguments"
 		for _, field := range localFields {
 			syntheticPath := embedding.ContainerFieldPath + "." + field.FieldPath
 

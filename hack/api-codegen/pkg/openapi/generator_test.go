@@ -197,7 +197,7 @@ func TestConfigurationUsesLocalType(t *testing.T) {
 	t.Run("ingress configuration", func(t *testing.T) { assertIngressConfiguration(t, output) })
 	t.Run("scheduler configuration", func(t *testing.T) { assertSchedulerConfiguration(t, output) })
 	t.Run("proxy configuration", func(t *testing.T) { assertProxyConfiguration(t, output) })
-	t.Run("kubelet configuration", func(t *testing.T) { assertKubeletConfiguration(t, output) })
+	t.Run("machineConfig", func(t *testing.T) { assertMachineConfiguration(t, output) })
 	t.Run("cluster autoscaling", func(t *testing.T) { assertClusterAutoscaling(t, output) })
 	t.Run("capabilities", func(t *testing.T) { assertCapabilities(t, output) })
 }
@@ -243,15 +243,15 @@ func assertClusterConfiguration(t *testing.T, output schemaOutput) {
 	}
 
 	// The local type's markers expose authentication, ingress, proxy, scheduler,
-	// kubelet, and machineConfig.
+	// and machineConfig.
 	// If the upstream hypershiftv1beta1.ClusterConfiguration were used instead,
 	// all 10 sub-config fields would be present (no hidden markers).
-	for _, visible := range []string{"authentication", "ingress", "proxy", "scheduler", "kubelet", "machineConfig"} {
+	for _, visible := range []string{"authentication", "ingress", "proxy", "scheduler", "machineConfig"} {
 		if _, found := cc.Properties[visible]; !found {
 			t.Errorf("expected visible property %q in ClusterConfiguration", visible)
 		}
 	}
-	for _, hidden := range []string{"apiServer", "featureGate", "image", "network", "oauth"} {
+	for _, hidden := range []string{"apiServer", "featureGate", "image", "network", "oauth", "kubelet"} {
 		if _, found := cc.Properties[hidden]; found {
 			t.Errorf("property %q should be hidden in ClusterConfiguration (local markers not applied?)", hidden)
 		}
@@ -352,21 +352,19 @@ func assertProxyConfiguration(t *testing.T, output schemaOutput) {
 	}
 }
 
-func assertKubeletConfiguration(t *testing.T, output schemaOutput) {
+func assertMachineConfiguration(t *testing.T, output schemaOutput) {
 	t.Helper()
-	// KubeletConfig must retain its visible fields (nested path test)
-	kc, ok := output.Definitions["KubeletConfig"]
+	// MachineConfigSpec must retain its visible fields (nested path test)
+	mc, ok := output.Definitions["MachineConfigSpec"]
 	if !ok {
-		t.Fatal("KubeletConfig definition not found")
+		t.Fatal("MachineConfigSpec definition not found")
 	}
-	for _, visible := range []string{"podPidsLimit", "maxPods", "containerLogMaxFiles"} {
-		if _, found := kc.Properties[visible]; !found {
-			t.Errorf("expected visible property %q in KubeletConfig", visible)
-		}
+	if _, found := mc.Properties["allowedKernelArguments"]; !found {
+		t.Error("expected visible property \"allowedKernelArguments\" in MachineConfigSpec")
 	}
-	for _, hidden := range []string{"evictionHard", "cpuManagerPolicy", "topologyManagerPolicy"} {
-		if _, found := kc.Properties[hidden]; found {
-			t.Errorf("property %q should be hidden in KubeletConfig", hidden)
+	for _, hidden := range []string{"kernelArguments", "systemdUnits", "files", "extensions"} {
+		if _, found := mc.Properties[hidden]; found {
+			t.Errorf("property %q should be hidden in MachineConfigSpec", hidden)
 		}
 	}
 }

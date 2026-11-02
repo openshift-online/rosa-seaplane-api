@@ -233,7 +233,6 @@ func TestMarkerScanner_UpstreamReducedTypesDetected(t *testing.T) {
 	// Check for expected upstream-reduced types
 	expectedTypes := map[string]string{
 		"ClusterConfiguration": "hypershiftv1beta1.ClusterConfiguration",
-		"KubeletConfig":        "hypershiftv1beta1.KubeletConfig",
 		"MachineConfigSpec":    "hypershiftv1beta1.MachineConfigSpec",
 	}
 
@@ -277,23 +276,23 @@ func TestMarkerScanner_EmbeddedUpstreamTypesTracked(t *testing.T) {
 		return
 	}
 
-	// Check for KubeletConfig embedding
-	foundKubelet := false
+	// Check for MachineConfigSpec embedding
+	foundMachineConfig := false
 	for _, embedding := range scanner.embeddedUpstreamTypes {
-		if embedding.LocalType == "KubeletConfig" {
-			foundKubelet = true
-			if !strings.Contains(embedding.ContainerFieldPath, "kubelet") {
-				t.Errorf("KubeletConfig embedding has wrong path: %q", embedding.ContainerFieldPath)
+		if embedding.LocalType == "MachineConfigSpec" {
+			foundMachineConfig = true
+			if !strings.Contains(embedding.ContainerFieldPath, "machineConfig") {
+				t.Errorf("MachineConfigSpec embedding has wrong path: %q", embedding.ContainerFieldPath)
 			}
-			if !strings.Contains(embedding.UpstreamType, "KubeletConfig") {
-				t.Errorf("KubeletConfig embedding has wrong upstream type: %q", embedding.UpstreamType)
+			if !strings.Contains(embedding.UpstreamType, "MachineConfigSpec") {
+				t.Errorf("MachineConfigSpec embedding has wrong upstream type: %q", embedding.UpstreamType)
 			}
 			break
 		}
 	}
 
-	if !foundKubelet {
-		t.Error("KubeletConfig embedding not found")
+	if !foundMachineConfig {
+		t.Error("MachineConfigSpec embedding not found")
 	}
 }
 
