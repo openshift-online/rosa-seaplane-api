@@ -10,6 +10,10 @@ AccessEntry, `/authz/check`; see the [target design](authz-design.md). Chart
 delivery and the account allowlist SOP:
 `rosa-seaplane/docs/platform-api-authorization.md`.
 
+The [DynamoDB authorization storage design](authz-storage-contract.md) defines the
+persistent storage contract and proposed provisioning. Live authorization still
+uses the startup bundle.
+
 ## Startup
 
 | Input                                       | Behavior                                              |

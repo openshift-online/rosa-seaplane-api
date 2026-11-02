@@ -76,12 +76,14 @@ type Resource struct {
 	ParentCluster  *ParentCluster
 }
 
-// Provenance identifies the policy, attachment, and startup bundle hash behind a decision.
+// Provenance identifies the policy/attachment revisions or startup bundle behind a decision.
 type Provenance struct {
-	DiagnosticID string
-	PolicyID     string
-	BundleHash   string
-	AttachmentID string
+	DiagnosticID       string
+	PolicyID           string
+	BundleHash         string
+	AttachmentID       string
+	PolicyRevision     string
+	AttachmentRevision string
 }
 
 type Decision struct {

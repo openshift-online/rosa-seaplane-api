@@ -144,6 +144,10 @@ Organization Administrators can attach managed ROSA policies to any IAM principa
 
 ## Data Storage
 
+See the [DynamoDB authorization storage design](authz-storage-contract.md) for the
+policy and attachment storage contract, consistency guarantees, and proposed
+provisioning. Account and identity linking are outside that document's scope.
+
 | Entity                          | Storage                         | Scope                       |
 | ------------------------------- | ------------------------------- | --------------------------- |
 | AWS account → RH org mapping    | DynamoDB Global Tables          | Global                      |

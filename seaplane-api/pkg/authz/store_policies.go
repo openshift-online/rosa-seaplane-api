@@ -1,0 +1,110 @@
+package authz
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/google/uuid"
+)
+
+func (s *Store) policyOwner(ref PolicyRef) (string, error) {
+	if !isStoreID(ref.ID) {
+		return "", fmt.Errorf("invalid policy ID")
+	}
+	switch ref.Kind {
+	case CustomPolicy:
+		return s.config.AccountID, nil
+	case ManagedPolicy:
+		return managedOwner, nil
+	default:
+		return "", fmt.Errorf("invalid policy kind")
+	}
+}
+
+func (s *Store) checkContent(content, id string) error {
+	// Validate before storage without persisting a binding to the sample identity.
+	_, err := s.bindPolicy(content, id, principalARN{kind: "user", original: "template-validation"})
+	return err
+}
+
+// decodePolicy rejects records whose key, owner or revision disagree with the payload.
+// Content is not re-validated: a policy a schema change invalidates must stay
+// listable and deletable. Binding still rejects it before evaluation.
+func (s *Store) decodePolicy(item map[string]types.AttributeValue) (StoredPolicy, error) {
+	var policy StoredPolicy
+	revision, err := decodeItem(item, &policy)
+	if err != nil {
+		return StoredPolicy{}, err
+	}
+	owner, err := s.policyOwner(PolicyRef{ID: policy.ID, Kind: policy.Kind})
+	if err != nil || policy.OwnerAccountID != owner || policy.Revision != revision || !matchesStoreKey(item, "ACCOUNT#"+owner, "POLICY#"+policy.ID) {
+		return StoredPolicy{}, fmt.Errorf("inconsistent policy record")
+	}
+	return policy, nil
+}
+
+func (s *Store) GetPolicy(ctx context.Context, ref PolicyRef) (StoredPolicy, error) {
+	owner, err := s.policyOwner(ref)
+	if err != nil {
+		return StoredPolicy{}, err
+	}
+	item, err := s.readItem(ctx, s.config.PolicyTable, "ACCOUNT#"+owner, "POLICY#"+ref.ID)
+	if err != nil {
+		return StoredPolicy{}, err
+	}
+	return s.decodePolicy(item)
+}
+
+func (s *Store) CreatePolicy(ctx context.Context, id, content string) (StoredPolicy, error) {
+	return s.writePolicy(ctx, id, "", content)
+}
+
+func (s *Store) UpdatePolicy(ctx context.Context, id, revision, content string) (StoredPolicy, error) {
+	if !isRevision(revision) {
+		return StoredPolicy{}, fmt.Errorf("expected revision is required")
+	}
+	return s.writePolicy(ctx, id, revision, content)
+}
+
+// Tenant mutations always address custom records, never catalog entries.
+func (s *Store) writePolicy(ctx context.Context, id, expected, content string) (StoredPolicy, error) {
+	if err := s.requireWriter(); err != nil {
+		return StoredPolicy{}, err
+	}
+	if !isStoreID(id) {
+		return StoredPolicy{}, fmt.Errorf("invalid policy ID")
+	}
+	if err := s.checkContent(content, id); err != nil {
+		return StoredPolicy{}, err
+	}
+	policy := StoredPolicy{ID: id, OwnerAccountID: s.config.AccountID, Kind: CustomPolicy, Content: content, Revision: uuid.NewString()}
+	item, err := storeItem("ACCOUNT#"+policy.OwnerAccountID, "POLICY#"+id, policy.Revision, policy)
+	if err != nil {
+		return StoredPolicy{}, err
+	}
+	condition := "attribute_not_exists(pk)"
+	values := map[string]types.AttributeValue(nil)
+	if expected != "" {
+		condition = "revision = :expected"
+		values = map[string]types.AttributeValue{":expected": &types.AttributeValueMemberS{Value: expected}}
+	}
+	_, err = s.client.PutItem(ctx, &dynamodb.PutItemInput{TableName: &s.config.PolicyTable, Item: item, ConditionExpression: &condition, ExpressionAttributeValues: values})
+	if err != nil {
+		return StoredPolicy{}, storeError(err)
+	}
+	return policy, nil
+}
+
+func (s *Store) DeletePolicy(ctx context.Context, id, revision string) error {
+	if err := s.requireWriter(); err != nil {
+		return err
+	}
+	if !isStoreID(id) || !isRevision(revision) {
+		return fmt.Errorf("valid policy ID and expected revision required")
+	}
+	_, err := s.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{TableName: &s.config.PolicyTable, Key: storeKey("ACCOUNT#"+s.config.AccountID, "POLICY#"+id), ConditionExpression: aws.String("revision = :expected"), ExpressionAttributeValues: map[string]types.AttributeValue{":expected": &types.AttributeValueMemberS{Value: revision}}})
+	return storeError(err)
+}
