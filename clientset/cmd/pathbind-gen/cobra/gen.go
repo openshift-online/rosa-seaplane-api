@@ -112,8 +112,13 @@ func loadOverrides(path string) (*pkg.Overrides, error) {
 	return &ov, nil
 }
 
+// licenseHeader is prepended to every generated file.
+const licenseHeader = "// Copyright Red Hat\n// SPDX-License-Identifier: Apache-2.0\n\n"
+
 func emitFile(tmpl *template.Template, data pkg.CobraTemplateData, path string, withHeader bool) error {
 	var buf bytes.Buffer
+
+	fmt.Fprintf(&buf, licenseHeader)
 
 	if !withHeader {
 		fmt.Fprintf(&buf, "package %s\n\nimport (\n\t\"context\"\n\t\"encoding/json\"%s\n\t\"github.com/spf13/cobra\"\n\t%s %q\n\tv1alpha1 \"github.com/openshift-online/rosa-seaplane-api/api/v1alpha1/public\"\n\tpathbind \"github.com/openshift-online/rosa-seaplane-api/clientset/pathbind\"\n\tplatform \"github.com/openshift-online/rosa-seaplane-api/clientset/platform\"\n\tinteractive %q\n\t\"k8s.io/apimachinery/pkg/types\"\n)\n\n",
