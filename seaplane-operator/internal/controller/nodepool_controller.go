@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -141,6 +142,13 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	m, err := render.NodePoolResource(&nodePool, cluster)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("render nodepool resource: %w", err)
+	}
+	renderedNodePool, ok := m.Object.(*hypershiftv1beta1.NodePool)
+	if !ok {
+		return ctrl.Result{}, fmt.Errorf("rendered NodePool has unexpected type %T", m.Object)
+	}
+	if err := r.upsertRenderedNodePool(ctx, renderedNodePool); err != nil {
+		return ctrl.Result{}, err
 	}
 	ns := m.Namespace
 
@@ -291,12 +299,26 @@ func (r *NodePoolReconciler) reconcileDelete(ctx context.Context, nodePool *seap
 
 		// Resource confirmed deleted — remove the ApplyDesire and ReadDesire
 		// specs from DynamoDB so kube-applier stops tracking them.
+		var desireCleanupErr error
 		if err := r.Dynamo.DeleteDesireSpec(ctx, specsPrefix, "-applydesires", docID); err != nil {
 			log.Error(err, "Failed to clean up ApplyDesire spec", "nodepool", m.Name)
+			desireCleanupErr = fmt.Errorf("delete ApplyDesire spec for NodePool %s: %w", m.Name, err)
 		}
 		readDocID := dynamo.NewDocumentID(taskKey+"-read", m.Group, m.Version, m.Resource, ns, m.Name)
 		if err := r.Dynamo.DeleteDesireSpec(ctx, specsPrefix, "-readdesires", readDocID); err != nil {
 			log.Error(err, "Failed to clean up ReadDesire spec", "nodepool", m.Name)
+			if desireCleanupErr == nil {
+				desireCleanupErr = fmt.Errorf("delete ReadDesire spec for NodePool %s: %w", m.Name, err)
+			}
+		}
+		if desireCleanupErr != nil {
+			return ctrl.Result{}, desireCleanupErr
+		}
+	}
+
+	if clusterUID, renderedName, ok := renderedNodePoolIdentity(nodePool); ok {
+		if err := r.deleteRenderedNodePool(ctx, clusterUID, renderedName); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 

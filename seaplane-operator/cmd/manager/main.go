@@ -29,6 +29,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	seaplanedb "github.com/openshift-online/rosa-seaplane-api/seaplane-db"
 	hd "github.com/openshift-online/rosa-seaplane-kube-applier/seaplane-dynamo/dynamodb"
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -118,6 +119,10 @@ func main() {
 	scheme := runtime.NewScheme()
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
 		setupLog.Error(err, "Failed to add v1alpha1 to scheme")
+		os.Exit(1)
+	}
+	if err := hypershiftv1beta1.AddToScheme(scheme); err != nil {
+		setupLog.Error(err, "Failed to add HyperShift v1beta1 to scheme")
 		os.Exit(1)
 	}
 

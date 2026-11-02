@@ -26,7 +26,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -65,6 +67,8 @@ var _ = BeforeSuite(func() {
 	var err error
 	err = seaplaneiov1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
+	err = hypershiftv1beta1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
 
@@ -72,6 +76,11 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
+		CRDs: []*apiextensionsv1.CustomResourceDefinition{
+			hostedClusterCRD(),
+			nodePoolCRD(),
+		},
+		UseExistingCluster: boolPtr(false),
 	}
 
 	// Retrieve the first found binary directory to allow running tests from IDEs
@@ -96,6 +105,44 @@ var _ = AfterSuite(func() {
 		return testEnv.Stop()
 	}, time.Minute, time.Second).Should(Succeed())
 })
+
+func hostedClusterCRD() *apiextensionsv1.CustomResourceDefinition {
+	return hypershiftCRD("hostedclusters", "hostedcluster", "HostedCluster")
+}
+
+func nodePoolCRD() *apiextensionsv1.CustomResourceDefinition {
+	return hypershiftCRD("nodepools", "nodepool", "NodePool")
+}
+
+func hypershiftCRD(plural, singular, kind string) *apiextensionsv1.CustomResourceDefinition {
+	return &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: plural + ".hypershift.openshift.io"},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: "hypershift.openshift.io",
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Plural:   plural,
+				Singular: singular,
+				Kind:     kind,
+			},
+			Scope: apiextensionsv1.NamespaceScoped,
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{{
+				Name:    "v1beta1",
+				Served:  true,
+				Storage: true,
+				Schema: &apiextensionsv1.CustomResourceValidation{
+					OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+						Type:                   "object",
+						XPreserveUnknownFields: boolPtr(true),
+					},
+				},
+			}},
+		},
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
 // ENVTEST-based tests depend on specific binaries, usually located in paths set by

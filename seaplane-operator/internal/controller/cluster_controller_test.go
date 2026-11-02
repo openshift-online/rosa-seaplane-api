@@ -986,6 +986,10 @@ func createTestClusterWithReservation(ctx context.Context, cluster *seaplanev1al
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		return err
 	}
+	// Rendered HostedClusters are namespaced by cluster UID. The PostgreSQL
+	// client does not require the namespace to exist, but envtest's Kubernetes
+	// API server does.
+	ensureNamespace(ctx, render.ManagementNamespace(string(cluster.UID)))
 	reservation.Labels[claimedByClusterUIDLabel] = string(cluster.UID)
 	if err := k8sClient.Update(ctx, reservation); err != nil {
 		return err
