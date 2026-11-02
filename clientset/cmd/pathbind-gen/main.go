@@ -38,6 +38,7 @@ func main() {
 	draftPath := flag.String("draft", "", "[cobra/tf] path to pathbind-draft.yaml (optional)")
 	overridesPath := flag.String("overrides", "", "[cobra/tf] path to pathbind-overrides.yaml")
 	outputDir := flag.String("output-dir", "", "[cobra/tf] directory to write generated Go files")
+	headerFile := flag.String("go-header-file", "", "[cobra] path to license header file (defaults to the repository boilerplate)")
 
 	flag.Parse()
 
@@ -58,7 +59,7 @@ func main() {
 		if *overridesPath == "" || *outputDir == "" {
 			fatalf("--overrides and --output-dir are required for --mode=cobra")
 		}
-		if err := cobra.Run(*draftPath, *overridesPath, *outputDir); err != nil {
+		if err := cobra.Run(*draftPath, *overridesPath, *outputDir, *headerFile); err != nil {
 			log.Fatalf("pathbind-gen: %v", err)
 		}
 

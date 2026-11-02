@@ -2,18 +2,46 @@ package cobra
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"go/format"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	pkg "github.com/openshift-online/rosa-seaplane-api/clientset/cmd/pathbind-gen/pkg"
 	"gopkg.in/yaml.v3"
 )
 
-func Run(draftPath, overridesPath, outputDir string) error {
+//go:embed license-boilerplate.go.txt
+var boilerplateTemplate string
+
+// licenseHeader returns the license header to prepend to every generated
+// file. If headerFile is empty, the repository's canonical boilerplate
+// (embedded copy of hack/clientset/license-boilerplate.go.txt) is used, with
+// YEAR replaced by the current year.
+func licenseHeader(headerFile string) (string, error) {
+	var raw string
+	if headerFile != "" {
+		b, err := os.ReadFile(headerFile)
+		if err != nil {
+			return "", fmt.Errorf("reading header file %s: %w", headerFile, err)
+		}
+		raw = string(b)
+	} else {
+		raw = boilerplateTemplate
+	}
+	return strings.ReplaceAll(raw, "YEAR", strconv.Itoa(time.Now().Year())), nil
+}
+
+func Run(draftPath, overridesPath, outputDir, headerFile string) error {
+	header, err := licenseHeader(headerFile)
+	if err != nil {
+		return err
+	}
 	rawOv, err := loadOverrides(overridesPath)
 	if err != nil {
 		return err
@@ -34,7 +62,7 @@ func Run(draftPath, overridesPath, outputDir string) error {
 		return fmt.Errorf("creating output dir: %w", err)
 	}
 
-	if err := emitHelpersFile(outputDir, cfg.Package); err != nil {
+	if err := emitHelpersFile(outputDir, cfg.Package, header); err != nil {
 		return err
 	}
 
@@ -88,11 +116,11 @@ func Run(draftPath, overridesPath, outputDir string) error {
 			UnsetPtrFields:           unsetPtrFields,
 		}
 
-		if err := emitFile(createTmpl, td, filepath.Join(outputDir, strings.ToLower(resName)+"_create_gen.go"), true); err != nil {
+		if err := emitFile(createTmpl, td, filepath.Join(outputDir, strings.ToLower(resName)+"_create_gen.go"), true, header); err != nil {
 			return err
 		}
 		if td.HasUpdateFields {
-			if err := emitFile(updateTmpl, td, filepath.Join(outputDir, strings.ToLower(resName)+"_update_gen.go"), false); err != nil {
+			if err := emitFile(updateTmpl, td, filepath.Join(outputDir, strings.ToLower(resName)+"_update_gen.go"), false, header); err != nil {
 				return err
 			}
 		}
@@ -112,13 +140,11 @@ func loadOverrides(path string) (*pkg.Overrides, error) {
 	return &ov, nil
 }
 
-// licenseHeader is prepended to every generated file.
-const licenseHeader = "// Copyright Red Hat\n// SPDX-License-Identifier: Apache-2.0\n\n"
-
-func emitFile(tmpl *template.Template, data pkg.CobraTemplateData, path string, withHeader bool) error {
+func emitFile(tmpl *template.Template, data pkg.CobraTemplateData, path string, withHeader bool, license string) error {
 	var buf bytes.Buffer
 
-	fmt.Fprintf(&buf, licenseHeader)
+	buf.WriteString(license)
+	buf.WriteString("\n\n")
 
 	if !withHeader {
 		fmt.Fprintf(&buf, "package %s\n\nimport (\n\t\"context\"\n\t\"encoding/json\"%s\n\t\"github.com/spf13/cobra\"\n\t%s %q\n\tv1alpha1 \"github.com/openshift-online/rosa-seaplane-api/api/v1alpha1/public\"\n\tpathbind \"github.com/openshift-online/rosa-seaplane-api/clientset/pathbind\"\n\tplatform \"github.com/openshift-online/rosa-seaplane-api/clientset/platform\"\n\tinteractive %q\n\t\"k8s.io/apimachinery/pkg/types\"\n)\n\n",
@@ -232,9 +258,11 @@ func buildFuncMap() template.FuncMap {
 	}
 }
 
-func emitHelpersFile(outputDir, pkgName string) error {
+func emitHelpersFile(outputDir, pkgName, license string) error {
 	tmpl := template.Must(template.New("helpers").Parse(helpersTemplate))
 	var buf bytes.Buffer
+	buf.WriteString(license)
+	buf.WriteString("\n\n")
 	if err := tmpl.Execute(&buf, map[string]string{"Package": pkgName}); err != nil {
 		return fmt.Errorf("rendering helpers_gen.go: %w", err)
 	}

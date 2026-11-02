@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"text/template"
+	"time"
 
 	pkg "github.com/openshift-online/rosa-seaplane-api/clientset/cmd/pathbind-gen/pkg"
 )
@@ -271,12 +273,22 @@ func TestEmitUpdateFileConditionalFmtImport(t *testing.T) {
 	}
 
 	resettablePath := filepath.Join(t.TempDir(), "resettable_update_gen.go")
-	if err := emitFile(tmpl, data, resettablePath, false); err != nil {
+	header, err := licenseHeader("")
+	if err != nil {
+		t.Fatalf("licenseHeader(): %v", err)
+	}
+	if err := emitFile(tmpl, data, resettablePath, false, header); err != nil {
 		t.Fatalf("emitFile() with only resettable fields: %v", err)
 	}
 	output, err := os.ReadFile(resettablePath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !bytes.Contains(output, []byte("Licensed under the Apache License")) {
+		t.Fatalf("generated file should carry the license header:\n%s", output)
+	}
+	if !bytes.Contains(output, []byte(strconv.Itoa(time.Now().Year()))) {
+		t.Fatalf("generated file should have YEAR replaced with the current year:\n%s", output)
 	}
 	if bytes.Contains(output, []byte("\t\"fmt\"\n")) {
 		t.Fatalf("generated update with only resettable fields should not import fmt:\n%s", output)
@@ -286,7 +298,7 @@ func TestEmitUpdateFileConditionalFmtImport(t *testing.T) {
 		GoName: "Replicas", Type: "int32", Path: "spec.nodePool.replicas", Flag: "replicas", HasFlag: true, Operations: []string{"update"},
 	})
 	nonResettablePath := filepath.Join(t.TempDir(), "non_resettable_update_gen.go")
-	if err := emitFile(tmpl, data, nonResettablePath, false); err != nil {
+	if err := emitFile(tmpl, data, nonResettablePath, false, header); err != nil {
 		t.Fatalf("emitFile() with a non-resettable field: %v", err)
 	}
 	output, err = os.ReadFile(nonResettablePath)
