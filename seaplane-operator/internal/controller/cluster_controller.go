@@ -471,7 +471,7 @@ func (r *ClusterReconciler) reconcilePlacedCluster(ctx context.Context, req ctrl
 			if !ok {
 				return ctrl.Result{}, fmt.Errorf("rendered HostedCluster has unexpected type %T", resource.Object)
 			}
-			if err := r.upsertRenderedHostedCluster(ctx, hostedCluster); err != nil {
+			if err := r.upsertRenderedHostedCluster(ctx, cluster, hostedCluster); err != nil {
 				return ctrl.Result{}, err
 			}
 			break
@@ -605,7 +605,7 @@ func (r *ClusterReconciler) reconcileDelete(ctx context.Context, cluster *seapla
 		}
 	}
 	if mc == "" {
-		if err := r.deleteRenderedHostedCluster(ctx, string(cluster.UID), render.HostedClusterName(cluster)); err != nil {
+		if err := r.deleteRenderedHostedCluster(ctx, cluster.Namespace, cluster.Name); err != nil {
 			return ctrl.Result{}, err
 		}
 		return r.cleanupAndRemoveFinalizer(ctx, cluster)
@@ -736,7 +736,7 @@ func (r *ClusterReconciler) reconcileDelete(ctx context.Context, cluster *seapla
 		return ctrl.Result{}, desireCleanupErr
 	}
 
-	if err := r.deleteRenderedHostedCluster(ctx, clusterID, hcName); err != nil {
+	if err := r.deleteRenderedHostedCluster(ctx, cluster.Namespace, cluster.Name); err != nil {
 		return ctrl.Result{}, err
 	}
 

@@ -147,7 +147,7 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if !ok {
 		return ctrl.Result{}, fmt.Errorf("rendered NodePool has unexpected type %T", m.Object)
 	}
-	if err := r.upsertRenderedNodePool(ctx, renderedNodePool); err != nil {
+	if err := r.upsertRenderedNodePool(ctx, &nodePool, renderedNodePool); err != nil {
 		return ctrl.Result{}, err
 	}
 	ns := m.Namespace
@@ -316,10 +316,8 @@ func (r *NodePoolReconciler) reconcileDelete(ctx context.Context, nodePool *seap
 		}
 	}
 
-	if clusterUID, renderedName, ok := renderedNodePoolIdentity(nodePool); ok {
-		if err := r.deleteRenderedNodePool(ctx, clusterUID, renderedName); err != nil {
-			return ctrl.Result{}, err
-		}
+	if err := r.deleteRenderedNodePool(ctx, nodePool.Namespace, nodePool.Name); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Remove finalizer with RetryOnConflict to handle stale resourceVersion.
