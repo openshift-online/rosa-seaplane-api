@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/server"
 )
 
@@ -174,11 +176,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if n, ok := parseMaxRequestBodyBytes(os.Getenv("MAX_REQUEST_BODY_BYTES")); ok {
-		cfg.Server.MaxRequestBodyBytes = n
-	} else if os.Getenv("MAX_REQUEST_BODY_BYTES") != "" {
-		logger.Warn("invalid MAX_REQUEST_BODY_BYTES, using default", "value", os.Getenv("MAX_REQUEST_BODY_BYTES"))
-	}
+	applyServerLimitConfig(cfg, logger)
 
 	// Create seaplane DB client (Postgres via pgruntime)
 	dbClient, err := seaplanedb.NewClient(context.Background(), cfg.DB.DSN, logger)
@@ -257,4 +255,53 @@ func parseMaxRequestBodyBytes(v string) (int64, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// applyServerLimitConfig reads server limit env vars and applies them to cfg.
+func applyServerLimitConfig(cfg *config.Config, logger *slog.Logger) {
+	if n, ok := parseMaxRequestBodyBytes(os.Getenv("MAX_REQUEST_BODY_BYTES")); ok {
+		cfg.Server.MaxRequestBodyBytes = n
+	} else if os.Getenv("MAX_REQUEST_BODY_BYTES") != "" {
+		logger.Warn("invalid MAX_REQUEST_BODY_BYTES, using default", "value", os.Getenv("MAX_REQUEST_BODY_BYTES"))
+	}
+
+	for _, t := range []struct {
+		env string
+		dst *time.Duration
+	}{
+		{"READ_HEADER_TIMEOUT_SECONDS", &cfg.Server.ReadHeaderTimeout},
+		{"READ_TIMEOUT_SECONDS", &cfg.Server.ReadTimeout},
+		{"WRITE_TIMEOUT_SECONDS", &cfg.Server.WriteTimeout},
+		{"IDLE_TIMEOUT_SECONDS", &cfg.Server.IdleTimeout},
+	} {
+		if d, ok := parseDurationSeconds(os.Getenv(t.env)); ok {
+			*t.dst = d
+		} else if os.Getenv(t.env) != "" {
+			logger.Warn("invalid timeout env var, using default", "env", t.env, "value", os.Getenv(t.env))
+		}
+	}
+
+	if n, ok := parseMaxRequestBodyBytes(os.Getenv("MAX_REQUEST_HEADER_BYTES")); ok && n <= math.MaxInt {
+		cfg.Server.MaxHeaderBytes = int(n)
+	} else if os.Getenv("MAX_REQUEST_HEADER_BYTES") != "" {
+		logger.Warn("invalid MAX_REQUEST_HEADER_BYTES, using default", "value", os.Getenv("MAX_REQUEST_HEADER_BYTES"))
+	}
+}
+
+// parseDurationSeconds parses a whole-second duration string (e.g. "30").
+// Returns (d, true) when v is a valid positive integer within the representable
+// range of time.Duration, (0, false) otherwise.
+func parseDurationSeconds(v string) (time.Duration, bool) {
+	if v == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	const maxSeconds = int64(math.MaxInt64 / time.Second)
+	if n > maxSeconds {
+		return 0, false
+	}
+	return time.Duration(n) * time.Second, true
 }

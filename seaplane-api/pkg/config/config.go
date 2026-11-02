@@ -48,7 +48,15 @@ type ServerConfig struct {
 	MetricsBindAddress  string
 	MetricsPort         int
 	ShutdownTimeout     time.Duration
-	MaxRequestBodyBytes int64 // maximum request body size in bytes; 0 uses the package default
+	MaxRequestBodyBytes int64 // maximum request body size in bytes; 0 uses the middleware default (10 MiB)
+
+	// API server timeout overrides — 0 means use the server package default.
+	ReadHeaderTimeout time.Duration // default 10s; prevents Slowloris attacks
+	ReadTimeout       time.Duration // default 30s; bounds total request read time
+	WriteTimeout      time.Duration // default 30s; bounds total response write time
+	IdleTimeout       time.Duration // default 60s; closes idle keep-alive connections
+
+	MaxHeaderBytes int // maximum request header size in bytes; 0 uses the server package default (16 KiB)
 }
 
 type LoggingConfig struct {

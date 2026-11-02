@@ -440,3 +440,82 @@ func TestServer_ServerAddresses(t *testing.T) {
 		t.Errorf("expected apiServer.MaxHeaderBytes=%d (16 KiB), got %d", wantMaxHeaderBytes, server.apiServer.MaxHeaderBytes)
 	}
 }
+
+func TestServer_TimeoutOverrides(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	cfg := config.NewConfig()
+	cfg.Server.ReadHeaderTimeout = 5 * time.Second
+	cfg.Server.ReadTimeout = 15 * time.Second
+	cfg.Server.WriteTimeout = 20 * time.Second
+	cfg.Server.IdleTimeout = 45 * time.Second
+	cfg.Server.MaxHeaderBytes = 8192 // 8 KiB
+
+	server, err := newConfiguredServer(t, cfg, nil, logger)
+	if err != nil {
+		t.Fatalf("unexpected error creating server: %v", err)
+	}
+
+	if server.apiServer.ReadHeaderTimeout != 5*time.Second {
+		t.Errorf("expected ReadHeaderTimeout=5s, got %v", server.apiServer.ReadHeaderTimeout)
+	}
+	if server.apiServer.ReadTimeout != 15*time.Second {
+		t.Errorf("expected ReadTimeout=15s, got %v", server.apiServer.ReadTimeout)
+	}
+	if server.apiServer.WriteTimeout != 20*time.Second {
+		t.Errorf("expected WriteTimeout=20s, got %v", server.apiServer.WriteTimeout)
+	}
+	if server.apiServer.IdleTimeout != 45*time.Second {
+		t.Errorf("expected IdleTimeout=45s, got %v", server.apiServer.IdleTimeout)
+	}
+	if server.apiServer.MaxHeaderBytes != 8192 {
+		t.Errorf("expected MaxHeaderBytes=8192, got %d", server.apiServer.MaxHeaderBytes)
+	}
+}
+
+func TestServer_ReadHeaderTimeoutCappedAtReadTimeout(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	cfg := config.NewConfig()
+	cfg.Server.ReadHeaderTimeout = 60 * time.Second // exceeds ReadTimeout
+	cfg.Server.ReadTimeout = 20 * time.Second
+
+	server, err := newConfiguredServer(t, cfg, nil, logger)
+	if err != nil {
+		t.Fatalf("unexpected error creating server: %v", err)
+	}
+
+	// ReadHeaderTimeout must not exceed ReadTimeout — if it did, the header
+	// deadline would never fire before the total read deadline cuts it off.
+	if server.apiServer.ReadHeaderTimeout > server.apiServer.ReadTimeout {
+		t.Errorf("ReadHeaderTimeout (%v) exceeds ReadTimeout (%v); header deadline would never fire",
+			server.apiServer.ReadHeaderTimeout, server.apiServer.ReadTimeout)
+	}
+	if server.apiServer.ReadHeaderTimeout != 20*time.Second {
+		t.Errorf("expected ReadHeaderTimeout capped at ReadTimeout (20s), got %v", server.apiServer.ReadHeaderTimeout)
+	}
+}
+
+func TestServer_TimeoutOverridesZeroUsesDefault(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	cfg := config.NewConfig() // all timeout fields are zero — must fall back to hardcoded defaults
+
+	server, err := newConfiguredServer(t, cfg, nil, logger)
+	if err != nil {
+		t.Fatalf("unexpected error creating server: %v", err)
+	}
+
+	if server.apiServer.ReadHeaderTimeout != 10*time.Second {
+		t.Errorf("expected default ReadHeaderTimeout=10s, got %v", server.apiServer.ReadHeaderTimeout)
+	}
+	if server.apiServer.ReadTimeout != 30*time.Second {
+		t.Errorf("expected default ReadTimeout=30s, got %v", server.apiServer.ReadTimeout)
+	}
+	if server.apiServer.WriteTimeout != 30*time.Second {
+		t.Errorf("expected default WriteTimeout=30s, got %v", server.apiServer.WriteTimeout)
+	}
+	if server.apiServer.IdleTimeout != 60*time.Second {
+		t.Errorf("expected default IdleTimeout=60s, got %v", server.apiServer.IdleTimeout)
+	}
+	if server.apiServer.MaxHeaderBytes != 1<<14 {
+		t.Errorf("expected default MaxHeaderBytes=%d, got %d", 1<<14, server.apiServer.MaxHeaderBytes)
+	}
+}
