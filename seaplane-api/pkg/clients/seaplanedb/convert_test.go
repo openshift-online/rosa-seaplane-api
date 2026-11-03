@@ -133,9 +133,7 @@ func TestInternalToPublicCluster_FiltersServiceSetFields(t *testing.T) {
 // Customer tags are annotations end to end; labels stay system-only.
 func TestCustomerTagsAreAnnotations(t *testing.T) {
 	pub := &public.Cluster{ObjectMeta: metav1.ObjectMeta{Name: testClusterName,
-		Labels: map[string]string{
-			"team": "dropped", accountIDLabel: "forged",
-		},
+		Labels:      map[string]string{"team": "dropped", accountIDLabel: "forged"},
 		Annotations: map[string]string{"team": "blue", "seaplane.io/forged": "dropped"},
 	}}
 

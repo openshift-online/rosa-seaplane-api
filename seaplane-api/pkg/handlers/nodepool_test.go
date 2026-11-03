@@ -89,9 +89,7 @@ func TestNodePoolHandler_Create_SetsAccountOwnership(t *testing.T) {
 		"metadata": map[string]any{
 			"name":      "parent.workers",
 			"namespace": "account-" + testAccountID,
-			"labels": map[string]any{
-				seaplanev1alpha1.AccountIDLabel: "999999999999",
-			},
+			"labels":    map[string]any{seaplanev1alpha1.AccountIDLabel: "999999999999"},
 		},
 		"spec": map[string]any{"nodePool": map[string]any{"replicas": 2}, "accountId": "999999999999"},
 	})
@@ -112,7 +110,7 @@ func TestNodePoolHandler_Create_SetsAccountOwnership(t *testing.T) {
 		t.Errorf("stored ownership = (%q, %q), want caller account %q", stored.Spec.AccountID, stored.Labels[seaplanev1alpha1.AccountIDLabel], testAccountID)
 	}
 	if stored.Labels[clusterUIDLabel] != clusterID {
-		t.Errorf("cluster UID shard label = %q, want parent UID %q", stored.Labels[clusterUIDLabel], clusterID)
+		t.Errorf("cluster UID label = %q, want parent UID %q", stored.Labels[clusterUIDLabel], clusterID)
 	}
 }
 

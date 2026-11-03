@@ -127,9 +127,8 @@ func main() {
 		Scheme: scheme,
 		DSN:    dsn,
 		Shard: &seaplanedb.ShardConfig{
-			Mod:      replicaCount,
-			Owned:    []int{ordinal},
-			KeyLabel: v1alpha1.ClusterUIDLabel,
+			Mod:   replicaCount,
+			Owned: []int{ordinal},
 			UnshardedGVKs: []schema.GroupVersionKind{
 				v1alpha1.SchemeGroupVersion.WithKind("ManagementCluster"),
 			},

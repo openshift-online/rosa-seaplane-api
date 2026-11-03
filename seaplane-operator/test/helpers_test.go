@@ -291,9 +291,7 @@ func newTestCluster(name string) *seaplanev1alpha1.Cluster {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: "account-111222333444",
-			Labels: map[string]string{
-				seaplanev1alpha1.AccountIDLabel: "111222333444",
-			},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: "111222333444"},
 		},
 		Spec: seaplanev1alpha1.ClusterSpec{
 			AccountID:         "111222333444",
@@ -476,9 +474,7 @@ func newTestNodePool(cluster *seaplanev1alpha1.Cluster) *seaplanev1alpha1.NodePo
 			},
 		},
 	}
-	nodePool.Labels = map[string]string{
-		seaplanev1alpha1.ClusterUIDLabel: string(cluster.UID),
-	}
+	nodePool.Labels = map[string]string{seaplanev1alpha1.ClusterUIDLabel: string(cluster.UID)}
 	nodePool.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(cluster, seaplanev1alpha1.GroupVersion.WithKind("Cluster"))}
 	return nodePool
 }

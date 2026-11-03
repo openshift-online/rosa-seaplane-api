@@ -21,8 +21,7 @@ const (
 	AccountIDLabel = "seaplane.io/account-id"
 
 	// ClusterUIDLabel records the database UID of the owning Cluster on
-	// Cluster-owned resources such as NodePools and Placements. Keep this value
-	// in sync with seaplane-db.ClusterUIDLabel, which is used for shard routing.
+	// Cluster-owned resources such as NodePools and Placements.
 	ClusterUIDLabel = "seaplane.io/cluster-uid"
 
 	// ClaimedByClusterUIDLabel records the Cluster UID holding an account-level
