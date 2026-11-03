@@ -110,15 +110,6 @@ func (c *Client) UpdateCluster(ctx context.Context, cluster *seaplanev1alpha1.Cl
 	return c.client.Update(ctx, cluster)
 }
 
-// DeleteCluster deletes a Cluster by name in the account namespace from ctx.
-func (c *Client) DeleteCluster(ctx context.Context, name string) error {
-	cluster, err := c.GetCluster(ctx, name)
-	if err != nil {
-		return err
-	}
-	return c.DeleteClusterObject(ctx, cluster)
-}
-
 // DeleteClusterObject deletes the checked snapshot without fetching newer state.
 func (c *Client) DeleteClusterObject(ctx context.Context, cluster *seaplanev1alpha1.Cluster) error {
 	if err := validateOwnedSnapshot(ctx, cluster); err != nil {
@@ -334,15 +325,6 @@ func (c *Client) UpdateNodePool(ctx context.Context, np *seaplanev1alpha1.NodePo
 	return c.client.Update(ctx, np)
 }
 
-// DeleteNodePool deletes a NodePool by name in the account namespace from ctx.
-func (c *Client) DeleteNodePool(ctx context.Context, name string) error {
-	np, err := c.GetNodePool(ctx, name)
-	if err != nil {
-		return err
-	}
-	return c.DeleteNodePoolObject(ctx, np)
-}
-
 // DeleteNodePoolObject deletes the checked child snapshot, never an unchecked reload.
 func (c *Client) DeleteNodePoolObject(ctx context.Context, np *seaplanev1alpha1.NodePool) error {
 	if err := validateOwnedSnapshot(ctx, np); err != nil {
@@ -407,14 +389,6 @@ func (c *Client) UpdateDNSReservation(ctx context.Context, reservation *seaplane
 
 func (c *Client) UpdateDNSReservationStatus(ctx context.Context, reservation *seaplanev1alpha1.DNSReservation) error {
 	return c.client.Status().Update(ctx, reservation)
-}
-
-func (c *Client) DeleteDNSReservation(ctx context.Context, name string) error {
-	reservation, err := c.GetDNSReservation(ctx, name)
-	if err != nil {
-		return err
-	}
-	return c.client.Delete(ctx, reservation)
 }
 
 func (c *Client) DeleteDNSReservationObject(ctx context.Context, reservation *seaplanev1alpha1.DNSReservation) error {
@@ -542,15 +516,6 @@ func (c *Client) ListOidcConfigs(ctx context.Context) (*seaplanev1alpha1.OidcCon
 		return nil, err
 	}
 	return &list, nil
-}
-
-// DeleteOidcConfig deletes an OidcConfig by name for the account in ctx.
-func (c *Client) DeleteOidcConfig(ctx context.Context, name string) error {
-	oc, err := c.GetOidcConfig(ctx, name)
-	if err != nil {
-		return err
-	}
-	return c.DeleteOidcConfigObject(ctx, oc)
 }
 
 // UpdateOidcConfigLastUsedTimestamp sets status.lastUsedTimestamp on an

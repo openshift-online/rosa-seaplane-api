@@ -371,13 +371,6 @@ func TestClient_ClusterUpdateAndDelete(t *testing.T) {
 		t.Fatalf("updated Cluster = %+v, err = %v", updated, err)
 	}
 
-	if err := c.DeleteCluster(ctx, "update-me"); err != nil {
-		t.Fatalf("DeleteCluster: %v", err)
-	}
-	if _, err := c.GetCluster(ctx, "update-me"); !IsNotFound(err) {
-		t.Fatalf("GetCluster after DeleteCluster error = %v, want NotFound", err)
-	}
-
 	directDelete, err := c.GetCluster(ctx, "delete-object")
 	if err != nil {
 		t.Fatalf("GetCluster before DeleteClusterObject: %v", err)
@@ -387,9 +380,6 @@ func TestClient_ClusterUpdateAndDelete(t *testing.T) {
 	}
 	if _, err := c.GetCluster(ctx, "delete-object"); !IsNotFound(err) {
 		t.Fatalf("GetCluster after DeleteClusterObject error = %v, want NotFound", err)
-	}
-	if err := c.DeleteCluster(ctx, "missing"); !IsNotFound(err) {
-		t.Fatalf("DeleteCluster missing object error = %v, want NotFound", err)
 	}
 }
 
@@ -433,14 +423,11 @@ func TestClient_NodePoolListUpdateAndDelete(t *testing.T) {
 		t.Fatalf("updated NodePool = %+v, err = %v", updated, err)
 	}
 
-	if err := c.DeleteNodePool(ctx, "alpha.workers"); err != nil {
-		t.Fatalf("DeleteNodePool: %v", err)
+	if err := c.DeleteNodePoolObject(ctx, updated); err != nil {
+		t.Fatalf("DeleteNodePoolObject: %v", err)
 	}
 	if _, err := c.GetNodePool(ctx, "alpha.workers"); !IsNotFound(err) {
-		t.Fatalf("GetNodePool after DeleteNodePool error = %v, want NotFound", err)
-	}
-	if err := c.DeleteNodePool(ctx, "missing.workers"); !IsNotFound(err) {
-		t.Fatalf("DeleteNodePool missing object error = %v, want NotFound", err)
+		t.Fatalf("GetNodePool after DeleteNodePoolObject error = %v, want NotFound", err)
 	}
 }
 
@@ -488,8 +475,8 @@ func TestClient_DNSReservationOperations(t *testing.T) {
 	if _, err := c.GetDNSReservationByUID(ctx, "missing-uid"); !IsNotFound(err) {
 		t.Fatalf("GetDNSReservationByUID missing UID error = %v, want NotFound", err)
 	}
-	if err := c.DeleteDNSReservation(ctx, "dns-one"); err != nil {
-		t.Fatalf("DeleteDNSReservation: %v", err)
+	if err := c.DeleteDNSReservationObject(ctx, updated); err != nil {
+		t.Fatalf("DeleteDNSReservationObject: %v", err)
 	}
 	if _, err := c.GetDNSReservation(ctx, "dns-one"); !IsNotFound(err) {
 		t.Fatalf("GetDNSReservation after delete error = %v, want NotFound", err)
@@ -584,8 +571,8 @@ func TestClient_OidcConfigAndIssuerIndexOperations(t *testing.T) {
 	if err := c.UpdateOidcConfigObject(ctx, byName); err != nil {
 		t.Fatalf("UpdateOidcConfigObject: %v", err)
 	}
-	if err := c.DeleteOidcConfig(ctx, "oidc-one"); err != nil {
-		t.Fatalf("DeleteOidcConfig: %v", err)
+	if err := c.DeleteOidcConfigObject(ctx, byName); err != nil {
+		t.Fatalf("DeleteOidcConfigObject: %v", err)
 	}
 	if _, err := c.GetOidcConfig(ctx, "oidc-one"); !IsNotFound(err) {
 		t.Fatalf("GetOidcConfig after delete error = %v, want NotFound", err)
