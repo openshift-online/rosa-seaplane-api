@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -79,6 +80,7 @@ func (s *Store) Resolve(ctx context.Context, id Identity) ([]ResolvedAttachment,
 func (s *Store) loadPolicies(ctx context.Context, bindings []StoredAttachment) (map[PolicyRef]StoredPolicy, error) {
 	const batchSize = 100
 	const batchAttempts = 4
+	const retryDelay = 100 * time.Millisecond
 	refs := []PolicyRef{}
 	seen := map[PolicyRef]bool{}
 	for _, binding := range bindings {
@@ -99,6 +101,16 @@ func (s *Store) loadPolicies(ctx context.Context, bindings []StoredAttachment) (
 		}
 		pending := map[string]types.KeysAndAttributes{s.config.PolicyTable: {Keys: keys, ConsistentRead: aws.Bool(true)}}
 		for attempt := 0; len(pending) > 0 && attempt < batchAttempts; attempt++ {
+			// Back off before retrying unprocessed keys without delaying cancellation.
+			if attempt > 0 {
+				timer := time.NewTimer(retryDelay * time.Duration(1<<(attempt-1)))
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return nil, ctx.Err()
+				case <-timer.C:
+				}
+			}
 			out, err := s.client.BatchGetItem(ctx, &dynamodb.BatchGetItemInput{RequestItems: pending})
 			if err != nil {
 				return nil, err

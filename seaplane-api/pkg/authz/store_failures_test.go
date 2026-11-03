@@ -45,17 +45,31 @@ func TestStoredReadFailures(t *testing.T) {
 	if _, err := store.CreateAttachment(ctx, authz.AttachmentSpec{PrincipalARN: caller, Policy: authz.PolicyRef{ID: policy.ID, Kind: policy.Kind}, Scope: authz.GlobalScope}); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"batch-unavailable", "regional-unavailable", "unprocessed-once", "unprocessed-always"} {
+	for _, mode := range []string{"batch-unavailable", "regional-unavailable", "unprocessed-once", "unprocessed-always", "unprocessed-canceled"} {
 		t.Run(mode, func(t *testing.T) {
 			attempts := 0
+			var lastAttempt time.Time
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 			wrapped := interceptedStore(t, client, cfg, func(request *http.Request) (*http.Response, error) {
 				target := request.Header.Get("X-Amz-Target")
 				if strings.HasSuffix(target, ".BatchGetItem") {
 					attempts++
+					if !lastAttempt.IsZero() {
+						minimum := 100 * time.Millisecond * time.Duration(1<<(attempts-2))
+						if time.Since(lastAttempt) < minimum {
+							t.Errorf("batch retry %d occurred before backoff %s", attempts, minimum)
+						}
+					}
+					lastAttempt = time.Now()
+					if mode == "unprocessed-canceled" && attempts == 1 {
+						timer := time.AfterFunc(20*time.Millisecond, cancel)
+						t.Cleanup(func() { timer.Stop() })
+					}
 					if mode == "batch-unavailable" {
 						return nil, errors.New("injected unavailable policy store")
 					}
-					if mode == "unprocessed-always" || (mode == "unprocessed-once" && attempts == 1) {
+					if mode == "unprocessed-always" || mode == "unprocessed-canceled" || (mode == "unprocessed-once" && attempts == 1) {
 						var body struct{ RequestItems json.RawMessage }
 						if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 							return nil, err
@@ -75,13 +89,20 @@ func TestStoredReadFailures(t *testing.T) {
 				}
 				return http.DefaultTransport.RoundTrip(request)
 			})
-			resolved, err := wrapped.Resolve(t.Context(), authz.Identity{AccountID: account, CallerARN: caller})
-			if mode == "unprocessed-once" {
+			resolved, err := wrapped.Resolve(ctx, authz.Identity{AccountID: account, CallerARN: caller})
+			if mode == "unprocessed-canceled" {
+				if !errors.Is(err, context.Canceled) || resolved != nil || attempts != 1 {
+					t.Fatalf("canceled retry = %+v, %v, attempts %d", resolved, err, attempts)
+				}
+			} else if mode == "unprocessed-once" {
 				if err != nil || len(resolved) != 1 || attempts != 2 {
 					t.Fatalf("retry = %+v, %v, attempts %d", resolved, err, attempts)
 				}
 			} else if err == nil || resolved != nil {
 				t.Fatalf("partial failure result = %+v, %v", resolved, err)
+			}
+			if mode == "unprocessed-always" && attempts != 4 {
+				t.Fatalf("batch attempts = %d, want 4", attempts)
 			}
 		})
 	}
