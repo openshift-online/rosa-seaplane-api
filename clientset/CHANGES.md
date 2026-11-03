@@ -1,5 +1,10 @@
 # Changes
 
+## 0.1.26 Nov 02 2026
+
+- Remove incorrect kubelet association from ClusterConfiguration
+
+
 ## 0.1.25 Oct 29 2026
 
 - feat(api): support HCP custom DNS domains
