@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"k8s.io/client-go/util/retry"
 
+	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 	public "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1/public"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/api"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
@@ -160,7 +161,7 @@ func (h *DNSReservationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		if !authorizeResource(w, r, h.authorizer, h.logger, authz.DeleteDNSReservation, dnsReservationResource(reservation)) {
 			return errResponded
 		}
-		if reservation.Labels["seaplane.io/claimed-by-cluster-uid"] != "" {
+		if reservation.Labels[seaplanev1alpha1.ClaimedByClusterUIDLabel] != "" {
 			return errDNSReservationClaimed
 		}
 		return h.db.DeleteDNSReservationObject(ctx, reservation)

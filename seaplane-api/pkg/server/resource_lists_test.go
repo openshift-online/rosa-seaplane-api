@@ -64,7 +64,7 @@ func TestNodePoolNamePinsParent(t *testing.T) {
 	second := objects[1].DeepCopyObject().(*v1.NodePool)
 	second.Name, second.UID = "second-parent.workers", "second-pool-uid"
 	second.Spec.NodePool.ClusterName = parent.Name
-	second.Labels["seaplane.io/cluster-uid"] = secondID
+	second.Labels[v1.ClusterUIDLabel] = secondID
 	second.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(parent, v1.GroupVersion.WithKind("Cluster"))}
 	objects = append(objects, second, parent)
 	hooks := interceptor.Funcs{List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
@@ -156,7 +156,7 @@ func TestCreatesUseValidatedCandidateLabelsAndOwnership(t *testing.T) {
 				policy := `permit(principal,action == Seaplane::Action::"` + tc.action + `",resource) when { resource.account == "123456789012" && resource.hasTag("team") && resource.getTag("team") == "` + check.grant + `" };`
 				srv, _ := resourceServer(t, []string{policy}, interceptor.Funcs{Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 					writes++
-					if obj.GetAnnotations()["team"] != "blue" || obj.GetLabels()["team"] != "" || obj.GetLabels()["seaplane.io/account-id"] != resourceTestAccount {
+					if obj.GetAnnotations()["team"] != "blue" || obj.GetLabels()["team"] != "" || obj.GetLabels()[v1.AccountIDLabel] != resourceTestAccount {
 						t.Errorf("customer labels not stored as tags, or forged ownership: %v %v", obj.GetLabels(), obj.GetAnnotations())
 					}
 					return c.Create(ctx, obj, opts...)
@@ -193,7 +193,7 @@ func TestDeniedClusterCreateDoesNotClaimOIDC(t *testing.T) {
 		t.Fatalf("denied Create claimed OIDC: %d writes=%d %s", w.Code, writes, w.Body.String())
 	}
 	var stored v1.OidcConfig
-	if err := store.Get(context.Background(), client.ObjectKeyFromObject(oc), &stored); err != nil || stored.Labels["seaplane.io/claimed-by-cluster-uid"] != "" {
+	if err := store.Get(context.Background(), client.ObjectKeyFromObject(oc), &stored); err != nil || stored.Labels[v1.ClaimedByClusterUIDLabel] != "" {
 		t.Fatalf("claim changed: %+v %v", stored, err)
 	}
 }
@@ -263,7 +263,7 @@ func TestNodePoolGetLoadsParentOnce(t *testing.T) {
 			objects := resourceFixtures()
 			pool := objects[1].(*v1.NodePool)
 			pool.OwnerReferences[0].UID = tc.parentUID
-			pool.Labels["seaplane.io/cluster-uid"] = string(tc.parentUID)
+			pool.Labels[v1.ClusterUIDLabel] = string(tc.parentUID)
 			reads := 0
 			hooks := interceptor.Funcs{Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 				if _, isCluster := obj.(*v1.Cluster); isCluster {

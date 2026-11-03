@@ -20,7 +20,7 @@ graph LR
 
 ### PostgreSQL (pgruntime)
 
-The operator uses [fleetdb](../../../seaplane-db/) to implement the controller-runtime `client.Client`, `cache.Cache`, and `manager.Manager` interfaces backed by PostgreSQL. This replaces a traditional Kubernetes API server (etcd) with a relational database, providing fenced writes, stored procedures, composite resource versions, and deterministic lease management.
+The operator uses [fleetdb](../../seaplane-db/) to implement the controller-runtime `client.Client`, `cache.Cache`, and `manager.Manager` interfaces backed by PostgreSQL. It is controller-runtime-compatible storage, not a Kubernetes API server: it has no admission or CRD validation, Kubernetes garbage collection, or transactions across resources. Updates and deletes use per-object UID and resource-version checks; informer List/Watch streams are poll-based and sharded, while direct reads see the full dataset. See the [seaplane-db guidelines](../../docs/seaplane-db-guidelines.md) and [compatibility notes](../../seaplane-db/docs/COMPATIBILITY.md) for the storage contract.
 
 ### CRDs
 

@@ -40,7 +40,7 @@ func TestLabelSnapshotIdentity(t *testing.T) {
 			case "replaced parent":
 				objects[0].SetUID("replacement")
 			case "wrong parent label":
-				objects[1].GetLabels()["seaplane.io/cluster-uid"] = "forged"
+				objects[1].GetLabels()[v1.ClusterUIDLabel] = "forged"
 			case "cannot escalate":
 				objects[1].GetAnnotations()["team"] = "red"
 				body = `{"team":"blue"}`

@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	clusterUIDLabel         = "seaplane.io/cluster-uid"
+	clusterUIDLabel         = seaplanev1alpha1.ClusterUIDLabel
 	clusterCleanupFinalizer = "seaplane.io/cluster" // keep in sync with the operator's Cluster finalizer
 )
 

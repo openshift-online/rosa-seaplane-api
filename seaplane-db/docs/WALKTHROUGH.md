@@ -674,8 +674,9 @@ config — useful for cluster-scoped configuration resources that all replicas
 need.
 
 To scale, change `Mod` and rolling-restart. The transient overlap (some
-namespaces watched by both old and new replicas) is benign — just duplicate
-reconciles, deduplicated by the informer cache.
+namespaces watched by both old and new replicas) is benign — each replica has
+its own informer cache, so both may reconcile the same object, and idempotent
+reconcilers absorb the duplicates.
 
 ---
 

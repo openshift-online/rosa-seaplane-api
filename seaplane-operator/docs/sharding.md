@@ -1,19 +1,20 @@
 # Namespace-Hash Sharding
 
-The seaplane operator uses namespace-hash sharding to horizontally scale
-controllers across multiple replicas. Each operator replica owns a subset of
-namespaces determined by `abs(hashtext(namespace)::bigint) % replicaCount`, so it only
-reconciles resources whose namespace hashes to its shard.
+The seaplane operator shards its informer cache across replicas. Each replica owns
+the namespaces where `abs(hashtext(namespace)::bigint) % replicaCount` equals its
+ordinal, and its cache lists and watches only those rows, except for kinds listed
+in `UnshardedGVKs`. Direct reads are never sharded.
 
-> **Note:** Under the current identity model, the namespace is
-> `account-<accountID>` — multiple Clusters share the same account namespace.
-> Namespace-hash sharding therefore provides **account-level** affinity, not
-> cluster-level. All account-namespaced resources for the same account land in
-> the same shard (cluster-scoped resources like ManagementCluster are unsharded).
-> A future migration to `cluster-uid`-based sharding (using
-> `COALESCE(labels->>'seaplane.io/cluster-uid', uid::text)`) is planned to
-> restore cluster-level affinity — see `seaplane-db/docs/RESOURCE_IDENTITY_IMPLEMENTATION_PLAN.md`
-> Phase 5 for details.
+Without sharding, every replica would hold and poll every object, so per-pod
+memory and watch load would grow with the fleet. Because the cache also decides
+which pod receives an object's events, sharding splits reconcile work (AWS calls,
+DynamoDB desires, retries) across pods, and a stuck or crash-looping pod delays
+only the accounts it owns.
+
+Customer resources live in `account-<accountID>`, so a shard is effectively a set
+of **accounts**: a Cluster, its NodePools and Placement, and the account's
+DNSReservations and OidcConfigs all go to the same pod. See
+[Limitations](#limitations).
 
 ## How It Works
 
@@ -26,11 +27,6 @@ The pgruntime cache partitions its List/Watch streams using PostgreSQL's
 shard = abs(hashtext(namespace)::bigint) % replicaCount
 ```
 
-Hashing on namespace gives **account-level affinity**: all resources for the
-same AWS account land in the same shard, because they share the
-`account-<accountID>` namespace. This means one operator replica handles all
-clusters and child resources for a given account.
-
 The sharding is configured via `pgruntime.ShardConfig`:
 
 ```go
@@ -38,14 +34,16 @@ pgruntime.ShardConfig{
     Mod:   replicaCount,
     Owned: []int{ordinal},
     UnshardedGVKs: []schema.GroupVersionKind{
-        v1alpha1.SchemeGroupVersion.WithKind("ManagementCluster"),
+        // kinds every replica must watch
     },
 }
 ```
 
 - **Mod**: the modulus (total number of shards, equal to `replicaCount`)
 - **Owned**: the shard indices this replica owns (typically just `[ordinal]`)
-- **UnshardedGVKs**: GVKs exempt from sharding (every replica sees them)
+- **UnshardedGVKs**: GVKs every replica watches in full, for kinds whose changes
+  all replicas must react to (e.g. a cluster-scoped regional config object).
+  Kinds that are only read need not be listed.
 
 ### Operator Replica Shard Assignment
 
@@ -70,18 +68,40 @@ Example with 4 replicas:
 | Pod-2 | 2     | `abs(hashtext(namespace)::bigint) % 4 == 2` |
 | Pod-3 | 3     | `abs(hashtext(namespace)::bigint) % 4 == 3` |
 
-### ManagementCluster Visibility
-
-ManagementCluster is **cluster-scoped** and declared in `UnshardedGVKs`. Unsharded
-GVKs bypass the shard filter entirely, so every pod sees all ManagementClusters
-through the standard manager client. This means the PlacementReconciler on every
-pod automatically has access to the full MC registry -- no separate client needed.
-
 ### Platform API
 
 The API uses `pgruntime.NewClient()` which is never sharded. It sees all data
 regardless of shard configuration. No shard-related configuration is needed for
 the API.
+
+## Limitations
+
+- **An account is the smallest unit.** An account with 200 Clusters is handled by
+  one pod. Adding replicas does not split it, and load is uneven when account
+  sizes vary.
+- **No failover.** While a pod is down, its accounts do not progress until it
+  returns.
+- **The cache is shard-local.** Counting Placements in the cache to pick the
+  least-loaded management cluster sees only this pod's accounts. Use an `Index`
+  claim or an optimistic update on a shared record instead.
+- **Watched objects must share the namespace.** If a Cluster's controller watched
+  an object in a separate internal namespace, that object's events would go to
+  the pod owning that namespace, not the Cluster's pod.
+
+## Why Not Shard by UID
+
+A per-Cluster UID key would split large accounts, but it breaks when a name is
+reused. Reconcile requests carry only namespace and name, and reconcilers read by
+name. If Cluster `prod` on pod 0 is deleted and recreated, the new UID can hash to
+pod 1. A request for `account-x/prod` that still reaches pod 0, such as a late
+status event, makes pod 0 read the new `prod` and reconcile it, and its periodic
+requeue keeps that going. Two pods then reconcile the same Cluster until pod 0
+restarts, doubling DynamoDB and management-cluster writes and racing each other's
+updates.
+
+A name never changes namespace, so namespace sharding cannot hit this. If
+per-Cluster spreading is ever needed, derive the key from the name instead:
+`hashtext(namespace || '/' || split_part(name, '.', 1))`.
 
 ## Configuration
 

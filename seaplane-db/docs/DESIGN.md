@@ -29,7 +29,7 @@ These are the properties the system promises. Everything else exists to uphold t
 - **I6 — Optimistic concurrency and incarnation safety.** An update presenting a
   stale `object_version` or a UID from an older same-name incarnation is rejected
   (409); no lost updates or stale-incarnation writes on one object.
-- **I7 — Partition completeness.** When sharding is enabled, the union of all replicas' owned residues for a given `Mod` must cover `[0, Mod)`. Every namespace hashes to exactly one residue, so every namespace is watched by at least one replica. During scale-up (changing `Mod`), a transient period exists where some namespaces are watched by both old and new replicas — this is benign (duplicate reconciles, deduplicated by the informer cache).
+- **I7 — Partition completeness.** When sharding is enabled, the union of all replicas' owned residues for a given `Mod` must cover `[0, Mod)`. Every namespace hashes to exactly one residue, so every namespace is watched by at least one replica. During scale-up (changing `Mod`), a transient period exists where some namespaces are watched by both old and new replicas, and some by none. Overlap is benign: each replica has its own informer cache, so both may reconcile the same object, and idempotent reconcilers absorb the duplicates. Unwatched namespaces are not reconciled until the rollout completes.
 
 **Not provided:** Owner-reference garbage collection is intentionally left to controllers. In Kubernetes, the API server's GC cascade-deletes dependents when their owner is removed; here, controllers handle this via standard controller-runtime patterns (`Owns()` watches + finalizer-driven cleanup). This keeps the storage layer simple — no cross-object graph traversal.
 
@@ -360,7 +360,7 @@ Two types expose sharding at different layers:
 
 ### 8.5 Scaling
 
-To change the number of shards, update `Mod` and the `Owned` residues in each replica's configuration, then perform a rolling restart. During the transition, some namespaces may be watched by both old-config and new-config replicas. This is benign — duplicate reconciles are deduplicated by the informer cache, and the write path is unaffected. Once all replicas are running the new config, each namespace is watched by exactly one replica (assuming partition completeness).
+To change the number of shards, update `Mod` and the `Owned` residues in each replica's configuration, then perform a rolling restart. During the transition, some namespaces may be watched by both old-config and new-config replicas, and some by none until the rollout completes. Overlap is benign — each replica has its own informer cache, so both may reconcile the same object; idempotent reconcilers absorb the duplicates, and the write path is unaffected. Once all replicas are running the new config, each namespace is watched by exactly one replica (assuming partition completeness).
 
 ### 8.6 PostgreSQL version caveat
 

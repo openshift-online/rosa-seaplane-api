@@ -19,8 +19,8 @@ import (
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/middleware"
 )
 
-const accountIDLabel = "seaplane.io/account-id"
-const clusterUIDLabel = "seaplane.io/cluster-uid"
+const accountIDLabel = seaplanev1alpha1.AccountIDLabel
+const clusterUIDLabel = seaplanev1alpha1.ClusterUIDLabel
 
 const spotQueueClaimTimeout = 10 * time.Minute
 const spotQueueOwnerPrefix = "cluster-"

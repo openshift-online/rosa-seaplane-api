@@ -35,7 +35,7 @@ func testOidcConfigCR(configID, accountID string, spec seaplanev1alpha1.OidcConf
 			Name:      configID,
 			Namespace: "account-" + accountID,
 			UID:       types.UID(configID),
-			Labels:    map[string]string{"seaplane.io/account-id": accountID},
+			Labels:    map[string]string{seaplanev1alpha1.AccountIDLabel: accountID},
 		},
 		Spec: spec,
 	}
@@ -56,8 +56,8 @@ func testIssuerIndex(issuerURL, oidcConfigID, accountID string) *seaplanev1alpha
 			Name:      seaplanev1alpha1.IssuerURLIndexName(issuerURL),
 			Namespace: seaplanev1alpha1.OidcIssuerReservationsNamespace,
 			Labels: map[string]string{
-				"seaplane.io/account-id": accountID,
-				"seaplane.io/owner-uid":  oidcConfigID,
+				seaplanev1alpha1.AccountIDLabel: accountID,
+				seaplanev1alpha1.OwnerUIDLabel:  oidcConfigID,
 			},
 		},
 	}
@@ -218,7 +218,7 @@ func TestOidcConfigHandler_Create_Success(t *testing.T) {
 		"metadata": map[string]any{
 			"name":      "test-config",
 			"namespace": "account-" + testAccountID,
-			"labels":    map[string]any{"seaplane.io/account-id": "999999999999"},
+			"labels":    map[string]any{seaplanev1alpha1.AccountIDLabel: "999999999999"},
 		},
 		"spec": map[string]any{
 			"type":      "managed",
@@ -255,8 +255,8 @@ func TestOidcConfigHandler_Create_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Spec.AccountID != testAccountID || stored.Labels["seaplane.io/account-id"] != testAccountID {
-		t.Errorf("stored ownership = (%q, %q), want caller account %q", stored.Spec.AccountID, stored.Labels["seaplane.io/account-id"], testAccountID)
+	if stored.Spec.AccountID != testAccountID || stored.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
+		t.Errorf("stored ownership = (%q, %q), want caller account %q", stored.Spec.AccountID, stored.Labels[seaplanev1alpha1.AccountIDLabel], testAccountID)
 	}
 }
 

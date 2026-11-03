@@ -117,8 +117,8 @@ body.
 write them: not on create, not on update, and not through any other endpoint.
 
 **Why.** Labels are GIN-indexed, and the platform's selectors run on them: ownership
-(`cluster-uid`), cleanup, claims (`owner-uid`, `claimed-by-cluster-uid`), the account,
-and sharding. Customer keys would grow and churn that index with data nobody selects
+(`cluster-uid`), cleanup, claims (`owner-uid`, `claimed-by-cluster-uid`), and the
+account. Customer keys would grow and churn that index with data nobody selects
 on. They would also sit next to the keys that decide ownership, guarded only by a
 prefix check: one missed check and a customer moves a resource or releases a claim.
 
@@ -165,7 +165,7 @@ object stores its **uid**.
 
 The ownerReference and the label are set once, at create, from the same parent, so they
 can't drift apart. Both are needed because an ownerReference can't be used in a label
-selector or the shard key.
+selector.
 
 **Lookups:**
 
@@ -286,32 +286,39 @@ uniqueness rules multiply.
 
 ## 8. Sharding
 
-Each operator replica reconciles one slice of the rows, keyed by the owning cluster's
-uid: the `seaplane.io/cluster-uid` label, or the row's own uid if it has no owner.
+Each operator replica caches and reconciles one slice of the rows, keyed by the row's
+namespace. Customer resources live in `account-<id>`, so an account's Clusters, their
+NodePools and Placements, and its DNSReservations and OidcConfigs land on one replica.
+Internal rows such as `Index` claims live in their own namespaces and shard separately.
 
-**Why.** Reconcile work (AWS and management-cluster calls, retries, rate limits) grows
-with the fleet. Sharding spreads it across replicas and limits the blast radius of one
-bad pod. Keying by cluster keeps a cluster and all its objects on one replica, so
-while the replica count is stable, each cluster is reconciled in one place. Only
-watches and reconciles are sharded;
-reads always see every row. Details and limits are in
-[sharding.md](../seaplane-operator/docs/sharding.md).
+**Why.** Mainly the cache: without sharding, every replica's informer cache holds and
+polls every object in the fleet. Sharding keeps each replica to one slice. Since the
+cache decides which replica gets an object's events, it also spreads reconcile work and
+limits the blast radius of one bad pod. Every reconcile request carries the namespace,
+and a name's namespace never changes, so a request always reaches the replica that owns
+the object, even after a delete and recreate under the same name. Only watches and
+reconciles are sharded; reads always see every row. Details, limits, and why a finer
+key is tricky are in [sharding.md](../seaplane-operator/docs/sharding.md).
 
 **What it means for your code:**
 
-- **Carry the label.** An object whose watch triggers a cluster reconcile must carry
-  that cluster's `seaplane.io/cluster-uid`. Otherwise its events go to the wrong
-  replica.
+- **Watched objects stay in the Cluster's namespace.** If a controller watches an
+  object to trigger a Cluster reconcile, such as `Owns(&Placement{})`, that object
+  must be in the Cluster's namespace. Otherwise its events reach another replica.
 - **Be idempotent.** While the replica count changes, a cluster can briefly be
   reconciled by two pods.
 - **No decisions from local counts across clusters.** For something like placing onto
   a management cluster with limited capacity, claim with an `Index` or use an
   optimistic update on a shared object.
+- **Don't refine the shard key on a whim.** A per-cluster key must be derivable from
+  the namespace and name of every request and stay the same across delete and
+  recreate. A UID-based key fails both.
 
 ## Review checklist
 
 - [ ] References another object? It stores the **uid**.
 - [ ] Belongs to a cluster? **ownerReference + `seaplane.io/cluster-uid`**.
+- [ ] Watched to trigger a Cluster reconcile? It's in the Cluster's **namespace**.
 - [ ] Lists a cluster's objects? The **label**, not `InNamespace`.
 - [ ] Builds a name? Only `<cluster>.<child>`.
 - [ ] Per-cluster object on the management cluster? In **`cluster-<uid>`**, plain name.

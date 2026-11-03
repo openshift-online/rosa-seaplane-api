@@ -12,7 +12,7 @@ import (
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 )
 
-const claimedByClusterUIDLabel = "seaplane.io/claimed-by-cluster-uid"
+const claimedByClusterUIDLabel = seaplanev1alpha1.ClaimedByClusterUIDLabel
 
 // ClusterClaimableResource adapts an account-scoped resource to the common
 // Cluster-claim workflow. Implementations provide lookup, readiness, persistence,

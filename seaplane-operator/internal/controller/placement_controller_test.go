@@ -86,6 +86,7 @@ var _ = Describe("Placement Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNS, Name: clusterName + ".placement"}, &placement)).To(Succeed())
 			Expect(placement.Spec.ClusterName).To(Equal(clusterName))
 			Expect(placement.Spec.ManagementCluster).To(Equal(mcName))
+			Expect(placement.Labels[seaplanev1alpha1.ClusterUIDLabel]).To(Equal(string(resource.UID)))
 			Expect(placement.Status.Phase).To(Equal(seaplanev1alpha1.PlacementPhaseBound))
 		})
 

@@ -325,7 +325,7 @@ func TestClusterAuthz_ListVisibility(t *testing.T) {
 			for _, item := range body.Items {
 				ids = append(ids, string(item.UID))
 				// List returns full objects; Describe is not checked per item.
-				if item.Labels["seaplane.io/account-id"] != testAccountID {
+				if item.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
 					t.Fatalf("list item lacks full details: %+v", item)
 				}
 			}
@@ -376,7 +376,7 @@ func TestClusterAuthz_TrustedMetadata(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
 			}
-			if w.Code != http.StatusOK || string(body.UID) != "fleetdb-uid-not-cluster-id" || body.Labels["seaplane.io/account-id"] != testAccountID {
+			if w.Code != http.StatusOK || string(body.UID) != "fleetdb-uid-not-cluster-id" || body.Labels[seaplanev1alpha1.AccountIDLabel] != testAccountID {
 				t.Fatalf("stored UID and label ownership not used: %d %s", w.Code, w.Body.String())
 			}
 			assertClusterAuthzMetrics(t, registry, authz.DescribeCluster, authz.OutcomeAllow, authz.StageNone)
@@ -449,7 +449,7 @@ func TestClusterAuthz_StoredResourceFaults(t *testing.T) {
 				cr := testClusterCR("owned", "owned", testAccountID)
 				switch fault {
 				case "foreign ownership":
-					cr.Labels["seaplane.io/account-id"] = "999999999999"
+					cr.Labels[seaplanev1alpha1.AccountIDLabel] = "999999999999"
 				case "invalid UID":
 					cr.UID = "../escape"
 				}
