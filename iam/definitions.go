@@ -8,7 +8,7 @@ import (
 // Bump this (following semver) whenever a role is added, a service account
 // changes, or a policy reference is updated. Overlays (D5) must carry a
 // strictly greater version to be applied.
-const definitionVersion = "1.0.0"
+const definitionVersion = "0.1.0"
 
 // embeddedDefinitionSet is the canonical, pinned source of truth for V2
 // operator role definitions. Seeded from the rosa CLI's
