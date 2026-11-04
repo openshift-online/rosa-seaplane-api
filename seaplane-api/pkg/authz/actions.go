@@ -3,6 +3,10 @@ package authz
 // actionResourceKind returns the resource kind for a supported action without inferring it from HTTP paths.
 func actionResourceKind(action Action) ResourceKind {
 	switch action {
+	case DescribeRegionalIdentity:
+		return RegionalAccess
+	case ListAWSVPCs:
+		return AWSVPC
 	case CreatePolicy, ListPolicies, DescribePolicy, UpdatePolicy, DeletePolicy:
 		return Policy
 	case CreateAttachment, ListAttachments, DeleteAttachment:
@@ -25,7 +29,7 @@ func actionResourceKind(action Action) ResourceKind {
 // listAction reports whether an action targets a collection, including management creates.
 func listAction(action Action) bool {
 	switch action {
-	case ListClusters, ListNodePools, ListOIDCConfigs, ListDNSReservations,
+	case DescribeRegionalIdentity, ListAWSVPCs, ListClusters, ListNodePools, ListOIDCConfigs, ListDNSReservations,
 		CreatePolicy, ListPolicies, CreateAttachment, ListAttachments, CreateAttachmentRegional, ListAttachmentsRegional:
 		return true
 	default:
@@ -36,6 +40,10 @@ func listAction(action Action) bool {
 // collectionName returns the collection segment used in Cedar UIDs for the resource kind.
 func collectionName(kind ResourceKind) string {
 	switch kind {
+	case RegionalAccess:
+		return "regional_access"
+	case AWSVPC:
+		return "aws_vpcs"
 	case Policy:
 		return "policies"
 	case Attachment:

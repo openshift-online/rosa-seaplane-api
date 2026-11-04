@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/api"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/customeraws"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	apphandlers "github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/handlers"
@@ -38,6 +39,9 @@ type Server struct {
 func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Authorizer, management *authz.Management, logger *slog.Logger) (*Server, error) {
 	if authorizer == nil {
 		return nil, fmt.Errorf("authorizer is required")
+	}
+	if err := cfg.CustomerAccess.Validate(); err != nil {
+		return nil, fmt.Errorf("regional customer access configuration: %w", err)
 	}
 	logger = logger.With("region", cfg.Regional.AWSRegion, "bundle_hash", authorizer.BundleHash())
 
@@ -130,6 +134,12 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 
 	resourceRouter.HandleFunc("/api/v0/accounts", accountsHandler.Enroll).Methods(http.MethodPost)
 	resourceRouter.HandleFunc("/api/v0/accounts/{id}", accountsHandler.Unenroll).Methods(http.MethodDelete)
+
+	customers := customeraws.New(cfg.Regional.AWSRegion, cfg.CustomerAccess.TokenFile)
+	identityHandler := apphandlers.NewRegionalIdentityHandler(cfg.CustomerAccess, authorizer, logger)
+	inquiriesHandler := apphandlers.NewAWSInquiriesHandler(customers, authorizer, cfg.Regional.AWSRegion, logger)
+	resourceRouter.HandleFunc("/api/v0/regional_identity", identityHandler.Get).Methods(http.MethodGet)
+	resourceRouter.HandleFunc("/api/v0/aws_inquiries/vpcs", inquiriesHandler.ListVPCs).Methods(http.MethodPost)
 
 	// Cluster routes
 	clusterRouter := resourceRouter.PathPrefix("/api/v0/clusters").Subrouter()

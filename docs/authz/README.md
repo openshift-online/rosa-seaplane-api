@@ -76,6 +76,8 @@ fails the request, even when Cedar would allow.
 
 | Resource       | Operation             | Required actions                                                         |
 | -------------- | --------------------- | ------------------------------------------------------------------------ |
+| Regional identity | Get setup metadata | DescribeRegionalIdentity |
+| AWS VPC inventory | Discover | ListAWSVPCs |
 | Cluster        | List                  | ListClusters                                                             |
 | Cluster        | Get                   | DescribeCluster                                                          |
 | Cluster        | Create                | CreateCluster; Describe on each referenced OIDCConfig and DNSReservation |
@@ -90,6 +92,12 @@ fails the request, even when Cedar would allow.
 | OIDCConfig     | Get / Create / Delete | DescribeOIDCConfig / CreateOIDCConfig / DeleteOIDCConfig                 |
 | DNSReservation | List                  | ListDNSReservations                                                      |
 | DNSReservation | Get / Create / Delete | DescribeDNSReservation / CreateDNSReservation / DeleteDNSReservation     |
+
+`DescribeRegionalIdentity` and `ListAWSVPCs` belong to resource `ReadOnly` and
+`AllActions`. They authorize the caller's account/region collections
+`<account>/<region>/regional_access` and `<account>/<region>/aws_vpcs`.
+No cluster permission or authorization-management grant substitutes for these
+resource actions. See [regional customer AWS access](../regional-customer-access.md).
 
 Changed-field actions, required in addition to the base update:
 

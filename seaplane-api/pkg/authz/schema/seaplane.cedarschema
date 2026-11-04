@@ -39,6 +39,8 @@ namespace Seaplane {
 
     action AllActions;
     action ReadOnly in [AllActions];
+    action DescribeRegionalIdentity in [ReadOnly, AllActions] appliesTo { principal: [Principal, Role], resource: Collection, context: RequestContext };
+    action ListAWSVPCs in [ReadOnly, AllActions] appliesTo { principal: [Principal, Role], resource: Collection, context: RequestContext };
     action ClusterAdmin in [AllActions];
     action NodePoolAdmin in [AllActions];
     action OIDCConfigAdmin in [AllActions];

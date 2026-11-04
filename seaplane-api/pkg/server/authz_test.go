@@ -47,6 +47,7 @@ attachments:
 func configuredAuthorizer(t *testing.T, cfg *config.Config) *authz.Authorizer {
 	t.Helper()
 	cfg.Regional.AWSRegion = "us-east-1"
+	configureRegionalIdentity(t, cfg)
 	cfg.Authz.ConfigFile = filepath.Join(t.TempDir(), "authz.yaml")
 	if err := os.WriteFile(cfg.Authz.ConfigFile, []byte(serverBundle), 0600); err != nil {
 		t.Fatal(err)
@@ -70,6 +71,61 @@ func TestNewRequiresAuthorizer(t *testing.T) {
 	srv, err := New(cfg, nil, nil, nil, logger)
 	if err == nil || srv != nil {
 		t.Fatalf("missing authorizer accepted: server=%v error=%v", srv, err)
+	}
+}
+
+func configureRegionalIdentity(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	cfg.CustomerAccess = config.NewConfig().CustomerAccess
+	cfg.CustomerAccess.IssuerURL = "https://issuer.example/id"
+	cfg.CustomerAccess.Subject = "system:serviceaccount:platform-api:platform-api-sa"
+	cfg.CustomerAccess.TokenFile = filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(cfg.CustomerAccess.TokenFile, []byte("projected-token"), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRegionalCustomerRoutes(t *testing.T) {
+	cfg := config.NewConfig()
+	srv, err := newConfiguredServer(t, cfg, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		method, path string
+		identified   bool
+		want         int
+	}{
+		{http.MethodGet, "/api/v0/regional_identity", true, 200},
+		{http.MethodGet, "/api/v0/regional_identity", false, 403},
+		{http.MethodPost, "/api/v0/aws_inquiries/vpcs", true, 400},
+	} {
+		request := httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`))
+		if tc.identified {
+			request.Header.Set(middleware.HeaderAccountID, "123456789012")
+			request.Header.Set(middleware.HeaderCallerARN, "arn:aws:iam::123456789012:user/test")
+		}
+		response := httptest.NewRecorder()
+		srv.apiServer.Handler.ServeHTTP(response, request)
+		if response.Code != tc.want {
+			t.Fatalf("%s: status=%d body=%s", tc.path, response.Code, response.Body.String())
+		}
+		if tc.want >= 400 {
+			var status metav1.Status
+			if err := json.Unmarshal(response.Body.Bytes(), &status); err != nil || status.Kind != "Status" {
+				t.Fatalf("invalid error response: %s", response.Body.String())
+			}
+		}
+	}
+}
+
+func TestNewRequiresRegionalIdentity(t *testing.T) {
+	cfg := config.NewConfig()
+	authorizer := configuredAuthorizer(t, cfg)
+	cfg.CustomerAccess.IssuerURL = ""
+	server, err := New(cfg, nil, authorizer, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err == nil || server != nil {
+		t.Fatal("missing regional identity accepted")
 	}
 }
 
