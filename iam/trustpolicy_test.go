@@ -108,6 +108,43 @@ func TestBuildWebIdentityTrustPolicyBadIssuer(t *testing.T) {
 	if _, err := BuildWebIdentityTrustPolicy(withIssuer(input, "://not-a-url"), ingress); err == nil {
 		t.Fatal("expected error for unparseable issuer URL")
 	}
+	// A quote in the issuer path must be rejected, not interpolated into the
+	// trust-policy JSON (would produce malformed JSON / extra keys).
+	if _, err := BuildWebIdentityTrustPolicy(withIssuer(input, "https://example.com/a\",\"x\":\"y"), ingress); err == nil {
+		t.Fatal("expected error for quote in issuer path")
+	}
+	if _, err := BuildWebIdentityTrustPolicy(withIssuer(input, "https:///no-host"), ingress); err == nil {
+		t.Fatal("expected error for issuer URL with empty host")
+	}
+}
+
+func TestBuildWebIdentityTrustPolicyInvalidInput(t *testing.T) {
+	set := DefaultDefinitionSet()
+	ingress, _ := set.Role(SuffixIngress)
+
+	tests := []struct {
+		name  string
+		input TrustPolicyInput
+	}{
+		{name: "bad partition", input: TrustPolicyInput{Partition: "aws; rm -rf", AccountID: "123456789012", IssuerURL: "https://oidc.example.com"}},
+		{name: "empty partition", input: TrustPolicyInput{Partition: "", AccountID: "123456789012", IssuerURL: "https://oidc.example.com"}},
+		{name: "bad account ID", input: TrustPolicyInput{Partition: "aws", AccountID: "not-an-account", IssuerURL: "https://oidc.example.com"}},
+		{name: "short account ID", input: TrustPolicyInput{Partition: "aws", AccountID: "12345", IssuerURL: "https://oidc.example.com"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := BuildWebIdentityTrustPolicy(tt.input, ingress); err == nil {
+				t.Fatalf("expected error for %s", tt.name)
+			}
+		})
+	}
+
+	// Valid GovCloud partition still accepted.
+	if _, err := BuildWebIdentityTrustPolicy(TrustPolicyInput{
+		Partition: "aws-us-gov", AccountID: "123456789012", IssuerURL: "https://oidc.example.com",
+	}, ingress); err != nil {
+		t.Fatalf("expected aws-us-gov partition to be accepted: %v", err)
+	}
 }
 
 func withIssuer(in TrustPolicyInput, issuer string) TrustPolicyInput {

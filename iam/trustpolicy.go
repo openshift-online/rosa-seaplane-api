@@ -4,7 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
+)
+
+// Allow-lists for values interpolated into the trust-policy JSON. The trust
+// policy is a security-sensitive IAM document, so inputs are validated with
+// allow-lists at the trust boundary rather than escaped after the fact.
+var (
+	partitionRe    = regexp.MustCompile(`^aws(-[a-z]+)*$`)
+	accountIDRe    = regexp.MustCompile(`^[0-9]{12}$`)
+	issuerDomainRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$`)
 )
 
 // BuildEC2TrustPolicy returns the trust policy for the worker node instance
@@ -32,10 +42,19 @@ func BuildWebIdentityTrustPolicy(input TrustPolicyInput, role OperatorRoleSpec) 
 	if len(role.ServiceAccounts) == 0 {
 		return "", fmt.Errorf("role %q has no service accounts", role.Name)
 	}
+	if !partitionRe.MatchString(input.Partition) {
+		return "", fmt.Errorf("invalid AWS partition %q", input.Partition)
+	}
+	if !accountIDRe.MatchString(input.AccountID) {
+		return "", fmt.Errorf("invalid AWS account ID %q", input.AccountID)
+	}
 
 	issuerDomain, err := IssuerDomain(input.IssuerURL)
 	if err != nil {
 		return "", err
+	}
+	if !issuerDomainRe.MatchString(issuerDomain) {
+		return "", fmt.Errorf("OIDC issuer %q contains unsupported characters", input.IssuerURL)
 	}
 
 	subject, err := OIDCSubject(role.ServiceAccounts)
@@ -100,6 +119,9 @@ func IssuerDomain(issuerURL string) (string, error) {
 	}
 	if parsed.Scheme != "https" {
 		return "", fmt.Errorf("expected OIDC issuer URL '%s' to use an https:// scheme", issuerURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("OIDC issuer URL '%s' has no host", issuerURL)
 	}
 	return parsed.Host + parsed.Path, nil
 }

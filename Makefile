@@ -1,6 +1,6 @@
 .PHONY: help build test test-unit test-integration lint clean \
-	build-seaplane-db build-operator build-api build-api-codegen \
-	test-seaplane-db test-operator test-operator-int test-api test-api-int test-api-codegen test-clientset \
+	build-seaplane-db build-iam build-operator build-api build-api-codegen \
+	test-seaplane-db test-iam test-operator test-operator-int test-api test-api-int test-api-codegen test-clientset \
 	test-e2e test-e2e-api test-e2e-authz test-e2e-cli test-e2e-platform-monitoring test-e2e-zoa test-e2e-sdk test-e2e-rosa-cli \
 	test-e2e test-e2e-api test-e2e-cli test-e2e-platform-monitoring test-e2e-sdk \
 	fmt vet verify verify-mod deps mod-tidy \
