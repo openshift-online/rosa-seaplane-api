@@ -107,20 +107,21 @@ func (r *ClusterReconciler) oidcSigningKeyExternal(ctx context.Context, cluster 
 // listByMetadataUID uses the pgruntime UID field index when available. Some
 // Kubernetes-backed clients do not support metadata.uid field selectors, so
 // fall back to a namespace list for those clients.
-func (r *ClusterReconciler) listByMetadataUID(ctx context.Context, list client.ObjectList, namespace, uid string) error {
-	err := r.List(ctx, list,
+// Callers must still compare each item's UID.
+func listByMetadataUID(ctx context.Context, reader client.Reader, list client.ObjectList, namespace, uid string) error {
+	err := reader.List(ctx, list,
 		client.InNamespace(namespace),
 		client.MatchingFields{metadataUIDField: uid},
 	)
 	if err == nil || !apierrors.IsBadRequest(err) {
 		return err
 	}
-	return r.List(ctx, list, client.InNamespace(namespace))
+	return reader.List(ctx, list, client.InNamespace(namespace))
 }
 
 func (r *ClusterReconciler) getOidcConfigByUID(ctx context.Context, accountID, uid string) (*seaplanev1alpha1.OidcConfig, error) {
 	var list seaplanev1alpha1.OidcConfigList
-	if err := r.listByMetadataUID(ctx, &list, accountNamespace(accountID), uid); err != nil {
+	if err := listByMetadataUID(ctx, r, &list, accountNamespace(accountID), uid); err != nil {
 		return nil, err
 	}
 	for i := range list.Items {
@@ -133,7 +134,7 @@ func (r *ClusterReconciler) getOidcConfigByUID(ctx context.Context, accountID, u
 
 func (r *ClusterReconciler) getDNSReservationByUID(ctx context.Context, accountID, uid string) (*seaplanev1alpha1.DNSReservation, error) {
 	var list seaplanev1alpha1.DNSReservationList
-	if err := r.listByMetadataUID(ctx, &list, accountNamespace(accountID), uid); err != nil {
+	if err := listByMetadataUID(ctx, r, &list, accountNamespace(accountID), uid); err != nil {
 		return nil, err
 	}
 	for i := range list.Items {

@@ -87,7 +87,7 @@ metadata:
 
 | Field                               | Set by                  | Rule                                                            |
 | ----------------------------------- | ----------------------- | --------------------------------------------------------------- |
-| `namespace`                         | client                  | required; must be `account-<caller's account>`, else 400        |
+| `namespace`                         | client                  | `account-<caller's account>`, else 400; omitted means that one  |
 | `name`                              | client                  | see [Names](#3-names); unique per kind and namespace; immutable |
 | `annotations`                       | client                  | key format, value size, and number of keys are validated        |
 | `uid`                               | database                | client value ignored; immutable                                 |
@@ -96,9 +96,10 @@ metadata:
 | `spec.accountId`, other service-set | seaplane-api            | client value ignored; never change on update                    |
 
 A wrong namespace returns 400, not 403 or 404, so the response tells a caller
-nothing about other accounts. The caller's account comes from API Gateway, which sets
-`X-Amz-Account-Id` from the SigV4-verified identity. It never comes from the request
-body.
+nothing about other accounts. An omitted namespace means the caller's own: the SDK's
+typed clients aren't namespaced, so they don't send one. The caller's account comes
+from API Gateway, which sets `X-Amz-Account-Id` from the SigV4-verified identity. It
+never comes from the request body.
 
 **From request to row:**
 
@@ -123,9 +124,8 @@ on. They would also sit next to the keys that decide ownership, guarded only by 
 prefix check: one missed check and a customer moves a resource or releases a claim.
 
 **Customer metadata goes in annotations.** Key format, value size, and number of keys
-are validated, and `seaplane.io/` is reserved. Annotations aren't indexed; don't
-select on them. A public API may call them labels or tags; they are stored as
-annotations.
+are validated. Annotations aren't indexed; don't select on them. A public API may
+call them labels or tags; they are stored as annotations.
 
 A claim label changes only when the server claims or releases
 ([§5](#5-lifecycle-and-writes)).

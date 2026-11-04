@@ -69,6 +69,7 @@ func TestAutomaticDNSReservationStatusUsesClaimedClustersPersistedName(t *testin
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithStatusSubresource(&seaplanev1alpha1.DNSReservation{}).
+		WithIndex(&seaplanev1alpha1.Cluster{}, metadataUIDField, func(obj client.Object) []string { return []string{string(obj.GetUID())} }).
 		WithObjects(cluster, reservation).
 		Build()
 	reconciler := &DNSReservationReconciler{Client: k8sClient}

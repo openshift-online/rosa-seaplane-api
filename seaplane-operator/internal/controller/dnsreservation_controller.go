@@ -308,7 +308,7 @@ func (r *DNSReservationReconciler) resolveInternalHostedClusterName(ctx context.
 
 	if clusterUID := reservation.Labels[claimedByClusterUIDLabel]; clusterUID != "" {
 		var clusters seaplanev1alpha1.ClusterList
-		if err := r.List(ctx, &clusters, client.InNamespace(reservation.Namespace)); err != nil {
+		if err := listByMetadataUID(ctx, r, &clusters, reservation.Namespace, clusterUID); err != nil {
 			return "", fmt.Errorf("find Cluster UID %s for DNSReservation %s/%s: %w", clusterUID, reservation.Namespace, reservation.Name, err)
 		}
 		for i := range clusters.Items {
