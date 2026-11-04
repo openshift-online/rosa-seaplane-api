@@ -58,6 +58,7 @@ func init() {
 	serveCmd.Flags().StringVar(&logFormat, "log-format", "json", "Log format (json, text)")
 	serveCmd.Flags().String("allowed-accounts", "", "Deprecated compatibility flag; ignored")
 	serveCmd.Flags().String("authz-config-file", "", "Authorization configuration bundle (required)")
+	serveCmd.Flags().String("authz-management-config-file", "", "Optional authorization management configuration")
 	serveCmd.Flags().StringVar(&legacyDynamoDBRegion, "dynamodb-region", "", "Deprecated compatibility flag; used only as a region fallback")
 	serveCmd.Flags().String("dynamodb-prefix", "", "Deprecated compatibility flag; ignored")
 	serveCmd.Flags().StringVar(&postgresDSN, "postgres-dsn", "", "PostgreSQL connection string (required)")
@@ -101,6 +102,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		} else {
 			logger.Error("authorization startup failed", "error", err)
 		}
+		return err
+	}
+
+	management, err := loadManagement(cmd, awsCfg)
+	if err != nil {
 		return err
 	}
 
@@ -190,7 +196,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create server
-	srv, err := server.New(cfg, dbClient, authorizer, logger)
+	srv, err := server.New(cfg, dbClient, authorizer, management, logger)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}

@@ -12,6 +12,148 @@ servers:
     description: API v0
 
 paths:
+  /authz/policies:
+    description: Account-scoped management. Bootstrap administrators need no legacy account enrollment. Resource grants remain separate.
+    post:
+      operationId: createAuthzPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthzPolicyCreate"
+      responses:
+        "201":
+          description: Committed policy revision; replication to other regions is asynchronous
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthzPolicy"
+        default:
+          $ref: "#/components/responses/AuthzError"
+    get:
+      operationId: listAuthzPolicies
+      description: Lists custom and managed policies available to the account.
+      responses:
+        "200":
+          description: Policies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthzPolicyList"
+        default:
+          $ref: "#/components/responses/AuthzError"
+  /authz/policies/{id}:
+    parameters:
+      - $ref: "#/components/parameters/AuthzID"
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum: [custom, managed]
+          default: custom
+    get:
+      operationId: getAuthzPolicy
+      responses:
+        "200":
+          description: Policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthzPolicy"
+        default:
+          $ref: "#/components/responses/AuthzError"
+    put:
+      operationId: updateAuthzPolicy
+      description: Global writer only. Managed policies are immutable (403).
+      parameters:
+        - $ref: "#/components/parameters/AuthzIfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthzPolicyUpdate"
+      responses:
+        "200":
+          description: Committed policy revision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthzPolicy"
+        default:
+          $ref: "#/components/responses/AuthzError"
+    delete:
+      operationId: deleteAuthzPolicy
+      description: Global writer only. Managed policies are immutable (403).
+      parameters:
+        - $ref: "#/components/parameters/AuthzIfMatch"
+      responses:
+        "200":
+          $ref: "#/components/responses/AuthzDeleted"
+        default:
+          $ref: "#/components/responses/AuthzError"
+  /authz/attachments:
+    post:
+      operationId: createAuthzAttachment
+      description: Global writes require the account writer; regional writes stay local. Region and owner are server-assigned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthzAttachmentCreate"
+      responses:
+        "201":
+          description: Committed attachment revision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthzAttachment"
+        default:
+          $ref: "#/components/responses/AuthzError"
+    get:
+      operationId: listAuthzAttachments
+      description: Omitted scope returns global and current-region attachments and requires both permissions. No silent omission.
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [global, regional]
+      responses:
+        "200":
+          description: Attachments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthzAttachmentList"
+        default:
+          $ref: "#/components/responses/AuthzError"
+  /authz/attachments/{id}:
+    delete:
+      operationId: deleteAuthzAttachment
+      parameters:
+        - $ref: "#/components/parameters/AuthzID"
+        - $ref: "#/components/parameters/AuthzIfMatch"
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [global, regional]
+      responses:
+        "200":
+          $ref: "#/components/responses/AuthzDeleted"
+        default:
+          $ref: "#/components/responses/AuthzError"
+  /authz/check:
+    description: Removed. This delivery does not rebuild authorization checks.
+    post:
+      operationId: removedAuthzCheck
+      responses:
+        "404":
+          $ref: "#/components/responses/AuthzError"
   /clusters/{id}/labels:
     parameters:
       - $ref: "#/components/parameters/LabelResourceID"
@@ -848,6 +990,31 @@ paths:
 
 components:
   responses:
+    AuthzError:
+      description: |
+        Kubernetes Status error. 400 malformed JSON, unknown fields, trailing JSON,
+        query or If-Match; 422 policy/input validation; 403 denied or managed policy;
+        404 missing; 409 stale revision or wrong writer; 503 backend unavailable;
+        500 authorization evaluation failure. Wrong writer includes
+        X-Authz-Writer-Region and details.causes field writerRegion. Retry the
+        authenticated request in that region; the writer reauthorizes locally.
+        Never fail over a global write to another region. Replicas may still use
+        old policy or attachment data after a successful commit or deletion.
+      headers:
+        X-Authz-Writer-Region:
+          description: Required region for global mutations on wrong-writer 409
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    AuthzDeleted:
+      description: Committed deletion; other regions may still use old data
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AuthzDeletionReceipt"
     ResourceLabels:
       description: Complete stored metadata labels, including read-only system labels; empty object when absent
       content:
@@ -857,6 +1024,20 @@ components:
             additionalProperties:
               type: string
   parameters:
+    AuthzID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    AuthzIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Single double-quoted nonzero UUID revision. Weak tags, wildcards and lists are rejected.
+      schema:
+        type: string
+        example: '"550e8400-e29b-41d4-a716-446655440000"'
     LabelResourceID:
       name: id
       in: path
@@ -883,6 +1064,119 @@ components:
               type: string
               nullable: true
   schemas:
+    AuthzPolicyRef:
+      type: object
+      additionalProperties: false
+      required: [id, type]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [custom, managed]
+    AuthzPolicyCreate:
+      type: object
+      additionalProperties: false
+      required: [id, content]
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+    AuthzPolicyUpdate:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        content:
+          type: string
+    AuthzPolicy:
+      type: object
+      required: [id, type, ownerAccountId, content, revision]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [custom, managed]
+        ownerAccountId:
+          type: string
+        content:
+          type: string
+        revision:
+          type: string
+          format: uuid
+    AuthzAttachmentCreate:
+      type: object
+      additionalProperties: false
+      required: [policy, principalArn]
+      properties:
+        policy:
+          $ref: "#/components/schemas/AuthzPolicyRef"
+        principalArn:
+          type: string
+        scope:
+          type: string
+          enum: [global, regional]
+          default: global
+    AuthzAttachment:
+      type: object
+      required: [id, ownerAccountId, policy, principalArn, scope, revision]
+      properties:
+        id:
+          type: string
+        ownerAccountId:
+          type: string
+        policy:
+          $ref: "#/components/schemas/AuthzPolicyRef"
+        principalArn:
+          type: string
+        scope:
+          type: string
+          enum: [global, regional]
+        region:
+          type: string
+          description: Present only for regional attachments
+        revision:
+          type: string
+          format: uuid
+    AuthzPolicyList:
+      type: object
+      required: [kind, total, items]
+      properties:
+        kind:
+          type: string
+          enum: [PolicyList]
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuthzPolicy"
+    AuthzAttachmentList:
+      type: object
+      required: [kind, total, items]
+      properties:
+        kind:
+          type: string
+          enum: [AttachmentList]
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuthzAttachment"
+    AuthzDeletionReceipt:
+      type: object
+      required: [id, deletedRevision, committedRegion]
+      properties:
+        id:
+          type: string
+        deletedRevision:
+          type: string
+          format: uuid
+        committedRegion:
+          type: string
     ManagementClusterRequest:
       type: object
       description: Request body for creating a management cluster

@@ -64,7 +64,7 @@ and 7 are only listed here until they are designed.
 **Phase 6 — Metadata, namespaces, and checked writes**
 
 - Store no customer labels; customer metadata goes in validated annotations, with
-  `seaplane.io/` reserved. Cedar and `docs/authz.md` read annotations.
+  `seaplane.io/` reserved. Cedar and `docs/authz/README.md` read annotations.
 - Reject an empty request namespace with 400.
 - The storage client checks the namespace and account label instead of setting them.
 - Cluster and NodePool deletes write the snapshot the handler checked.
