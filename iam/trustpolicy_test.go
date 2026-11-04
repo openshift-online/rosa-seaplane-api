@@ -204,6 +204,9 @@ func TestIssuerDomain(t *testing.T) {
 		// behavior (design doc: naive scheme/path normalization would diverge
 		// from the provider that was actually created).
 		{issuerURL: "https://example.com/path/", want: "example.com/path/"},
+		// Percent-encoded characters are preserved verbatim so the domain
+		// matches the OIDC provider registered with AWS.
+		{issuerURL: "https://example.com/ten%61nt/blue", want: "example.com/ten%61nt/blue"},
 		{issuerURL: "http://example.com", wantErr: true},
 		{issuerURL: "https:///no-host", wantErr: true},
 		{issuerURL: "not-a-url", wantErr: true},
