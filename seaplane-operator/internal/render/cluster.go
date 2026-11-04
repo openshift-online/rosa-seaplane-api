@@ -22,7 +22,7 @@ import (
 // baseDomain is the fully assembled DNS base domain from the DNSReservation
 // (e.g. "f7a3.0.openshiftapps.com").
 func ClusterResources(cluster *seaplanev1alpha1.Cluster, oidcSigningKeyExternal bool,
-	baseDomain, controlPlaneOperatorImage string) ([]Resource, error) {
+	baseDomain, controlPlaneOperatorImage string, ecrMirror ECRMirrorConfig) ([]Resource, error) {
 	clusterID, ns, err := managementClusterIdentity(cluster)
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func ClusterResources(cluster *seaplanev1alpha1.Cluster, oidcSigningKeyExternal 
 		return nil, fmt.Errorf("cluster %s/%s has no valid HostedCluster name", cluster.Namespace, cluster.Name)
 	}
 
-	hc, err := hostedCluster(cluster, clusterID, ns, hostedClusterName, oidcSigningKeyExternal, baseDomain, controlPlaneOperatorImage)
+	hc, err := hostedCluster(cluster, clusterID, ns, hostedClusterName, oidcSigningKeyExternal, baseDomain, controlPlaneOperatorImage, ecrMirror)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func apiServingCert(clusterID, hostedClusterName, baseDomain, ns string) Resourc
 }
 
 func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClusterName string, oidcSigningKeyExternal bool,
-	baseDomain, controlPlaneOperatorImage string) (Resource, error) {
+	baseDomain, controlPlaneOperatorImage string, ecrMirror ECRMirrorConfig) (Resource, error) {
 	clusterName := cluster.Name // customer-facing identity
 	apiHost := fmt.Sprintf("api.%s.%s", hostedClusterName, baseDomain)
 
@@ -296,6 +296,11 @@ func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClust
 		hcSpec.ServiceAccountSigningKey = &corev1.LocalObjectReference{Name: oidcSigningKeyName}
 	} else {
 		hcSpec.ServiceAccountSigningKey = nil
+	}
+
+	// ECR mirror: platform-managed imageContentSources for zero-egress environments.
+	if ics := ecrImageContentSources(ecrMirror); len(ics) > 0 {
+		hcSpec.ImageContentSources = ics
 	}
 
 	annotations := map[string]string{

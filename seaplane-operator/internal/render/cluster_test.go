@@ -66,7 +66,7 @@ func testCluster() *seaplanev1alpha1.Cluster {
 }
 
 func TestClusterResourcesPreservesProxyConfiguration(t *testing.T) {
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -103,7 +103,7 @@ func testClusterWithOidcConfig() *seaplanev1alpha1.Cluster {
 }
 
 func TestClusterResourcesCount(t *testing.T) {
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestClusterResourcesCount(t *testing.T) {
 }
 
 func TestClusterResourcesTypes(t *testing.T) {
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestClusterResourcesDecoupleHostedClusterNameFromCustomerName(t *testing.T)
 	cluster.Spec.HostedClusterName = seaplanev1alpha1.HostedClusterNameFromDNSReservation(&seaplanev1alpha1.DNSReservation{
 		ObjectMeta: metav1.ObjectMeta{UID: "550e8400-e29b-41d4-a716-446655440000"},
 	})
-	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestLongCustomerNameUsesHostedClusterNameForAPIOAuthAndCertificateDNS(t *te
 	cluster.Spec.DNSReservationID = string(reservation.UID)
 	cluster.Spec.HostedClusterName = seaplanev1alpha1.HostedClusterNameFromDNSReservation(reservation)
 
-	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestLongCustomerNameUsesHostedClusterNameForAPIOAuthAndCertificateDNS(t *te
 
 func TestClusterResourcesRenderIntoUIDManagementNamespace(t *testing.T) {
 	cluster := testCluster()
-	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestClusterResourcesRenderIntoUIDManagementNamespace(t *testing.T) {
 // ExternalSecret and ServiceAccountSigningKey reference are rendered when the
 // referenced OidcConfig is type=unmanaged (oidcSigningKeyExternal=true).
 func TestClusterResourcesWithOidcConfig(t *testing.T) {
-	resources, err := ClusterResources(testClusterWithOidcConfig(), true, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(testClusterWithOidcConfig(), true, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -348,7 +348,7 @@ func TestClusterResourcesWithOidcConfig(t *testing.T) {
 // TestClusterResourcesWithoutOidcConfig_NoExternalSecret verifies the legacy
 // path renders no OIDC signing key ExternalSecret.
 func TestClusterResourcesWithoutOidcConfig_NoExternalSecret(t *testing.T) {
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestClusterResourcesWithoutOidcConfig_NoExternalSecret(t *testing.T) {
 // no ExternalSecret/ServiceAccountSigningKey, since managed configs don't
 // store a signing key in Secrets Manager for ESO to deliver.
 func TestClusterResourcesWithManagedOidcConfig_NoExternalSecret(t *testing.T) {
-	resources, err := ClusterResources(testClusterWithOidcConfig(), false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(testClusterWithOidcConfig(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestClusterResourcesClearsStaleServiceAccountSigningKey(t *testing.T) {
 	cluster := testCluster()
 	cluster.Spec.HostedCluster.ServiceAccountSigningKey = &corev1.LocalObjectReference{Name: "stale-key"}
 
-	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -432,7 +432,7 @@ func TestClusterResourcesClearsStaleServiceAccountSigningKey(t *testing.T) {
 }
 
 func TestHostedClusterDNS(t *testing.T) {
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -504,7 +504,7 @@ func TestHostedClusterDNSClearsZoneIDs(t *testing.T) {
 	cluster.Spec.HostedCluster.DNS.PublicZoneID = "Z0123456789PUBLIC"
 	cluster.Spec.HostedCluster.DNS.PrivateZoneID = "Z0123456789PRIVATE"
 
-	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestHostedClusterInfraIDManagedOidcConfig(t *testing.T) {
 	cluster := testClusterWithOidcConfig()
 	cluster.Spec.HostedCluster.IssuerURL = "https://oidc.example.com/2130539814aa400396a3f3b860e04a1c"
 
-	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -549,7 +549,7 @@ func TestHostedClusterInfraIDUnmanagedOidcConfig(t *testing.T) {
 	cluster := testClusterWithOidcConfig()
 	cluster.Spec.HostedCluster.IssuerURL = "https://customer-idp.example.com/some/arbitrary/path"
 
-	resources, err := ClusterResources(cluster, true, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(cluster, true, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -577,7 +577,7 @@ func hostedClusterFrom(t *testing.T, resources []Resource) *hypershiftv1beta1.Ho
 // test if one was not produced.
 func renderHostedCluster(t *testing.T, cluster *seaplanev1alpha1.Cluster) *hypershiftv1beta1.HostedCluster {
 	t.Helper()
-	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "")
+	resources, err := ClusterResources(cluster, false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -589,7 +589,7 @@ func renderHostedCluster(t *testing.T, cluster *seaplanev1alpha1.Cluster) *hyper
 func TestHostedClusterControlPlaneOperatorImageAnnotation(t *testing.T) {
 	const cpoImage = "quay.io/me/hypershift:pr-1234"
 
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", cpoImage)
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", cpoImage, ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -598,7 +598,7 @@ func TestHostedClusterControlPlaneOperatorImageAnnotation(t *testing.T) {
 		t.Errorf("CPO annotation = %q, want %q", got, cpoImage)
 	}
 
-	resources, err = ClusterResources(testCluster(), false, "f7a3.0.example.com", "")
+	resources, err = ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}

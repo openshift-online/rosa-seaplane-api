@@ -149,12 +149,15 @@ func main() {
 	dynamoDBClient := dynamodb.NewFromConfig(awsCfg)
 	dynamoClient := dynamo.NewClient(dynamoDBClient)
 
+	ecrMirror := buildECRMirrorConfig()
+
 	rcfg := render.RegionalConfig{
 		BaseDomainSuffix: baseDomain,
 		AWSRegion:        awsRegion,
 		// Development override: when set, every HostedCluster is pinned to this
 		// control-plane-operator image (empty disables the override).
 		ControlPlaneOperatorImage: os.Getenv("CONTROL_PLANE_OPERATOR_IMAGE"),
+		ECRMirror:                 ecrMirror,
 	}
 
 	eventRouter := controller.NewEventRouter()
@@ -275,6 +278,65 @@ func main() {
 	if err := mgr.Start(signalCtx); err != nil {
 		setupLog.Error(err, "Failed to run manager")
 		os.Exit(1)
+	}
+}
+
+// buildECRMirrorConfig reads ECR mirror configuration from environment variables.
+//
+//   - ECR_MIRROR_REGISTRY_ACCOUNT — AWS account ID of the ECR registry
+//   - ECR_MIRROR_REGISTRY_REGION  — AWS region of the ECR registry
+//   - ECR_MIRROR_REPOSITORY       — ECR repository name for OCP images
+//   - ECR_MIRROR_SOURCES          — comma-separated source registry paths to redirect
+//
+// All four must be set together or none at all; partial configuration causes
+// the operator to exit.
+func buildECRMirrorConfig() render.ECRMirrorConfig {
+	account := os.Getenv("ECR_MIRROR_REGISTRY_ACCOUNT")
+	region := os.Getenv("ECR_MIRROR_REGISTRY_REGION")
+	repo := os.Getenv("ECR_MIRROR_REPOSITORY")
+	sourcesRaw := os.Getenv("ECR_MIRROR_SOURCES")
+
+	if account == "" && region == "" && repo == "" && sourcesRaw == "" {
+		setupLog.Info("ECR mirror disabled: ECR_MIRROR_REGISTRY_ACCOUNT, ECR_MIRROR_REGISTRY_REGION, ECR_MIRROR_REPOSITORY, and ECR_MIRROR_SOURCES are not set")
+		return render.ECRMirrorConfig{}
+	}
+
+	var missing []string
+	if account == "" {
+		missing = append(missing, "ECR_MIRROR_REGISTRY_ACCOUNT")
+	}
+	if region == "" {
+		missing = append(missing, "ECR_MIRROR_REGISTRY_REGION")
+	}
+	if repo == "" {
+		missing = append(missing, "ECR_MIRROR_REPOSITORY")
+	}
+	if sourcesRaw == "" {
+		missing = append(missing, "ECR_MIRROR_SOURCES")
+	}
+	if len(missing) > 0 {
+		setupLog.Error(nil, "ECR mirror partially configured — set all four env vars or none",
+			"missing", missing)
+		os.Exit(1)
+	}
+
+	sources, err := render.ParseECRSources(sourcesRaw)
+	if err != nil {
+		setupLog.Error(err, "invalid ECR_MIRROR_SOURCES")
+		os.Exit(1)
+	}
+
+	setupLog.Info("ECR mirror enabled",
+		"account", account,
+		"region", region,
+		"repository", repo,
+		"sources", len(sources),
+	)
+	return render.ECRMirrorConfig{
+		RegistryAccount: account,
+		RegistryRegion:  region,
+		Repository:      repo,
+		Sources:         sources,
 	}
 }
 
