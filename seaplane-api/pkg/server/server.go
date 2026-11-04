@@ -33,8 +33,9 @@ type Server struct {
 	redisCloser   io.Closer
 }
 
-// New creates a new Server instance. The dbClient is used by the resource handlers.
-func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Authorizer, logger *slog.Logger) (*Server, error) {
+// New creates a Server with separate resource and management authorization dependencies.
+// A nil management service leaves management routes unregistered.
+func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Authorizer, management *authz.Management, logger *slog.Logger) (*Server, error) {
 	if authorizer == nil {
 		return nil, fmt.Errorf("authorizer is required")
 	}
@@ -107,16 +108,31 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 		apiRouter.Use(rl.Middleware)
 	}
 
-	apiRouter.Use(allowlistAccounts(authorizer, dbClient, logger))
-	apiRouter.Use(middleware.RequireIdentity(logger, func(ctx context.Context, accountID string) bool {
+	if management != nil {
+		managementRouter := apiRouter.PathPrefix("/api/v0/authz").Subrouter()
+		managementRouter.Use(middleware.RequireIdentity(logger, management.IsAccountRegistered))
+		h := apphandlers.NewManagementHandler(management, logger)
+		managementRouter.HandleFunc("/policies", h.CreatePolicy).Methods(http.MethodPost)
+		managementRouter.HandleFunc("/policies", h.ListPolicies).Methods(http.MethodGet)
+		managementRouter.HandleFunc("/policies/{id}", h.GetPolicy).Methods(http.MethodGet)
+		managementRouter.HandleFunc("/policies/{id}", h.UpdatePolicy).Methods(http.MethodPut)
+		managementRouter.HandleFunc("/policies/{id}", h.DeletePolicy).Methods(http.MethodDelete)
+		managementRouter.HandleFunc("/attachments", h.CreateAttachment).Methods(http.MethodPost)
+		managementRouter.HandleFunc("/attachments", h.ListAttachments).Methods(http.MethodGet)
+		managementRouter.HandleFunc("/attachments/{id}", h.DeleteAttachment).Methods(http.MethodDelete)
+	}
+
+	resourceRouter := apiRouter.NewRoute().Subrouter()
+	resourceRouter.Use(allowlistAccounts(authorizer, dbClient, logger))
+	resourceRouter.Use(middleware.RequireIdentity(logger, func(ctx context.Context, accountID string) bool {
 		return authorizer.IsAccountRegistered(ctx, accountID) || middleware.IsAllowlisted(ctx)
 	}))
 
-	apiRouter.HandleFunc("/api/v0/accounts", accountsHandler.Enroll).Methods(http.MethodPost)
-	apiRouter.HandleFunc("/api/v0/accounts/{id}", accountsHandler.Unenroll).Methods(http.MethodDelete)
+	resourceRouter.HandleFunc("/api/v0/accounts", accountsHandler.Enroll).Methods(http.MethodPost)
+	resourceRouter.HandleFunc("/api/v0/accounts/{id}", accountsHandler.Unenroll).Methods(http.MethodDelete)
 
 	// Cluster routes
-	clusterRouter := apiRouter.PathPrefix("/api/v0/clusters").Subrouter()
+	clusterRouter := resourceRouter.PathPrefix("/api/v0/clusters").Subrouter()
 	clusterRouter.HandleFunc("", clusterHandler.List).Methods(http.MethodGet)
 	clusterRouter.HandleFunc("", clusterHandler.Create).Methods(http.MethodPost)
 	clusterRouter.HandleFunc("/{id}", clusterHandler.Get).Methods(http.MethodGet)
@@ -125,7 +141,7 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 	clusterRouter.HandleFunc("/{id}", clusterHandler.Delete).Methods(http.MethodDelete)
 
 	// NodePool routes
-	nodePoolRouter := apiRouter.PathPrefix("/api/v0/nodepools").Subrouter()
+	nodePoolRouter := resourceRouter.PathPrefix("/api/v0/nodepools").Subrouter()
 	nodePoolRouter.HandleFunc("", nodePoolHandler.List).Methods(http.MethodGet)
 	nodePoolRouter.HandleFunc("", nodePoolHandler.Create).Methods(http.MethodPost)
 	nodePoolRouter.HandleFunc("/{id}", nodePoolHandler.Get).Methods(http.MethodGet)
@@ -134,7 +150,7 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 	nodePoolRouter.HandleFunc("/{id}", nodePoolHandler.Delete).Methods(http.MethodDelete)
 
 	// OidcConfig routes
-	oidcConfigRouter := apiRouter.PathPrefix("/api/v0/oidc_configs").Subrouter()
+	oidcConfigRouter := resourceRouter.PathPrefix("/api/v0/oidc_configs").Subrouter()
 	oidcConfigRouter.HandleFunc("", oidcConfigHandler.List).Methods(http.MethodGet)
 	oidcConfigRouter.HandleFunc("", oidcConfigHandler.Create).Methods(http.MethodPost)
 	oidcConfigRouter.HandleFunc("/{id}", oidcConfigHandler.Get).Methods(http.MethodGet)
@@ -142,7 +158,7 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 	oidcConfigRouter.HandleFunc("/{id}", oidcConfigHandler.Delete).Methods(http.MethodDelete)
 
 	// DNSReservation routes
-	dnsReservationRouter := apiRouter.PathPrefix("/api/v0/dns_reservations").Subrouter()
+	dnsReservationRouter := resourceRouter.PathPrefix("/api/v0/dns_reservations").Subrouter()
 	dnsReservationRouter.HandleFunc("", dnsReservationHandler.List).Methods(http.MethodGet)
 	dnsReservationRouter.HandleFunc("", dnsReservationHandler.Create).Methods(http.MethodPost)
 	dnsReservationRouter.HandleFunc("/{id}", dnsReservationHandler.Get).Methods(http.MethodGet)

@@ -93,7 +93,7 @@ func resourceServer(t *testing.T, customer []string, hooks interceptor.Funcs, ob
 	cfg := config.NewConfig()
 	cfg.Regional.AWSRegion = "us-east-1"
 	cfg.Server.MaxRequestBodyBytes = 1 << 20 // 1 MiB — match the upstream hardcoded limit
-	srv, err := New(cfg, seaplanedb.NewClientFrom(fc, logger), authorizer, logger)
+	srv, err := New(cfg, seaplanedb.NewClientFrom(fc, logger), authorizer, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

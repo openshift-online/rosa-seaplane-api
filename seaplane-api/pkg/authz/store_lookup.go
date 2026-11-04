@@ -17,7 +17,7 @@ func (s *Store) queryItems(ctx context.Context, table, pk string) ([]map[string]
 	for {
 		out, err := s.client.Query(ctx, input)
 		if err != nil {
-			return nil, err
+			return nil, backendError(err)
 		}
 		items = append(items, out.Items...)
 		if len(out.LastEvaluatedKey) == 0 {
@@ -27,6 +27,7 @@ func (s *Store) queryItems(ctx context.Context, table, pk string) ([]map[string]
 	}
 }
 
+// ListPolicies returns the account's custom policies and the platform's managed policies.
 func (s *Store) ListPolicies(ctx context.Context) ([]StoredPolicy, error) {
 	policies := []StoredPolicy{}
 	for _, owner := range []string{s.config.AccountID, managedOwner} {
@@ -45,6 +46,8 @@ func (s *Store) ListPolicies(ctx context.Context) ([]StoredPolicy, error) {
 	return policies, nil
 }
 
+// readBindings returns validated attachments for a scope and account or principal lookup key.
+// It returns an error if any record is malformed or inconsistent.
 func (s *Store) readBindings(ctx context.Context, scope AttachmentScope, pk string) ([]StoredAttachment, error) {
 	table, err := s.attachmentTable(scope)
 	if err != nil {
@@ -79,6 +82,7 @@ func (s *Store) readBindings(ctx context.Context, scope AttachmentScope, pk stri
 	return bindings, nil
 }
 
+// ListAttachments returns the account's global attachments and attachments for the store's region.
 func (s *Store) ListAttachments(ctx context.Context) ([]StoredAttachment, error) {
 	bindings := []StoredAttachment{}
 	for _, scope := range []AttachmentScope{GlobalScope, RegionalScope} {

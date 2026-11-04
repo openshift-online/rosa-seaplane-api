@@ -61,13 +61,13 @@ func configuredAuthorizer(t *testing.T, cfg *config.Config) *authz.Authorizer {
 func newConfiguredServer(t *testing.T, cfg *config.Config, db *seaplanedb.Client, logger *slog.Logger) (*Server, error) {
 	t.Helper()
 	authorizer := configuredAuthorizer(t, cfg)
-	return New(cfg, db, authorizer, logger)
+	return New(cfg, db, authorizer, nil, logger)
 }
 
 func TestNewRequiresAuthorizer(t *testing.T) {
 	cfg := config.NewConfig()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := New(cfg, nil, nil, logger)
+	srv, err := New(cfg, nil, nil, nil, logger)
 	if err == nil || srv != nil {
 		t.Fatalf("missing authorizer accepted: server=%v error=%v", srv, err)
 	}
@@ -128,7 +128,7 @@ func TestServerEnrollment(t *testing.T) {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	db := seaplanedb.NewClientFrom(fake.NewClientBuilder().WithScheme(scheme).Build(), logger)
-	srv, err := New(cfg, db, authorizer, logger)
+	srv, err := New(cfg, db, authorizer, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestServerRateLimitBeforeAdmission(t *testing.T) {
 	cfg.RateLimit = config.RateLimitConfig{Enabled: true, InMemory: true, DefaultRate: 1, DefaultBurst: 1, DefaultWindow: 60}
 	authorizer := configuredAuthorizer(t, cfg)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := New(cfg, nil, authorizer, logger)
+	srv, err := New(cfg, nil, authorizer, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

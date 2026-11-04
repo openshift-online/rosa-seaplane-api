@@ -1,18 +1,15 @@
 # Platform API authorization
 
-The API evaluates Cedar in-process (`cedar-go v1.8.0`) against a configuration
-bundle loaded at startup. Every implemented resource operation requires an
-explicit grant. Bundle enrollment and gateway authentication grant nothing; the temporary
-account allowlist grants its accounts full access to their own resources.
+Resource requests evaluate Cedar in-process (`cedar-go v1.8.0`) against a startup
+bundle. Enrollment and gateway authentication grant nothing. The temporary
+allowlist is the exception, granting full access to its accounts' own resources.
 
-Not implemented: policy/attachment management, account linking,
-AccessEntry, `/authz/check`; see the [target design](authz-design.md). Chart
-delivery and the account allowlist SOP:
-`rosa-seaplane/docs/platform-api-authorization.md`.
-
-The [DynamoDB authorization storage design](authz-storage-contract.md) defines the
-persistent storage contract and proposed provisioning. Live authorization still
-uses the startup bundle.
+[Management](management.md) uses DynamoDB and separate bootstrap
+administrators, without implicit resource grants. Resource resolution stays on
+the bundle until ROSAENG-67498. See the [storage contract](storage-contract.md)
+and [future design](design.md). Platform setup lives in
+`rosa-seaplane/docs/platform-api-authorization.md`. `AccessEntry` is unimplemented.
+The removed `/api/v0/authz/check` returns a structured 404.
 
 ## Startup
 
@@ -23,11 +20,9 @@ uses the startup bundle.
 | `--dynamodb-region`                         | Deprecated region fallback.                           |
 | `--allowed-accounts`, `--dynamodb-prefix`   | Deprecated, ignored.                                  |
 
-Startup validates the whole bundle before opening the database or listeners. On
-failure it logs `authorization startup failed` and exits nonzero.
-
-The bundle is an immutable snapshot. Changes require a restart and rollout;
-old replicas keep old permissions until replaced.
+Startup validates the whole bundle before database connections or listeners.
+Failure logs `authorization startup failed` and exits nonzero. Changes require a
+rollout. Old replicas keep their immutable permissions until replaced.
 
 ## Bundle
 
@@ -49,13 +44,12 @@ attachments:
 ```
 
 - `registeredAccounts`: accounts admitted to the API. Admission only.
-- Temporary allowlist: `POST /api/v0/accounts` (`{"accountId": "<id>"}`) and
-  `DELETE /api/v0/accounts/{id}` admit or revoke an account without a bundle
-  change. Only callers from the platform's own account (`AWS_ACCOUNT_ID`) may
-  call them; unset denies all. Both are idempotent and return 204. An
-  allowlisted account gets full access to its own resources (diagnostic ID
-  `allowlist/<account>`). Bundle accounts are never treated as allowlisted; a
-  lookup error denies. DynamoDB policy storage replaces this.
+- The temporary allowlist uses `POST /api/v0/accounts` with `{"accountId":"<id>"}`
+  and `DELETE /api/v0/accounts/{id}`. Both return 204 idempotently without rollout.
+  Only the platform account (`AWS_ACCOUNT_ID`) may call them. Unset denies all.
+  Allowlisted accounts get full access to their own resources, diagnostic ID
+  `allowlist/<account>`. Bundle accounts never use the allowlist. Lookup errors
+  deny. Persistent admission and grants must replace this bypass.
 - Each policy holds one Cedar statement, strictly validated against the schema.
 - An attachment's principal account must equal its policy's `ownerAccountID`.
 - `regional` attachments apply only in their region; `global` applies everywhere.
@@ -105,8 +99,6 @@ Changed-field actions, required in addition to the base update:
 | Cluster `hostedCluster.configuration`                        | UpdateClusterConfig   |
 | NodePool `nodePool.replicas`, `nodePool.autoScaling`         | ScaleNodePool         |
 | NodePool `nodePool.release`                                  | UpdateNodePoolVersion |
-
-Rules:
 
 - Lists return every item in full and count it in `total`. List permission
   alone is enough; Describe is not checked per item.
@@ -221,7 +213,7 @@ when { context.requestLabels.hasTag("Team") && context.requestLabels.getTag("Tea
 | LabelAdmin          | LabelResource, UnlabelResource, without implicit label read permission    |
 | AllActions          | The six customer groups, including LabelAdmin.                            |
 
-These examples are validated against the schema in tests.
+Tests pin all nine Cedar examples in this document.
 
 ```cedar
 permit(principal, action in Seaplane::Action::"ReadOnly", resource);
@@ -230,6 +222,8 @@ permit(principal, action in Seaplane::Action::"ReadOnly", resource);
 ```cedar
 permit(principal, action in Seaplane::Action::"AllActions", resource);
 ```
+
+Resource groups exclude management actions. See [management delegation](management.md#startup-configuration).
 
 ```cedar
 forbid(principal, action == Seaplane::Action::"DeleteCluster", resource)
@@ -297,9 +291,8 @@ forbid IDs when one matches). Logs never include policy content.
 | `make test-api-int`   | Handler and server integration tests.                                                              |
 | `make test-e2e-authz` | Real binary over HTTP with disposable PostgreSQL (Podman). Results in `test-results/authz-http-*`. |
 
-Local results do not prove deployed ServiceMonitor, Prometheus, or Thanos
-delivery. That needs an integrated run at matching API, operator, and test
-revisions.
+Local results do not prove deployed metrics delivery. Verify ServiceMonitor,
+Prometheus, and Thanos at matching API, operator, and test revisions.
 
 ## Limits
 

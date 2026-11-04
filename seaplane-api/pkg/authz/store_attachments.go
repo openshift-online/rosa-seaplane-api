@@ -10,24 +10,31 @@ import (
 	"github.com/google/uuid"
 )
 
+// AttachmentScope identifies whether an attachment applies globally or to one region.
 type AttachmentScope string
 
 const (
-	GlobalScope   AttachmentScope = "global"
+	// GlobalScope applies an attachment across regions.
+	GlobalScope AttachmentScope = "global"
+	// RegionalScope applies an attachment only in its stored region.
 	RegionalScope AttachmentScope = "regional"
 )
 
+// AttachmentSpec links a policy reference to a principal ARN and a global or regional scope.
 type AttachmentSpec struct {
 	Policy       PolicyRef
 	PrincipalARN string
 	Scope        AttachmentScope
 }
 
+// StoredAttachment contains an attachment specification, ID, owning account, region, and revision.
+// Region is empty for global attachments and identifies the region for regional attachments.
 type StoredAttachment struct {
 	AttachmentSpec
 	ID, OwnerAccountID, Region, Revision string
 }
 
+// attachmentTable returns the table name for a global or regional attachment scope.
 func (s *Store) attachmentTable(scope AttachmentScope) (string, error) {
 	switch scope {
 	case GlobalScope:
@@ -35,10 +42,12 @@ func (s *Store) attachmentTable(scope AttachmentScope) (string, error) {
 	case RegionalScope:
 		return s.config.RegionalTable, nil
 	default:
-		return "", fmt.Errorf("invalid attachment scope")
+		return "", fmt.Errorf("%w: invalid attachment scope", ErrValidation)
 	}
 }
 
+// checkAttachment checks the attachment's identity, account ownership, policy reference, and scope.
+// Regional attachments must belong to the store's region.
 func (s *Store) checkAttachment(binding StoredAttachment) error {
 	principal, err := parsePrincipal(binding.PrincipalARN)
 	if err != nil {
@@ -67,19 +76,20 @@ func principalKey(principal principalARN) string {
 	return "ACCOUNT#" + principal.account + "#EXACT#" + principal.original
 }
 
-// roleKey builds the same lookup key for an IAM role and its assumed-role sessions.
-// Role paths are omitted because STS session ARNs do not include them.
+// roleKey returns an account-scoped lookup key shared by an IAM role and its assumed-role sessions.
 func roleKey(principal principalARN) string {
 	return "ACCOUNT#" + principal.account + "#ROLE#" + principal.roleAlias()
 }
 
+// GetAttachment returns the account's attachment for the given scope and ID.
+// It returns ErrNotFound if the attachment does not exist.
 func (s *Store) GetAttachment(ctx context.Context, scope AttachmentScope, id string) (StoredAttachment, error) {
 	table, err := s.attachmentTable(scope)
 	if err != nil {
 		return StoredAttachment{}, err
 	}
 	if !isStoreID(id) {
-		return StoredAttachment{}, fmt.Errorf("invalid attachment ID")
+		return StoredAttachment{}, fmt.Errorf("%w: invalid attachment ID", ErrValidation)
 	}
 	item, err := s.readItem(ctx, table, "ACCOUNT#"+s.config.AccountID, "ATTACHMENT#"+id)
 	if err != nil {
@@ -108,6 +118,8 @@ func (s *Store) CreateAttachment(ctx context.Context, spec AttachmentSpec) (Stor
 	return s.writeAttachment(ctx, binding, "")
 }
 
+// UpdateAttachment changes an attachment's policy reference and returns the updated attachment.
+// It returns ErrConflict if expected does not match the stored revision.
 func (s *Store) UpdateAttachment(ctx context.Context, scope AttachmentScope, id, expected string, policy PolicyRef) (StoredAttachment, error) {
 	binding, err := s.GetAttachment(ctx, scope, id)
 	if err != nil {
@@ -133,7 +145,7 @@ func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment, e
 		}
 	}
 	if err := s.checkAttachment(binding); err != nil {
-		return StoredAttachment{}, err
+		return StoredAttachment{}, fmt.Errorf("%w: %w", ErrValidation, err)
 	}
 	policy, err := s.GetPolicy(ctx, binding.Policy)
 	if err != nil {
@@ -147,10 +159,10 @@ func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment, e
 	if err != nil {
 		return StoredAttachment{}, err
 	}
-	condition := "attribute_not_exists(pk)"
-	values := map[string]types.AttributeValue(nil)
+	condition := conditionCreateOnly
+	var values map[string]types.AttributeValue
 	if expected != "" {
-		condition = "revision = :expected"
+		condition = conditionMatchRevision
 		values = map[string]types.AttributeValue{":expected": &types.AttributeValueMemberS{Value: expected}}
 	}
 	writes := []types.TransactWriteItem{}
@@ -169,6 +181,8 @@ func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment, e
 	return binding, nil
 }
 
+// DeleteAttachment deletes an attachment and its principal lookup record.
+// It returns ErrConflict if expected does not match the stored revision.
 func (s *Store) DeleteAttachment(ctx context.Context, scope AttachmentScope, id, expected string) error {
 	if scope == GlobalScope {
 		if err := s.requireWriter(); err != nil {
@@ -192,7 +206,7 @@ func (s *Store) DeleteAttachment(ctx context.Context, scope AttachmentScope, id,
 	}
 	writes := []types.TransactWriteItem{}
 	for _, pk := range []string{"ACCOUNT#" + s.config.AccountID, principalKey(principal)} {
-		writes = append(writes, types.TransactWriteItem{Delete: &types.Delete{TableName: &table, Key: storeKey(pk, "ATTACHMENT#"+id), ConditionExpression: aws.String("revision = :expected"), ExpressionAttributeValues: map[string]types.AttributeValue{":expected": &types.AttributeValueMemberS{Value: expected}}}})
+		writes = append(writes, types.TransactWriteItem{Delete: &types.Delete{TableName: &table, Key: storeKey(pk, "ATTACHMENT#"+id), ConditionExpression: aws.String(conditionMatchRevision), ExpressionAttributeValues: map[string]types.AttributeValue{":expected": &types.AttributeValueMemberS{Value: expected}}}})
 	}
 	_, err = s.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{TransactItems: writes})
 	return storeError(err)

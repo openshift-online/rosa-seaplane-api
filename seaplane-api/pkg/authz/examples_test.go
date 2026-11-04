@@ -8,7 +8,7 @@ import (
 )
 
 func TestDocumentationExamplesPinnedCedar(t *testing.T) {
-	content, err := os.ReadFile("../../../docs/authz.md")
+	content, err := os.ReadFile("../../../docs/authz/README.md")
 	if err != nil {
 		t.Fatal(err)
 	}

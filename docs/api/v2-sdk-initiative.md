@@ -125,8 +125,8 @@ The v2 SDK only needs to cover the Seaplane equivalents.
 | ------------------------- | -------------------------- | -------------------------------------------------------------------- | --------- |
 | ClustersMgmt (clusters)   | `/api/clusters_mgmt`       | **Cluster** CRD                                                      | Immediate |
 | ClustersMgmt (node pools) | `/api/clusters_mgmt`       | **NodePool** CRD                                                     | Immediate |
-| AccountsMgmt              | `/api/accounts_mgmt`       | Authz: accounts, policies, attachments (see [authz-design.md](../authz-design.md)) | Future    |
-| Authorizations            | `/api/authorizations`      | Authz: check endpoint (see [authz-design.md](../authz-design.md))                  | Future    |
+| AccountsMgmt              | `/api/accounts_mgmt`       | Authz: accounts, policies, attachments (see [authorization design](../authz/design.md)) | Future    |
+| Authorizations            | `/api/authorizations`      | Authz: check endpoint (see [authorization design](../authz/design.md))                  | Future    |
 | AccessTransparency        | `/api/access_transparency` | TBD — likely needed - SRE flows                                      | Future    |
 | ServiceLogs               | `/api/service_logs`        | Per-cluster logs — mechanism TBD                                     | Future    |
 
@@ -245,7 +245,7 @@ Because the generated core already produces the typed `Spec`/`Status` models fro
 
 ### Out of Scope
 
-- **Tenancy and authorization** — account linking, policy CRUD, attachment CRUD, and the authorization check surface (see [authz-design.md](../authz-design.md)) are deferred to a future iteration. This first iteration covers authentication (AWS SigV4) only, not authz.
+- **Tenancy and authorization** — account linking, policy CRUD, attachment CRUD, and the authorization check surface (see [authorization design](../authz/design.md)) are deferred to a future iteration. This first iteration covers authentication (AWS SigV4) only, not authz.
 - CI/prow integration (manual testing is sufficient)
 - Non-HCP cluster types (classic ROSA)
 - Full OCM API surface coverage (only cluster + node pool lifecycle)

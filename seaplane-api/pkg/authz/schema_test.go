@@ -53,7 +53,7 @@ func TestSchemaValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(model.Entities) != 8 || len(model.Actions) != 32 {
+	if len(model.Entities) != 11 || len(model.Actions) != 45 {
 		t.Fatalf("resolved declarations: %d entities, %d actions", len(model.Entities), len(model.Actions))
 	}
 	cluster := model.Entities["Seaplane::Cluster"]

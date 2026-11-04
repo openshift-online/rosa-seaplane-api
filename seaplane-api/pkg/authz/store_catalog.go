@@ -10,7 +10,7 @@ import (
 )
 
 // PublishManagedPolicy adds a managed policy without replacing an existing entry.
-// It requires dedicated publisher credentials, separate from runtime roles.
+// Callers must supply a client configured with dedicated publisher credentials separate from runtime roles.
 func PublishManagedPolicy(ctx context.Context, client *dynamodb.Client, table, id, content string) (StoredPolicy, error) {
 	if client == nil || table == "" || !isStoreID(id) {
 		return StoredPolicy{}, fmt.Errorf("invalid catalog publication")
@@ -28,7 +28,7 @@ func PublishManagedPolicy(ctx context.Context, client *dynamodb.Client, table, i
 	if err != nil {
 		return StoredPolicy{}, err
 	}
-	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{TableName: &table, Item: item, ConditionExpression: aws.String("attribute_not_exists(pk)")})
+	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{TableName: &table, Item: item, ConditionExpression: aws.String(conditionCreateOnly)})
 	if err != nil {
 		return StoredPolicy{}, storeError(err)
 	}

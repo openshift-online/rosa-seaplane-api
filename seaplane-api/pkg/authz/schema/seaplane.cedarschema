@@ -19,6 +19,24 @@ namespace Seaplane {
     entity OIDCConfig in [Collection] { account: AccountID, region: Region } tags String;
     entity DNSReservation in [Collection] { account: AccountID, region: Region } tags String;
 
+    entity Policy in [Collection] { account: AccountID, region: Region } tags String;
+    entity Attachment in [Collection] { account: AccountID, region: Region } tags String;
+    entity RegionalAttachment in [Collection] { account: AccountID, region: Region } tags String;
+
+    action PolicyAdmin;
+    action RegionalAttachmentAdmin in [PolicyAdmin];
+    action CreatePolicy in [PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Collection, context: RequestContext };
+    action ListPolicies in [PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Collection, context: RequestContext };
+    action DescribePolicy in [PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Policy, context: RequestContext };
+    action UpdatePolicy in [PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Policy, context: RequestContext };
+    action DeletePolicy in [PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Policy, context: RequestContext };
+    action CreateAttachment in [PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Collection, context: RequestContext };
+    action ListAttachments in [PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Collection, context: RequestContext };
+    action DeleteAttachment in [PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Attachment, context: RequestContext };
+    action CreateAttachmentRegional in [RegionalAttachmentAdmin, PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Collection, context: RequestContext };
+    action ListAttachmentsRegional in [RegionalAttachmentAdmin, PolicyAdmin] appliesTo { principal: [Principal, Role], resource: Collection, context: RequestContext };
+    action DeleteAttachmentRegional in [RegionalAttachmentAdmin, PolicyAdmin] appliesTo { principal: [Principal, Role], resource: RegionalAttachment, context: RequestContext };
+
     action AllActions;
     action ReadOnly in [AllActions];
     action ClusterAdmin in [AllActions];

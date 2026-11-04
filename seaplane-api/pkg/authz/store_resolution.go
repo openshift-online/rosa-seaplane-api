@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+// ResolvedAttachment pairs an attachment with the policy it references.
 type ResolvedAttachment struct {
 	Attachment StoredAttachment
 	Policy     StoredPolicy
@@ -18,6 +19,11 @@ type ResolvedAttachment struct {
 // Resolve reads a caller's global and local regional attachments and their policies.
 // It returns an error instead of partial results if any read or validation fails.
 func (s *Store) Resolve(ctx context.Context, id Identity) ([]ResolvedAttachment, error) {
+	return s.resolveScopes(ctx, id, []AttachmentScope{GlobalScope, RegionalScope})
+}
+
+// resolveScopes loads only the grant scopes permitted to authorize an operation.
+func (s *Store) resolveScopes(ctx context.Context, id Identity, scopes []AttachmentScope) ([]ResolvedAttachment, error) {
 	caller, err := checkedIdentity(id)
 	if err != nil {
 		return nil, err
@@ -32,7 +38,7 @@ func (s *Store) Resolve(ctx context.Context, id Identity) ([]ResolvedAttachment,
 	bindings := []StoredAttachment{}
 	aliases := map[string]string{}
 	bindingIDs := map[string]bool{}
-	for _, scope := range []AttachmentScope{GlobalScope, RegionalScope} {
+	for _, scope := range scopes {
 		for _, pk := range keys {
 			part, err := s.readBindings(ctx, scope, pk)
 			if err != nil {
@@ -75,8 +81,8 @@ func (s *Store) Resolve(ctx context.Context, id Identity) ([]ResolvedAttachment,
 	return resolved, nil
 }
 
-// loadPolicies reads distinct policy references in batches of up to 100 keys.
-// It retries unprocessed keys and returns an error if a batch remains incomplete.
+// loadPolicies returns the policies referenced by the attachments, loading each distinct policy once.
+// It returns an error if a read fails or unprocessed keys remain after retries.
 func (s *Store) loadPolicies(ctx context.Context, bindings []StoredAttachment) (map[PolicyRef]StoredPolicy, error) {
 	const batchSize = 100
 	const batchAttempts = 4
@@ -113,7 +119,7 @@ func (s *Store) loadPolicies(ctx context.Context, bindings []StoredAttachment) (
 			}
 			out, err := s.client.BatchGetItem(ctx, &dynamodb.BatchGetItemInput{RequestItems: pending})
 			if err != nil {
-				return nil, err
+				return nil, backendError(err)
 			}
 			for _, item := range out.Responses[s.config.PolicyTable] {
 				policy, err := s.decodePolicy(item)
@@ -132,21 +138,27 @@ func (s *Store) loadPolicies(ctx context.Context, bindings []StoredAttachment) (
 			pending = out.UnprocessedKeys
 		}
 		if len(pending) > 0 {
-			return nil, fmt.Errorf("incomplete policy batch after %d attempts", batchAttempts)
+			return nil, fmt.Errorf("%w: incomplete policy batch after %d attempts", ErrUnavailable, batchAttempts)
 		}
 	}
 	return policies, nil
 }
 
+// bindingDiagnosticID returns an attachment's scope, region, and ID joined for diagnostics.
 func bindingDiagnosticID(binding StoredAttachment) string {
 	return string(binding.Scope) + "/" + binding.Region + "/" + binding.ID
 }
 
 // Prepare loads and binds stored policies for one caller and request.
 func (s *Store) Prepare(ctx context.Context, id Identity, req RequestContext) (*Prepared, error) {
-	resolved, err := s.Resolve(ctx, id)
+	return s.prepareScopes(ctx, id, req, []AttachmentScope{GlobalScope, RegionalScope})
+}
+
+// prepareScopes shares binding and Cedar preparation without a management allowlist bypass.
+func (s *Store) prepareScopes(ctx context.Context, id Identity, req RequestContext, scopes []AttachmentScope) (*Prepared, error) {
+	resolved, err := s.resolveScopes(ctx, id, scopes)
 	if err != nil {
-		return nil, newFailure(StageResolution, err)
+		return nil, managementResultResolution(err)
 	}
 	authorizer := &Authorizer{region: s.config.Region, model: s.model, validator: s.validator, evaluate: nativeEvaluate}
 	for _, record := range resolved {

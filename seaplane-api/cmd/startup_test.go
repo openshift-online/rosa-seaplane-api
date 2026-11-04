@@ -39,6 +39,7 @@ func startupCommand(t *testing.T, args ...string) *cobra.Command {
 		t.Fatal("missing startup flag authz-config-file")
 	}
 	cmd.Flags().String(flag.Name, flag.DefValue, flag.Usage)
+	cmd.Flags().String("authz-management-config-file", "", "Optional management configuration")
 	if err := cmd.ParseFlags(args); err != nil {
 		t.Fatal(err)
 	}
