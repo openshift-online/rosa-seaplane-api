@@ -1,6 +1,7 @@
 package render
 
 import (
+	"strings"
 	"testing"
 
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
@@ -29,6 +30,9 @@ func TestParseECRSources(t *testing.T) {
 		{"multiple sources", "source-a.example.com/org/repo,source-b.example.com/org/repo", []string{"source-a.example.com/org/repo", "source-b.example.com/org/repo"}, false},
 		{"trims whitespace", " source-a.example.com/org/repo , source-b.example.com/org/repo ", []string{"source-a.example.com/org/repo", "source-b.example.com/org/repo"}, false},
 		{"only commas", ",,,", nil, true},
+		{"entry exceeds max length", strings.Repeat("a", ImageContentSourceMaxLength+1), nil, true},
+		{"entry at max length accepted", strings.Repeat("a", ImageContentSourceMaxLength), []string{strings.Repeat("a", ImageContentSourceMaxLength)}, false},
+		{"too many entries", strings.Repeat("a,", imageContentSourceMaxItems+1), nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -142,6 +146,89 @@ func TestECRImageContentSources(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestClusterResources_ECRMirrorBaseSecretNameRedirectsESOTarget(t *testing.T) {
+	cfg := ECRMirrorConfig{
+		RegistryAccount: "123456789012",
+		RegistryRegion:  "us-east-1",
+		Repository:      "example-org/ocp-mirror",
+		Sources:         []string{"source-a.example.com/org/repo"},
+		BaseSecretName:  "base-pull-secret",
+	}
+
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", cfg)
+	if err != nil {
+		t.Fatalf("ClusterResources: %v", err)
+	}
+
+	// Find the ExternalSecret for pull-secret
+	var es *ExternalSecret
+	for _, r := range resources {
+		if r.Resource == "externalsecrets" && r.Name == "pull-secret" {
+			es = r.Object.(*ExternalSecret)
+		}
+	}
+	if es == nil {
+		t.Fatal("no pull-secret ExternalSecret found")
+	}
+	if es.Spec.Target.Name != "base-pull-secret" {
+		t.Errorf("ExternalSecret target: got %q, want %q", es.Spec.Target.Name, "base-pull-secret")
+	}
+
+	// HostedCluster.spec.pullSecret must still reference "pull-secret"
+	hc := findHostedCluster(t, resources)
+	if hc.Spec.PullSecret.Name != "pull-secret" {
+		t.Errorf("HostedCluster.spec.pullSecret.name: got %q, want %q", hc.Spec.PullSecret.Name, "pull-secret")
+	}
+}
+
+func TestClusterResources_ECRMirrorDisabledESOTargetsPullSecretDirectly(t *testing.T) {
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
+	if err != nil {
+		t.Fatalf("ClusterResources: %v", err)
+	}
+
+	var es *ExternalSecret
+	for _, r := range resources {
+		if r.Resource == "externalsecrets" && r.Name == "pull-secret" {
+			es = r.Object.(*ExternalSecret)
+		}
+	}
+	if es == nil {
+		t.Fatal("no pull-secret ExternalSecret found")
+	}
+	if es.Spec.Target.Name != "pull-secret" {
+		t.Errorf("ExternalSecret target: got %q, want %q (should be pull-secret when ECR mirror disabled)", es.Spec.Target.Name, "pull-secret")
+	}
+}
+
+func TestClusterResources_ECRMirrorEnabledWithoutBaseSecretNameKeepsPullSecret(t *testing.T) {
+	// ECR mirror enabled but BaseSecretName not set — ESO still targets pull-secret
+	cfg := ECRMirrorConfig{
+		RegistryAccount: "123456789012",
+		RegistryRegion:  "us-east-1",
+		Repository:      "example-org/ocp-mirror",
+		Sources:         []string{"source-a.example.com/org/repo"},
+	}
+
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", cfg)
+	if err != nil {
+		t.Fatalf("ClusterResources: %v", err)
+	}
+
+	var es *ExternalSecret
+	for _, r := range resources {
+		if r.Resource == "externalsecrets" && r.Name == "pull-secret" {
+			es = r.Object.(*ExternalSecret)
+		}
+	}
+	if es == nil {
+		t.Fatal("no pull-secret ExternalSecret found")
+	}
+	if es.Spec.Target.Name != "pull-secret" {
+		t.Errorf("ExternalSecret target: got %q, want %q (BaseSecretName empty → no redirect)", es.Spec.Target.Name, "pull-secret")
 	}
 }
 

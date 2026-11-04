@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -287,14 +288,38 @@ func main() {
 //   - ECR_MIRROR_REGISTRY_REGION  — AWS region of the ECR registry
 //   - ECR_MIRROR_REPOSITORY       — ECR repository name for OCP images
 //   - ECR_MIRROR_SOURCES          — comma-separated source registry paths to redirect
+//   - ECR_MIRROR_BASE_SECRET_NAME — target Secret name for the ESO ExternalSecret
+//     (default: "pull-secret"). Set to a different name (e.g. "base-pull-secret")
+//     when ecr-creds-sync is active so that ESO and ecr-creds-sync write to
+//     separate Secrets.
 //
-// All four must be set together or none at all; partial configuration causes
-// the operator to exit.
+// The first four must be set together or none at all; partial configuration
+// causes the operator to exit. ECR_MIRROR_BASE_SECRET_NAME is optional.
+// ecrAccountRE validates that an ECR registry account ID is exactly 12 digits.
+var ecrAccountRE = regexp.MustCompile(`^\d{12}$`)
+
+// ecrRegionRE validates that a value looks like a supported AWS region name
+// (letters, digits, and hyphens, e.g. "us-east-1" or "eu-central-1").
+var ecrRegionRE = regexp.MustCompile(`^[a-z]{2}(-[a-z]+)+-\d+$`)
+
+// ecrRepositoryRE validates an ECR repository name. ECR allows lowercase
+// letters, digits, hyphens, underscores, periods, and forward slashes.
+// Must start and end with an alphanumeric character.
+var ecrRepositoryRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]*[a-z0-9]$|^[a-z0-9]$`)
+
+// k8sNameRE validates a Kubernetes resource name: lowercase alphanumerics and
+// hyphens, must start and end with an alphanumeric. Matches DNS label rules.
+var k8sNameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// buildECRMirrorConfig reads and validates the ECR mirror environment variables,
+// returning a populated ECRMirrorConfig or calling os.Exit on invalid input.
+// See the block comment above for the full variable reference.
 func buildECRMirrorConfig() render.ECRMirrorConfig {
 	account := os.Getenv("ECR_MIRROR_REGISTRY_ACCOUNT")
 	region := os.Getenv("ECR_MIRROR_REGISTRY_REGION")
 	repo := os.Getenv("ECR_MIRROR_REPOSITORY")
 	sourcesRaw := os.Getenv("ECR_MIRROR_SOURCES")
+	baseSecretName := os.Getenv("ECR_MIRROR_BASE_SECRET_NAME")
 
 	if account == "" && region == "" && repo == "" && sourcesRaw == "" {
 		setupLog.Info("ECR mirror disabled: ECR_MIRROR_REGISTRY_ACCOUNT, ECR_MIRROR_REGISTRY_REGION, ECR_MIRROR_REPOSITORY, and ECR_MIRROR_SOURCES are not set")
@@ -320,26 +345,53 @@ func buildECRMirrorConfig() render.ECRMirrorConfig {
 		os.Exit(1)
 	}
 
+	if !ecrAccountRE.MatchString(account) {
+		setupLog.Error(nil, "ECR_MIRROR_REGISTRY_ACCOUNT must be a 12-digit AWS account ID", "value", account)
+		os.Exit(1)
+	}
+	if !ecrRegionRE.MatchString(region) {
+		setupLog.Error(nil, "ECR_MIRROR_REGISTRY_REGION must be a valid AWS region (e.g. us-east-1)", "value", region)
+		os.Exit(1)
+	}
+	if !ecrRepositoryRE.MatchString(repo) {
+		setupLog.Error(nil, "ECR_MIRROR_REPOSITORY must contain only lowercase letters, digits, hyphens, underscores, periods, and slashes", "value", repo)
+		os.Exit(1)
+	}
+	if baseSecretName != "" && !k8sNameRE.MatchString(baseSecretName) {
+		setupLog.Error(nil, "ECR_MIRROR_BASE_SECRET_NAME must be a valid Kubernetes name (lowercase alphanumerics and hyphens)", "value", baseSecretName)
+		os.Exit(1)
+	}
+
 	sources, err := render.ParseECRSources(sourcesRaw)
 	if err != nil {
 		setupLog.Error(err, "invalid ECR_MIRROR_SOURCES")
 		os.Exit(1)
 	}
 
+	// Validate the rendered mirror URI length. HyperShift CRD enforces
+	// MaxLength=255 on each mirror string in ImageContentSource.mirrors.
+	mirrorURI := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s", account, region, repo)
+	if len(mirrorURI) > render.ImageContentSourceMaxLength {
+		setupLog.Error(nil, "rendered ECR mirror URI exceeds HyperShift MaxLength=255",
+			"length", len(mirrorURI), "max", render.ImageContentSourceMaxLength)
+		os.Exit(1)
+	}
+
 	setupLog.Info("ECR mirror enabled",
-		"account", account,
-		"region", region,
-		"repository", repo,
 		"sources", len(sources),
+		"baseSecretName", baseSecretName,
 	)
 	return render.ECRMirrorConfig{
 		RegistryAccount: account,
 		RegistryRegion:  region,
 		Repository:      repo,
 		Sources:         sources,
+		BaseSecretName:  baseSecretName,
 	}
 }
 
+// envInt reads an integer environment variable, returning fallback when unset.
+// Exits the process if the value is set but cannot be parsed as an integer.
 func envInt(key string, fallback int) int {
 	s := os.Getenv(key)
 	if s == "" {

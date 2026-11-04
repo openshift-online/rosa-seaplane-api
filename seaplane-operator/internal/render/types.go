@@ -42,6 +42,12 @@ type ECRMirrorConfig struct {
 	// Sources lists the source registry paths to redirect to the ECR mirror.
 	// Parsed from ECR_MIRROR_SOURCES ("source-a,source-b,...").
 	Sources []string
+	// BaseSecretName is the target Secret name for the ESO ExternalSecret that
+	// syncs /infra/pull-secret from SSM. When set, ESO writes to this Secret
+	// instead of "pull-secret", leaving "pull-secret" exclusively for
+	// ecr-creds-sync to write the merged credentials. When empty, the ESO
+	// ExternalSecret targets "pull-secret" directly (default, non-zero-egress).
+	BaseSecretName string
 }
 
 // Enabled returns true when all four fields are set.

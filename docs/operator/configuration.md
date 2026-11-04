@@ -38,8 +38,10 @@ for every cluster, redirecting OCP image pulls from `quay.io` to the
 configured zero-egress ECR registry. This is a platform-managed override —
 customers do not set `imageContentSources` directly.
 
-All three variables must be set together, or none at all. Setting some but not
-all causes the operator to exit with an error at startup.
+The first four variables must be set together, or none at all. Setting some but
+not all causes the operator to exit with an error at startup.
+`ECR_MIRROR_BASE_SECRET_NAME` is optional but **strongly recommended** when
+`ecr-creds-sync` is also deployed — see the note below.
 
 | Variable | Description |
 | -------- | ----------- |
@@ -47,6 +49,17 @@ all causes the operator to exit with an error at startup.
 | `ECR_MIRROR_REGISTRY_REGION` | AWS region of the ECR registry |
 | `ECR_MIRROR_REPOSITORY` | ECR repository name |
 | `ECR_MIRROR_SOURCES` | Comma-separated list of source registry paths to redirect to the ECR mirror |
+| `ECR_MIRROR_BASE_SECRET_NAME` | Target Secret name for the ESO ExternalSecret. See note below. |
+
+> **Race condition warning:** When `ecr-creds-sync` is deployed alongside this
+> operator and `ECR_MIRROR_BASE_SECRET_NAME` is not set, both ESO and
+> `ecr-creds-sync` write to the same `pull-secret`. ESO re-syncs every hour
+> and overwrites the ECR token with the SSM content (which does not contain
+> ECR credentials), leaving nodes without ECR access until `ecr-creds-sync`
+> reconciles again. Set `ECR_MIRROR_BASE_SECRET_NAME` to a different name
+> (e.g. `base-pull-secret`) so ESO writes the SSM credentials there while
+> `ecr-creds-sync` reads from it and writes the merged result to `pull-secret`
+> exclusively.
 
 **Example:**
 
@@ -55,6 +68,7 @@ ECR_MIRROR_REGISTRY_ACCOUNT=123456789012
 ECR_MIRROR_REGISTRY_REGION=us-east-1
 ECR_MIRROR_REPOSITORY=example-org/ocp-mirror
 ECR_MIRROR_SOURCES=source-registry-a.example.com/org/repo,source-registry-b.example.com/org/repo
+ECR_MIRROR_BASE_SECRET_NAME=base-pull-secret
 ```
 
 **Startup log confirmation:**

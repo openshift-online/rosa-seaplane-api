@@ -38,10 +38,19 @@ func ClusterResources(cluster *seaplanev1alpha1.Cluster, oidcSigningKeyExternal 
 		return nil, err
 	}
 
+	// When ECR mirror is active, ESO writes the SSM pull secret to BaseSecretName
+	// so that ecr-creds-sync can read and merge it into "pull-secret" without
+	// conflicting with ESO. When BaseSecretName is empty, ESO writes directly
+	// to "pull-secret" (non-zero-egress default).
+	esoTargetName := "pull-secret"
+	if ecrMirror.Enabled() && ecrMirror.BaseSecretName != "" {
+		esoTargetName = ecrMirror.BaseSecretName
+	}
+
 	resources := []Resource{
 		namespace(clusterID, ns),
 		clusterConfig(clusterID, clusterName, ns),
-		pullSecret(clusterID, ns),
+		pullSecret(clusterID, ns, esoTargetName),
 		apiServingCert(clusterID, hostedClusterName, baseDomain, ns),
 		hc,
 		sshKey(clusterID, ns),
@@ -157,7 +166,12 @@ func additionalTrustBundle(clusterID, ns, bundle string) Resource {
 	}
 }
 
-func pullSecret(clusterID, ns string) Resource {
+// pullSecret renders the ExternalSecret that syncs /infra/pull-secret from SSM.
+// targetSecretName is the name of the Secret ESO creates/updates: "pull-secret"
+// in non-zero-egress environments, or a different name (e.g. "base-pull-secret")
+// when ecr-creds-sync is active so that ESO and ecr-creds-sync write to separate
+// Secrets and avoid overwriting each other.
+func pullSecret(clusterID, ns, targetSecretName string) Resource {
 	return Resource{
 		Group: "external-secrets.io", Version: "v1", Resource: "externalsecrets",
 		Name: "pull-secret", Namespace: ns,
@@ -175,7 +189,7 @@ func pullSecret(clusterID, ns string) Resource {
 					Kind: "ClusterSecretStore",
 				},
 				Target: ExternalSecretTarget{
-					Name:           "pull-secret",
+					Name:           targetSecretName,
 					CreationPolicy: "Orphan",
 					Template: ExternalSecretTargetTemplate{
 						Type: "kubernetes.io/dockerconfigjson",
