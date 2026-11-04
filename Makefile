@@ -100,6 +100,7 @@ help:
 	@echo "  build-api            Platform API server"
 	@echo "  build-operator       Seaplane operator (manager + compactor)"
 	@echo "  build-seaplane-db  Seaplane DB library"
+	@echo "  build-iam            IAM operator-role definitions library"
 	@echo "  build-api-codegen    API codegen tools (build-time generators)"
 	@echo ""
 	@echo "Test:"
@@ -148,10 +149,13 @@ help:
 
 # ── Build ────────────────────────────────────────────────────────────────
 
-build: build-seaplane-db build-operator build-api
+build: build-seaplane-db build-iam build-operator build-api
 
 build-seaplane-db:
 	cd seaplane-db && go build ./...
+
+build-iam:
+	cd iam && go build ./...
 
 build-operator:
 	cd seaplane-operator && go build -o ../bin/manager ./cmd/manager
@@ -174,7 +178,7 @@ build-api-codegen:
 
 test: test-unit test-integration
 
-test-unit: test-api test-operator test-api-codegen test-clientset
+test-unit: test-api test-operator test-api-codegen test-clientset test-iam
 
 test-integration: test-seaplane-db test-operator-int test-api-int
 
@@ -201,6 +205,10 @@ test-operator: $(SETUP_ENVTEST)
 
 test-seaplane-db:
 	cd seaplane-db && go test -v -race -count=1 ./...
+
+test-iam:
+	cd iam && go test -v -race -count=1 $(if $(COVERAGE),-covermode=atomic -coverprofile=../coverage-iam.out,) ./...
+	$(if $(filter html,$(COVERAGE)),cd iam && go tool cover -html=../coverage-iam.out -o ../coverage-iam.html,)
 
 test-operator-int:
 	cd seaplane-operator && go test -v -race -count=1 ./test/...
@@ -287,6 +295,7 @@ test-e2e-rosa-cli:
 
 fmt:
 	cd seaplane-db && go fmt ./...
+	cd iam && go fmt ./...
 	cd seaplane-operator && go fmt ./...
 	cd seaplane-api && go fmt ./...
 	cd hack/api-codegen && go fmt ./...
@@ -295,6 +304,7 @@ fmt:
 
 vet:
 	cd seaplane-db && go vet ./...
+	cd iam && go vet ./...
 	cd seaplane-operator && go vet ./...
 	cd seaplane-api && go vet ./...
 	cd hack/api-codegen && go vet ./...
@@ -303,6 +313,7 @@ vet:
 
 lint: $(GOLANGCI_LINT)
 	cd seaplane-db && $(GOLANGCI_LINT) run --config ../.golangci.yml --timeout 5m ./...
+	cd iam && $(GOLANGCI_LINT) run --config ../.golangci.yml --timeout 5m ./...
 	cd seaplane-operator && $(GOLANGCI_LINT) run --config ../.golangci.yml --timeout 5m ./...
 	cd seaplane-api && $(GOLANGCI_LINT) run --config ../.golangci.yml --timeout 5m ./...
 	cd hack/api-codegen && $(GOLANGCI_LINT) run --config ../../.golangci.yml --timeout 5m ./...
@@ -310,7 +321,7 @@ lint: $(GOLANGCI_LINT)
 	cd hack/clientset/cmd/bridge-gen && $(GOLANGCI_LINT) run --config $(abspath .golangci.yml) --timeout 5m ./...
 
 # All Go modules in the repo (used by verify and MintMaker/Renovate post-upgrade).
-override MOD_TIDY_DIRS := seaplane-db api seaplane-operator seaplane-api test clientset hack/tools hack/api-codegen
+override MOD_TIDY_DIRS := seaplane-db api iam seaplane-operator seaplane-api test clientset hack/tools hack/api-codegen
 MOD_TIDY_FILES := $(foreach d,$(MOD_TIDY_DIRS),$(d)/go.mod $(d)/go.sum)
 
 mod-tidy:
