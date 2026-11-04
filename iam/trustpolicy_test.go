@@ -113,6 +113,22 @@ func TestBuildWebIdentityTrustPolicyBadIssuer(t *testing.T) {
 	if _, err := BuildWebIdentityTrustPolicy(withIssuer(input, "https://example.com/a\",\"x\":\"y"), ingress); err == nil {
 		t.Fatal("expected error for quote in issuer path")
 	}
+	// Backslash is the other JSON-unsafe character.
+	if _, err := BuildWebIdentityTrustPolicy(withIssuer(input, "https://example.com/a\\b"), ingress); err == nil {
+		t.Fatal("expected error for backslash in issuer path")
+	}
+	// RFC 3986 sub-delims and ':'/'@' are valid in issuer paths and must be
+	// accepted (e.g. multi-tenant IdPs use 'tenant=blue').
+	for _, issuer := range []string{
+		"https://oidc.example.com/tenant=blue",
+		"https://oidc.example.com/a@b+c;d,e!f",
+		"https://oidc.example.com/a$b&c(d)e",
+		"https://oidc.example.com/a'b*c",
+	} {
+		if _, err := BuildWebIdentityTrustPolicy(withIssuer(input, issuer), ingress); err != nil {
+			t.Errorf("expected issuer URL %q to be accepted: %v", issuer, err)
+		}
+	}
 	if _, err := BuildWebIdentityTrustPolicy(withIssuer(input, "https:///no-host"), ingress); err == nil {
 		t.Fatal("expected error for issuer URL with empty host")
 	}
@@ -182,7 +198,14 @@ func TestIssuerDomain(t *testing.T) {
 	}{
 		{issuerURL: "https://oidc.s3.us-east-1.amazonaws.com/abc", want: "oidc.s3.us-east-1.amazonaws.com/abc"},
 		{issuerURL: "https://example.com/nested/path", want: "example.com/nested/path"},
+		{issuerURL: "https://example.com/tenant=blue", want: "example.com/tenant=blue"},
+		// A trailing slash is preserved verbatim: the domain must match the
+		// OIDC provider registration exactly, and this mirrors the rosa CLI's
+		// behavior (design doc: naive scheme/path normalization would diverge
+		// from the provider that was actually created).
+		{issuerURL: "https://example.com/path/", want: "example.com/path/"},
 		{issuerURL: "http://example.com", wantErr: true},
+		{issuerURL: "https:///no-host", wantErr: true},
 		{issuerURL: "not-a-url", wantErr: true},
 	}
 	for _, tt := range tests {

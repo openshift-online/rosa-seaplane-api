@@ -10,7 +10,11 @@ func RoleName(prefix, suffix string) string {
 	return prefix + "-" + suffix
 }
 
-// RoleARN builds the IAM role ARN for a prefix and suffix.
+// RoleARN builds the IAM role ARN for a prefix and suffix. A pure
+// formatter: partition and accountID are expected from a trusted source
+// (e.g. STS-derived caller identity); malformed values yield an ARN that
+// AWS rejects. JSON-interpolating paths are validated in
+// BuildWebIdentityTrustPolicy instead.
 func RoleARN(partition, accountID, prefix, suffix string) string {
 	return fmt.Sprintf("arn:%s:iam::%s:role/%s", partition, accountID, RoleName(prefix, suffix))
 }

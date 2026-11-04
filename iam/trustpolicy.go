@@ -12,10 +12,27 @@ import (
 // policy is a security-sensitive IAM document, so inputs are validated with
 // allow-lists at the trust boundary rather than escaped after the fact.
 var (
-	partitionRe    = regexp.MustCompile(`^aws(-[a-z]+)*$`)
-	accountIDRe    = regexp.MustCompile(`^[0-9]{12}$`)
-	issuerDomainRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$`)
+	partitionRe = regexp.MustCompile(`^aws(-[a-z]+)*$`)
+	accountIDRe = regexp.MustCompile(`^[0-9]{12}$`)
+	// issuerDomainRe accepts RFC 3986 pchar in the path (unreserved /
+	// pct-encoded / sub-delims / ":" / "@"), excluding only the JSON-unsafe
+	// characters " and \", which are the two that could break out of the JSON
+	// string the domain is interpolated into. Real OIDC issuers (AWS, Azure AD,
+	// multi-tenant IdPs) routinely use '=', '@', '+', etc. in paths.
+	issuerDomainRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~!$&'()*+,;=:@/-]*)?$`)
 )
+
+// validateAWSInputs checks the AWS identity values that get interpolated
+// into generated IAM documents and ARNs.
+func validateAWSInputs(partition, accountID string) error {
+	if !partitionRe.MatchString(partition) {
+		return fmt.Errorf("invalid AWS partition %q", partition)
+	}
+	if !accountIDRe.MatchString(accountID) {
+		return fmt.Errorf("invalid AWS account ID %q", accountID)
+	}
+	return nil
+}
 
 // BuildEC2TrustPolicy returns the trust policy for the worker node instance
 // role, which is trusted by the EC2 service (not OIDC web identity).
@@ -42,11 +59,8 @@ func BuildWebIdentityTrustPolicy(input TrustPolicyInput, role OperatorRoleSpec) 
 	if len(role.ServiceAccounts) == 0 {
 		return "", fmt.Errorf("role %q has no service accounts", role.Name)
 	}
-	if !partitionRe.MatchString(input.Partition) {
-		return "", fmt.Errorf("invalid AWS partition %q", input.Partition)
-	}
-	if !accountIDRe.MatchString(input.AccountID) {
-		return "", fmt.Errorf("invalid AWS account ID %q", input.AccountID)
+	if err := validateAWSInputs(input.Partition, input.AccountID); err != nil {
+		return "", err
 	}
 
 	issuerDomain, err := IssuerDomain(input.IssuerURL)
@@ -129,6 +143,7 @@ func IssuerDomain(issuerURL string) (string, error) {
 // ManagedPolicyARNs renders the full policy ARNs for a role in the given
 // AWS partition, e.g. "arn:aws:iam::aws:policy/service-role/ROSAIngressOperatorPolicy".
 // Definitions store partition-relative policy paths for this reason.
+// A pure formatter: see RoleARN for the validation boundary note.
 func ManagedPolicyARNs(role OperatorRoleSpec, partition string) []string {
 	arns := make([]string, len(role.ManagedPolicies))
 	for i, path := range role.ManagedPolicies {
