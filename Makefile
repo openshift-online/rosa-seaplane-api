@@ -213,6 +213,7 @@ test-e2e-authz: build-api
 test-e2e-api: $(GINKGO)
 	E2E_BASE_URL="$${BASE_URL}" E2E_ACCOUNT_ID="$${E2E_ACCOUNT_ID}" \
 	E2E_RHOBS_API_URL="$${RHOBS_API_URL}" \
+	OCP_IMAGE="$${OCP_IMAGE}" \
 	$(GINKGO) -vv \
 		$(if $(E2E_LABEL_FILTER),--label-filter="$(E2E_LABEL_FILTER)") \
 		--junit-report=junit-api.xml --output-dir=$(TEST_OUTPUT_DIR) \

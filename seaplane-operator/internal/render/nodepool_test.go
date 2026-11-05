@@ -1,6 +1,7 @@
 package render
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,34 @@ func TestNodePoolResourceRejectsMismatchedParentName(t *testing.T) {
 	nodePool.Name = "other-cluster.workers"
 	if _, err := NodePoolResource(nodePool, testCluster()); err == nil {
 		t.Fatal("expected error for NodePool name whose parent prefix does not match the Cluster")
+	}
+}
+
+func TestValidateNodePoolReleaseImage(t *testing.T) {
+	cluster := testCluster()
+	nodePool := testNodePool()
+	nodePool.Spec.NodePool.Release.Image = ""
+
+	if err := ValidateNodePoolReleaseImage(nodePool, cluster); err != nil {
+		t.Fatalf("ValidateNodePoolReleaseImage() error = %v, want nil", err)
+	}
+
+	nodePool.Spec.NodePool.Release.Image = "   "
+	err := ValidateNodePoolReleaseImage(nodePool, cluster)
+	if err == nil || !strings.Contains(err.Error(), "must not be whitespace-only") {
+		t.Fatalf("ValidateNodePoolReleaseImage() error = %v, want whitespace-only release image error", err)
+	}
+
+	nodePool.Spec.NodePool.Release.Image = "quay.io/ocp:4.18"
+	cluster.Spec.HostedCluster.Release.Image = ""
+	if err := ValidateNodePoolReleaseImage(nodePool, cluster); err != nil {
+		t.Fatalf("ValidateNodePoolReleaseImage() error = %v, want nil with explicit NodePool image", err)
+	}
+
+	nodePool.Spec.NodePool.Release.Image = ""
+	err = ValidateNodePoolReleaseImage(nodePool, cluster)
+	if err == nil || !strings.Contains(err.Error(), "spec.hostedCluster.release.image is required") {
+		t.Fatalf("ValidateNodePoolReleaseImage() error = %v, want missing parent release image error", err)
 	}
 }
 
