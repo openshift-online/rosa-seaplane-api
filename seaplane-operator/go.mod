@@ -24,7 +24,7 @@ require (
 	github.com/openshift-online/rosa-seaplane-api/seaplane-db v0.0.0
 	github.com/openshift-online/rosa-seaplane-kube-applier v1.0.3
 	github.com/openshift-online/rosa-seaplane-kube-applier/seaplane-dynamo v1.0.3
-	github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
+	github.com/openshift/api v0.0.0-20260930220732-5588d747a72b
 	github.com/openshift/hypershift/api v0.0.0-20260625052409-9acec4759a16
 	github.com/prometheus/client_golang v1.24.1
 	k8s.io/api v0.37.1

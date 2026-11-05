@@ -267,8 +267,43 @@
   },
   {
     "fieldPath": "spec.hostedCluster.configuration.image",
-    "writeMode": "service-set",
-    "hidden": true,
+    "writeMode": "mutable",
+    "ownerType": "Cluster",
+    "ownerGVK": "seaplane.io/v1alpha1.Cluster"
+  },
+  {
+    "fieldPath": "spec.hostedCluster.configuration.image.allowedRegistriesForImport",
+    "writeMode": "mutable",
+    "ownerType": "Cluster",
+    "ownerGVK": "seaplane.io/v1alpha1.Cluster"
+  },
+  {
+    "fieldPath": "spec.hostedCluster.configuration.image.allowedRegistriesForImport.domainName",
+    "writeMode": "mutable",
+    "ownerType": "Cluster",
+    "ownerGVK": "seaplane.io/v1alpha1.Cluster"
+  },
+  {
+    "fieldPath": "spec.hostedCluster.configuration.image.allowedRegistriesForImport.insecure",
+    "writeMode": "mutable",
+    "ownerType": "Cluster",
+    "ownerGVK": "seaplane.io/v1alpha1.Cluster"
+  },
+  {
+    "fieldPath": "spec.hostedCluster.configuration.image.registrySources.allowedRegistries",
+    "writeMode": "mutable",
+    "ownerType": "Cluster",
+    "ownerGVK": "seaplane.io/v1alpha1.Cluster"
+  },
+  {
+    "fieldPath": "spec.hostedCluster.configuration.image.registrySources.blockedRegistries",
+    "writeMode": "mutable",
+    "ownerType": "Cluster",
+    "ownerGVK": "seaplane.io/v1alpha1.Cluster"
+  },
+  {
+    "fieldPath": "spec.hostedCluster.configuration.image.registrySources.insecureRegistries",
+    "writeMode": "mutable",
     "ownerType": "Cluster",
     "ownerGVK": "seaplane.io/v1alpha1.Cluster"
   },
@@ -709,6 +744,12 @@
     "ownerGVK": "seaplane.io/v1alpha1.Cluster"
   },
   {
+    "fieldPath": "spec.registryAdditionalTrustedCA",
+    "writeMode": "mutable",
+    "ownerType": "Cluster",
+    "ownerGVK": "seaplane.io/v1alpha1.Cluster"
+  },
+  {
     "fieldPath": "spec.tags",
     "writeMode": "mutable",
     "resettable": true,
@@ -754,8 +795,43 @@
   },
   {
     "fieldPath": "image",
-    "writeMode": "service-set",
-    "hidden": true,
+    "writeMode": "mutable",
+    "ownerType": "ClusterConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "image.allowedRegistriesForImport",
+    "writeMode": "mutable",
+    "ownerType": "ClusterConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "image.allowedRegistriesForImport.domainName",
+    "writeMode": "mutable",
+    "ownerType": "ClusterConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "image.allowedRegistriesForImport.insecure",
+    "writeMode": "mutable",
+    "ownerType": "ClusterConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "image.registrySources.allowedRegistries",
+    "writeMode": "mutable",
+    "ownerType": "ClusterConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "image.registrySources.blockedRegistries",
+    "writeMode": "mutable",
+    "ownerType": "ClusterConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "image.registrySources.insecureRegistries",
+    "writeMode": "mutable",
     "ownerType": "ClusterConfiguration",
     "ownerGVK": ""
   },
@@ -991,6 +1067,42 @@
     "hidden": true,
     "ownerType": "DNSReservation",
     "ownerGVK": "seaplane.io/v1alpha1.DNSReservation"
+  },
+  {
+    "fieldPath": "allowedRegistriesForImport",
+    "writeMode": "mutable",
+    "ownerType": "ImageConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "allowedRegistriesForImport.domainName",
+    "writeMode": "mutable",
+    "ownerType": "ImageConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "allowedRegistriesForImport.insecure",
+    "writeMode": "mutable",
+    "ownerType": "ImageConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "registrySources.allowedRegistries",
+    "writeMode": "mutable",
+    "ownerType": "ImageConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "registrySources.blockedRegistries",
+    "writeMode": "mutable",
+    "ownerType": "ImageConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "registrySources.insecureRegistries",
+    "writeMode": "mutable",
+    "ownerType": "ImageConfiguration",
+    "ownerGVK": ""
   },
   {
     "fieldPath": "componentRoutes",
@@ -1504,6 +1616,36 @@
     "writeMode": "service-set",
     "hidden": true,
     "ownerType": "ProxyConfiguration",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "domainName",
+    "writeMode": "mutable",
+    "ownerType": "RegistryLocation",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "insecure",
+    "writeMode": "mutable",
+    "ownerType": "RegistryLocation",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "allowedRegistries",
+    "writeMode": "mutable",
+    "ownerType": "RegistrySources",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "blockedRegistries",
+    "writeMode": "mutable",
+    "ownerType": "RegistrySources",
+    "ownerGVK": ""
+  },
+  {
+    "fieldPath": "insecureRegistries",
+    "writeMode": "mutable",
+    "ownerType": "RegistrySources",
     "ownerGVK": ""
   },
   {

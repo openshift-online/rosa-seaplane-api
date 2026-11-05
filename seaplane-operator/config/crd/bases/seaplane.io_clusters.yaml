@@ -6998,6 +6998,16 @@ spec:
                   description: Properties are arbitrary key-value pairs for customer metadata.
                   maxProperties: 100
                   type: object
+                registryAdditionalTrustedCA:
+                  additionalProperties:
+                    type: string
+                  description: |-
+                    RegistryAdditionalTrustedCA is a map of registry hostname to PEM-encoded CA
+                    certificates that should be trusted when pulling images from those registries.
+                    The operator materializes this into a ConfigMap and references it in the
+                    HostedCluster's ImageSpec.
+                  maxProperties: 256
+                  type: object
                 tags:
                   additionalProperties:
                     type: string
