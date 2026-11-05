@@ -139,6 +139,9 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	statusPrefix := dynamo.StatusPrefix(mc)
 
 	// Generate NodePool resource and create ApplyDesire.
+	if err := render.ValidateNodePoolReleaseImage(&nodePool, cluster); err != nil {
+		return ctrl.Result{}, err
+	}
 	m, err := render.NodePoolResource(&nodePool, cluster)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("render nodepool resource: %w", err)

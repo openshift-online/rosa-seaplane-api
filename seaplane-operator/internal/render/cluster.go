@@ -226,7 +226,6 @@ func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClust
 	if err != nil {
 		return Resource{}, fmt.Errorf("converting HostedClusterSpec for cluster %s/%s: %w", ns, clusterName, err)
 	}
-
 	// --- Platform-managed overrides (always set by the operator) ---
 	hcSpec.InfraID = clusterID
 	if cluster.Spec.OidcConfigID != "" && !oidcSigningKeyExternal {

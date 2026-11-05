@@ -290,7 +290,8 @@ func (h *ClusterHandler) decodeClusterCreateRequest(accountID string, body []byt
 	if err := validation.ValidateAccountNamespace(req.Namespace, accountID); err != nil {
 		return nil, &ErrClusterCreateNamespaceMismatch
 	}
-	errs := h.validator.ValidateCreate(&req.Spec, featuregate.Default)
+	errs := validation.ValidateReleaseImage(req.Spec.HostedCluster.Release.Image)
+	errs = append(errs, h.validator.ValidateCreate(&req.Spec, featuregate.Default)...)
 	errs = append(errs, validation.ValidateCustomerAWSTags(req.Spec.Tags, "spec.tags")...)
 	errs = append(errs, validation.ValidateClusterAWSTagBudget(req.Spec.Tags)...)
 	if len(errs) > 0 {
@@ -532,6 +533,10 @@ func (h *ClusterHandler) updateOnce(w http.ResponseWriter, r *http.Request, clus
 	if err := h.validator.PreserveServiceSet(&candidate.Spec, &cr.Spec, featuregate.Default); err != nil {
 		h.logger.Error("failed to preserve service-set fields", "error", err, "account_id", accountID, "cluster_name", clusterName)
 		writeAPIError(w, ErrClusterUpdateFailed, h.logger)
+		return nil, errResponded
+	}
+	if errs := validation.ValidateReleaseImage(candidate.Spec.HostedCluster.Release.Image); len(errs) != 0 {
+		writeAPIError(w, ErrClusterValidation.WithErrors(errs), h.logger)
 		return nil, errResponded
 	}
 	// Authorize the stored snapshot and every changed-field action before its CAS write.
