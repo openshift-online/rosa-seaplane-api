@@ -10,6 +10,7 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 )
 
 // TestManagementLocalEndpoint proves startup uses the existing SDK configuration and its DynamoDB endpoint override.
@@ -50,6 +51,12 @@ func TestManagementLocalEndpoint(t *testing.T) {
 
 // TestManagementStartupFail rejects invalid supplied management config before a PostgreSQL connection is attempted.
 func TestManagementStartupFail(t *testing.T) {
+	previousIdentity := customerAccess
+	t.Cleanup(func() { customerAccess = previousIdentity })
+	customerAccess = config.NewConfig().CustomerAccess
+	customerAccess.IssuerURL = "https://issuer.example/id"
+	customerAccess.Subject = "system:serviceaccount:platform-api:platform-api-sa"
+	customerAccess.TokenFile = startupFile(t, "projected-token")
 	t.Setenv("AWS_REGION", "us-east-1")
 	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
 	t.Setenv("AUTHZ_CONFIG_FILE", startupFile(t, startupBundle))

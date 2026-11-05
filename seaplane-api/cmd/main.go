@@ -32,6 +32,7 @@ var (
 	apiPort                  int
 	healthPort               int
 	metricsPort              int
+	customerAccess           config.CustomerAccessConfig
 )
 
 func main() {
@@ -67,6 +68,7 @@ func init() {
 	serveCmd.Flags().IntVar(&apiPort, "api-port", 8000, "API server port")
 	serveCmd.Flags().IntVar(&healthPort, "health-port", 8080, "Health check server port")
 	serveCmd.Flags().IntVar(&metricsPort, "metrics-port", 9090, "Metrics server port")
+	registerCustomerAccessFlags(serveCmd, &customerAccess)
 
 	rootCmd.AddCommand(serveCmd)
 }
@@ -103,6 +105,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 			logger.Error("authorization startup failed", "error", err)
 		}
 		return err
+	}
+
+	cfg.CustomerAccess = customerAccess
+	if err := cfg.CustomerAccess.Validate(); err != nil {
+		return fmt.Errorf("regional customer access configuration: %w", err)
 	}
 
 	management, err := loadManagement(cmd, awsCfg)

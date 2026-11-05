@@ -3,12 +3,13 @@ package config
 import "time"
 
 type Config struct {
-	Server    ServerConfig
-	DB        DBConfig
-	Regional  RegionalConfig
-	Logging   LoggingConfig
-	RateLimit RateLimitConfig
-	Authz     AuthzConfig
+	Server         ServerConfig
+	DB             DBConfig
+	Regional       RegionalConfig
+	Logging        LoggingConfig
+	RateLimit      RateLimitConfig
+	Authz          AuthzConfig
+	CustomerAccess CustomerAccessConfig
 }
 
 type AuthzConfig struct {
@@ -66,6 +67,11 @@ type LoggingConfig struct {
 
 func NewConfig() *Config {
 	return &Config{
+		CustomerAccess: CustomerAccessConfig{
+			Audience:        DefaultWorkloadAudience,
+			ContractVersion: DefaultWorkloadContractVersion,
+			TokenFile:       DefaultCustomerAccessTokenFile,
+		},
 		Server: ServerConfig{
 			APIBindAddress:     "0.0.0.0",
 			APIPort:            8000,

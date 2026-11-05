@@ -12,6 +12,105 @@ servers:
     description: API v0
 
 paths:
+  /regional_identity:
+    get:
+      operationId: getRegionalIdentity
+      summary: Get regional workload identity and customer IAM trust metadata
+      description: Requires DescribeRegionalIdentity on the caller's regional_access collection.
+      tags:
+        - RegionalIdentity
+      responses:
+        "200":
+          description: Public identity settings and an additional customer-role trust statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionalIdentity"
+        "403":
+          description: Caller identity or resource authorization denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal operation or authorization error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /aws_inquiries/vpcs:
+    post:
+      operationId: listAWSVPCs
+      summary: Discover VPCs using regional workload identity
+      description: |
+        Requires ListAWSVPCs on the caller's aws_vpcs collection. The installer
+        role must belong to the authenticated account. Lists all VPCs visible
+        through that role in the service region, consuming AWS pagination
+        internally. This read-only inquiry does not store the role or create a
+        cluster.
+      tags:
+        - AWSInquiries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VPCInquiryRequest"
+      responses:
+        "200":
+          description: Complete VPC list, including an empty items array when no VPCs are visible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VPCList"
+        "400":
+          description: Invalid inquiry input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Caller identity or resource authorization denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Request body exceeds the configured limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Customer role trust, account verification, or AWS permission failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal operation or authorization error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Invalid AWS response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Regional workload token unavailable, or AWS unavailable after retries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: Customer AWS operation exceeded its deadline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /authz/policies:
     description: Account-scoped management. Bootstrap administrators need no legacy account enrollment. Resource grants remain separate.
     post:
@@ -1064,6 +1163,115 @@ components:
               type: string
               nullable: true
   schemas:
+    VPCInquiryRequest:
+      type: object
+      additionalProperties: false
+      required: [installerRoleArn]
+      properties:
+        installerRoleArn:
+          type: string
+          minLength: 20
+          maxLength: 2048
+          pattern: '^arn:aws:iam::[0-9]{12}:role/.+$'
+          description: IAM role in the authenticated caller's account, including an optional IAM path
+          example: arn:aws:iam::123456789012:role/example-Installer-Role
+    VPC:
+      type: object
+      required: [id, redHatManaged]
+      properties:
+        id:
+          type: string
+          example: vpc-0123456789abcdef0
+        name:
+          type: string
+          description: Name tag, omitted when absent
+        cidrBlock:
+          type: string
+          description: Primary IPv4 CIDR, when present
+          example: 10.0.0.0/16
+        redHatManaged:
+          type: boolean
+          description: Parsed red-hat-managed tag, false when absent or invalid
+    VPCList:
+      type: object
+      required: [kind, page, size, total, items]
+      properties:
+        kind:
+          type: string
+          enum: [VPCList]
+        page:
+          type: integer
+          enum: [1]
+        size:
+          type: integer
+          minimum: 0
+          description: Number of VPCs in this complete response
+        total:
+          type: integer
+          minimum: 0
+          description: Equal to size; AWS pages are consumed internally
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VPC"
+    RegionalIdentity:
+      type: object
+      required: [issuerURL, audience, contractVersion, workloads, additionalTrustStatement]
+      properties:
+        issuerURL:
+          type: string
+          format: uri
+          description: Regional EKS service-account issuer, distinct from hosted-cluster OIDC hosting
+          example: https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE
+        audience:
+          type: string
+          enum: [sts.amazonaws.com]
+        contractVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+          example: regional-workload-v1
+        workloads:
+          type: object
+          required: [platform-api]
+          properties:
+            platform-api:
+              type: object
+              required: [subject]
+              properties:
+                subject:
+                  type: string
+                  example: system:serviceaccount:platform-api:platform-api-sa
+        additionalTrustStatement:
+          type: object
+          description: Merge this statement into the customer role's trust policy, preserving its other statements
+          required: [Sid, Effect, Principal, Action, Condition]
+          properties:
+            Sid:
+              type: string
+              enum: [RegionalPlatformAPIOIDC]
+            Effect:
+              type: string
+              enum: [Allow]
+            Principal:
+              type: object
+              required: [Federated]
+              properties:
+                Federated:
+                  type: string
+                  description: Customer-account IAM OIDC provider ARN for the regional issuer
+            Action:
+              type: string
+              enum: ['sts:AssumeRoleWithWebIdentity']
+            Condition:
+              type: object
+              required: [StringEquals]
+              properties:
+                StringEquals:
+                  type: object
+                  description: Exact regional issuer aud and sub conditions
+                  additionalProperties:
+                    type: string
     AuthzPolicyRef:
       type: object
       additionalProperties: false
