@@ -36,6 +36,7 @@ import (
 
 const testAccountID = "123456789012"
 const testDNSReservationUID = "11111111-1111-4111-8111-111111111111"
+const testReleaseImage = "quay.io/openshift-release-dev/ocp-release:5.0.0-rc.5-multi"
 
 func newTestScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
@@ -122,6 +123,7 @@ func testClusterCR(clusterID, clusterName, accountID string) *seaplanev1alpha1.C
 			DNSReservationID: testDNSReservationUID,
 			AccountID:        accountID,
 			HostedCluster: seaplanev1alpha1.HostedClusterSpecPassthrough{
+				Release: hypershiftv1beta1.Release{Image: testReleaseImage},
 				Platform: hypershiftv1beta1.PlatformSpec{
 					Type: hypershiftv1beta1.AWSPlatform,
 					AWS: &hypershiftv1beta1.AWSPlatformSpec{
@@ -155,7 +157,7 @@ const testOidcConfigIssuerURL = "https://oidc.example.com/test-oidc-config"
 var minSpec = map[string]any{
 	"dnsReservationId": testDNSReservationUID,
 	"hostedCluster": map[string]any{
-		"release":    map[string]any{"image": ""},
+		"release":    map[string]any{"image": testReleaseImage},
 		"networking": map[string]any{},
 	},
 }
@@ -196,7 +198,7 @@ func clusterBody(name string, spec map[string]any) []byte {
 func spotQueueClusterBody(name, region, queueURL string) []byte {
 	return clusterBody(name, map[string]any{
 		"hostedCluster": map[string]any{
-			"release":    map[string]any{"image": ""},
+			"release":    map[string]any{"image": testReleaseImage},
 			"networking": map[string]any{},
 			"platform": map[string]any{
 				"type": "AWS",
@@ -562,6 +564,45 @@ func TestClusterHandler_Create_MissingFields(t *testing.T) {
 
 			if w.Code != http.StatusBadRequest {
 				t.Errorf("expected 400, got %d", w.Code)
+			}
+		})
+	}
+}
+
+func TestClusterHandler_Create_RejectsInvalidReleaseImage(t *testing.T) {
+	tests := []struct {
+		name  string
+		image string
+	}{
+		{name: "empty", image: ""},
+		{name: "whitespace", image: "   "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := newTestScheme()
+			fc := newClusterTestClientBuilder(scheme).Build()
+			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+			handler := NewClusterHandler(seaplanedb.NewClientFrom(fc, logger), "", 0, clusterAuthorizer(t, lifecyclePermit), logger)
+			spec := map[string]any{
+				"hostedCluster": map[string]any{
+					"release":    map[string]any{"image": tt.image},
+					"networking": map[string]any{},
+					"platform":   map[string]any{"type": "AWS"},
+				},
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v0/clusters", bytes.NewReader(clusterBody("my-cluster", spec)))
+			req = req.WithContext(testContext(testAccountID))
+			w := httptest.NewRecorder()
+			handler.Create(w, req)
+
+			if w.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+			}
+			const releaseImageField = "spec.hostedCluster.release.image"
+			if body := w.Body.String(); !strings.Contains(body, releaseImageField) {
+				t.Errorf("expected response to contain %s, got %q", releaseImageField, body)
 			}
 		})
 	}
@@ -1323,6 +1364,35 @@ func TestClusterHandler_Update_Success(t *testing.T) {
 	}
 }
 
+func TestClusterHandler_Update_RejectsClearingReleaseImage(t *testing.T) {
+	scheme := newTestScheme()
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		testClusterCR("cluster-123", "test-cluster", testAccountID),
+	).Build()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	handler := NewClusterHandler(seaplanedb.NewClientFrom(fc, logger), "", 0, clusterAuthorizer(t, lifecyclePermit), logger)
+	body, _ := json.Marshal(map[string]any{
+		"spec": map[string]any{
+			"hostedCluster": map[string]any{
+				"release": map[string]any{"image": ""},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/v0/clusters/test-cluster", bytes.NewReader(body))
+	req = req.WithContext(testContext(testAccountID))
+	req = mux.SetURLVars(req, map[string]string{"id": "test-cluster"})
+	w := httptest.NewRecorder()
+	handler.Update(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+	if body := w.Body.String(); !strings.Contains(body, "spec.hostedCluster.release.image") {
+		t.Errorf("expected release image validation error, got %q", body)
+	}
+}
+
 func TestClusterHandler_Update_ReplacesAndClearsTags(t *testing.T) {
 	cluster := testClusterCR("cluster-123", "test-cluster", testAccountID)
 	cluster.Spec.Tags = map[string]string{"owner": "old", "remove": "this"}
@@ -1890,7 +1960,7 @@ func TestClusterHandler_Create_NetworkCIDRValidation(t *testing.T) {
 
 			spec := map[string]any{
 				"hostedCluster": map[string]any{
-					"release":    map[string]any{"image": ""},
+					"release":    map[string]any{"image": testReleaseImage},
 					"networking": tt.networking,
 					"platform":   map[string]any{"type": "AWS"},
 				},

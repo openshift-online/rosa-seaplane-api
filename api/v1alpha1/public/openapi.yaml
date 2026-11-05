@@ -464,9 +464,10 @@ paths:
       description: |
         Create a new cluster for the authenticated user.
 
-        The API automatically enriches the cluster spec with:
+        The caller must provide hostedCluster.release.image as a full OCP
+        release image pullspec. The API automatically enriches the cluster
+        spec with:
         - hostedCluster.issuerURL: Auto-populated from the regional OIDC CloudFront distribution
-        - hostedCluster.release.image: Defaulted if not provided
         - hostedCluster.networking: Default CIDR ranges applied if not provided
 
         Possible error codes:

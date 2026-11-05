@@ -56,6 +56,7 @@ func spotUnitTestCluster(clusterName string) *seaplanev1alpha1.Cluster {
 		},
 		Spec: seaplanev1alpha1.ClusterSpec{
 			HostedCluster: seaplanev1alpha1.HostedClusterSpecPassthrough{
+				Release: hypershiftv1beta1.Release{Image: testReleaseImage},
 				Platform: hypershiftv1beta1.PlatformSpec{
 					Type: hypershiftv1beta1.AWSPlatform,
 					AWS:  &hypershiftv1beta1.AWSPlatformSpec{Region: "us-east-1"},
@@ -79,7 +80,7 @@ func TestSpotUnit_CreateRejectsDuplicateTerminationQueueURL(t *testing.T) {
 		"metadata": map[string]any{"name": "new-cluster"},
 		"spec": map[string]any{
 			"hostedCluster": map[string]any{
-				"release":    map[string]any{"image": ""},
+				"release":    map[string]any{"image": testReleaseImage},
 				"networking": map[string]any{},
 				"platform": map[string]any{
 					"type": "AWS",
@@ -194,7 +195,7 @@ func TestSpotUnit_CreateClaimsTerminationQueue(t *testing.T) {
 		"metadata": map[string]any{"name": "spot-cluster"},
 		"spec": map[string]any{
 			"hostedCluster": map[string]any{
-				"release":    map[string]any{"image": ""},
+				"release":    map[string]any{"image": testReleaseImage},
 				"networking": map[string]any{},
 				"platform": map[string]any{
 					"type": "AWS",
@@ -254,7 +255,7 @@ func TestSpotUnit_CreateMapsQueueClaimConflictToValidation(t *testing.T) {
 		"metadata": map[string]any{"name": "spot-cluster"},
 		"spec": map[string]any{
 			"hostedCluster": map[string]any{
-				"release":    map[string]any{"image": ""},
+				"release":    map[string]any{"image": testReleaseImage},
 				"networking": map[string]any{},
 				"platform": map[string]any{
 					"type": "AWS",

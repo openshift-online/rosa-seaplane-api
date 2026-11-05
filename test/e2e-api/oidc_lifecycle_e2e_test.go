@@ -25,6 +25,17 @@ import (
 // synchronous OidcConfig<->Cluster binding in seaplane-api and the operator's real reconciliation
 // against real AWS (CloudFront TLS reachability, and for unmanaged, real Secrets Manager).
 
+// defaultReleaseImage matches the fallback used by test/e2e-sdk. OCP_IMAGE
+// overrides it, so CI can pin the release without editing the suite.
+const defaultReleaseImage = "quay.io/openshift-release-dev/ocp-release:5.0.0-rc.5-multi"
+
+func releaseImage() string {
+	if image := os.Getenv("OCP_IMAGE"); image != "" {
+		return image
+	}
+	return defaultReleaseImage
+}
+
 // minClusterSpec is the same minimal, VPC-free HostedCluster spec seaplane-api's own unit tests use
 // (see seaplane-api/pkg/handlers/cluster_test.go's minSpec) — enough to pass Create validation
 // without needing real VPC/IAM infra we don't need for OidcConfig-binding coverage.
@@ -32,7 +43,7 @@ func minClusterSpec(oidcConfigID string) map[string]any {
 	return map[string]any{
 		"oidcConfigId": oidcConfigID,
 		"hostedCluster": map[string]any{
-			"release":    map[string]any{"image": ""},
+			"release":    map[string]any{"image": releaseImage()},
 			"networking": map[string]any{},
 			"platform":   map[string]any{"type": "AWS"},
 		},

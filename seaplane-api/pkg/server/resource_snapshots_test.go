@@ -19,6 +19,7 @@ import (
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/middleware"
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,6 +30,7 @@ import (
 
 const resourceTestAccount = "123456789012"
 const resourceTestClusterID = "550e8400-e29b-41d4-a716-446655440000"
+const resourceTestReleaseImage = "quay.io/openshift-release-dev/ocp-release:5.0.0-rc.5-multi"
 
 func resourceServer(t *testing.T, customer []string, hooks interceptor.Funcs, objects ...client.Object) (*Server, client.Client) {
 	t.Helper()
@@ -110,7 +112,12 @@ func resourceRequest(srv *Server, method, path, body string) *httptest.ResponseR
 func resourceFixtures() []client.Object {
 	labels := map[string]string{v1.AccountIDLabel: resourceTestAccount}
 	tags := map[string]string{"team": "blue"}
-	parent := &v1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "parent", Namespace: "account-" + resourceTestAccount, UID: types.UID(resourceTestClusterID), Labels: labels, Annotations: tags}}
+	parent := &v1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "parent", Namespace: "account-" + resourceTestAccount, UID: types.UID(resourceTestClusterID), Labels: labels, Annotations: tags},
+		Spec: v1.ClusterSpec{HostedCluster: v1.HostedClusterSpecPassthrough{
+			Release: hypershiftv1beta1.Release{Image: resourceTestReleaseImage},
+		}},
+	}
 	pool := &v1.NodePool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "parent.workers", Namespace: parent.Namespace, UID: "pool-uid",
@@ -136,7 +143,7 @@ func TestImplementedRoutesActionSpecific(t *testing.T) {
 		action, group, method, path, body string
 		status                            int
 	}{
-		{"ListClusters", "ReadOnly", "GET", "clusters", "", 200}, {"DescribeCluster", "ReadOnly", "GET", "clusters/parent", "", 200}, {"CreateCluster", "ClusterAdmin", "POST", "clusters", `{"metadata":{"name":"new"},"spec":{"properties":{"team":"new"}}}`, 201}, {"UpdateCluster", "ClusterAdmin", "PUT", "clusters/parent", `{"spec":{"properties":{"team":"new"}}}`, 200}, {"UpdateCluster", "ClusterAdmin", "PATCH", "clusters/parent", `{"spec":{"properties":{"team":"new"}}}`, 200}, {"DeleteCluster", "ClusterAdmin", "DELETE", "clusters/parent", "", 202},
+		{"ListClusters", "ReadOnly", "GET", "clusters", "", 200}, {"DescribeCluster", "ReadOnly", "GET", "clusters/parent", "", 200}, {"CreateCluster", "ClusterAdmin", "POST", "clusters", `{"metadata":{"name":"new"},"spec":{"properties":{"team":"new"},"hostedCluster":{"release":{"image":"` + resourceTestReleaseImage + `"}}}}`, 201}, {"UpdateCluster", "ClusterAdmin", "PUT", "clusters/parent", `{"spec":{"properties":{"team":"new"}}}`, 200}, {"UpdateCluster", "ClusterAdmin", "PATCH", "clusters/parent", `{"spec":{"properties":{"team":"new"}}}`, 200}, {"DeleteCluster", "ClusterAdmin", "DELETE", "clusters/parent", "", 202},
 		{"ListNodePools", "ReadOnly", "GET", "nodepools", "", 200}, {"DescribeNodePool", "ReadOnly", "GET", "nodepools/parent.workers", "", 200}, {"CreateNodePool", "NodePoolAdmin", "POST", "nodepools", `{"metadata":{"name":"parent.new"},"spec":{"nodePool":{"clusterName":"parent"}}}`, 201}, {"UpdateNodePool", "NodePoolAdmin", "PUT", "nodepools/parent.workers", `{"spec":{"labels":{"team":"new"}}}`, 200}, {"UpdateNodePool", "NodePoolAdmin", "PATCH", "nodepools/parent.workers", `{"spec":{"labels":{"team":"new"}}}`, 200}, {"DeleteNodePool", "NodePoolAdmin", "DELETE", "nodepools/parent.workers", "", 202},
 		{"ListOIDCConfigs", "ReadOnly", "GET", "oidc_configs", "", 200}, {"DescribeOIDCConfig", "ReadOnly", "GET", "oidc_configs/config", "", 200}, {"CreateOIDCConfig", "OIDCConfigAdmin", "POST", "oidc_configs", `{"metadata":{"name":"new"},"spec":{"type":"unmanaged","issuerUrl":"https://example.com","secretArn":"secret","installerRoleArn":"role"}}`, 201}, {"DeleteOIDCConfig", "OIDCConfigAdmin", "DELETE", "oidc_configs/config", "", 202},
 		{"ListDNSReservations", "ReadOnly", "GET", "dns_reservations", "", 200}, {"DescribeDNSReservation", "ReadOnly", "GET", "dns_reservations/zone", "", 200}, {"CreateDNSReservation", "DNSReservationAdmin", "POST", "dns_reservations", `{"metadata":{"name":"new"}}`, 201}, {"DeleteDNSReservation", "DNSReservationAdmin", "DELETE", "dns_reservations/zone", "", 202},

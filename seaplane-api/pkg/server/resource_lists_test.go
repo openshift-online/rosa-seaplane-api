@@ -136,7 +136,7 @@ func TestNodePoolListSkipsParentLookups(t *testing.T) {
 
 func TestCreatesUseValidatedCandidateLabelsAndOwnership(t *testing.T) {
 	for _, tc := range []struct{ action, path, body string }{
-		{"CreateCluster", "clusters", `{"metadata":{"name":"new","annotations":LABELS},"spec":{"properties":{"team":"new"}}}`},
+		{"CreateCluster", "clusters", `{"metadata":{"name":"new","annotations":LABELS},"spec":{"properties":{"team":"new"},"hostedCluster":{"release":{"image":"` + resourceTestReleaseImage + `"}}}}`},
 		{"CreateNodePool", "nodepools?clusterId=foreign", `{"metadata":{"name":"parent.new","annotations":LABELS},"spec":{"nodePool":{"clusterName":"parent"}}}`},
 		{"CreateOIDCConfig", "oidc_configs", `{"metadata":{"name":"new","annotations":LABELS},"spec":{"type":"unmanaged","issuerUrl":"https://example.com","secretArn":"secret","installerRoleArn":"role"}}`},
 		{"CreateDNSReservation", "dns_reservations", `{"metadata":{"name":"new","annotations":LABELS}}`},
@@ -188,7 +188,7 @@ func TestDeniedClusterCreateDoesNotClaimOIDC(t *testing.T) {
 		return fmt.Errorf("unexpected create")
 	}}
 	srv, store := resourceServer(t, nil, hooks, objects...)
-	w := resourceRequest(srv, "POST", "clusters", `{"metadata":{"name":"new"},"spec":{"oidcConfigId":"config-uid"}}`)
+	w := resourceRequest(srv, "POST", "clusters", `{"metadata":{"name":"new"},"spec":{"oidcConfigId":"config-uid","hostedCluster":{"release":{"image":"`+resourceTestReleaseImage+`"}}}}`)
 	if w.Code != 403 || writes != 0 {
 		t.Fatalf("denied Create claimed OIDC: %d writes=%d %s", w.Code, writes, w.Body.String())
 	}
@@ -224,7 +224,7 @@ func TestClusterCreateAuthorizesReferences(t *testing.T) {
 				return c.Create(ctx, o, opts...)
 			}}
 			srv, _ := resourceServer(t, tc.policies, hooks, objects...)
-			w := resourceRequest(srv, "POST", "clusters", `{"metadata":{"name":"new"},"spec":`+tc.spec+`}`)
+			w := resourceRequest(srv, "POST", "clusters", `{"metadata":{"name":"new"},"spec":`+strings.TrimSuffix(tc.spec, "}")+`,"hostedCluster":{"release":{"image":"`+resourceTestReleaseImage+`"}}}}`)
 			if w.Code != tc.want || (tc.want == 403 && writes != 0) {
 				t.Fatalf("want %d (writes on deny 0), got %d writes=%d: %s", tc.want, w.Code, writes, w.Body.String())
 			}

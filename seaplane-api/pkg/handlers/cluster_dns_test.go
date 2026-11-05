@@ -33,7 +33,7 @@ func clusterDNSRequestContext() context.Context {
 func clusterDNSRequestBody(dns map[string]any, reservationID string) []byte {
 	spec := map[string]any{
 		"hostedCluster": map[string]any{
-			"release":    map[string]any{"image": ""},
+			"release":    map[string]any{"image": testReleaseImage},
 			"networking": map[string]any{},
 			"platform":   map[string]any{"type": "AWS"},
 			"dns":        dns,
