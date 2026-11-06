@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.28 Nov 03 2026
+
+- ROSAENG-67911 | refactor: keep namespace sharding, document why
+- ROSAENG-67911 | feat: drop name label and rely on UID instead
+- ROSAENG-67911 | feat: include namespace+label sharding
+
+
 ## 0.1.27 Nov 02 2026
 
 - Remove incorrect kubelet association from ClusterConfiguration
