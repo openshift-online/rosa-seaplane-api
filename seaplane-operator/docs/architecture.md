@@ -48,10 +48,10 @@ See individual controller docs for detailed creation/deletion flows:
 
 The operator is the **inverse** of kube-applier-aws:
 
-|                         | Specs tables | Status tables |
-| ----------------------- | ------------ | ------------- |
+|                       | Specs tables | Status tables |
+| --------------------- | ------------ | ------------- |
 | **seaplane-operator** | writes       | reads         |
-| **kube-applier-aws**    | reads        | writes        |
+| **kube-applier-aws**  | reads        | writes        |
 
 Per management cluster, there are 4 DynamoDB tables:
 

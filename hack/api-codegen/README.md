@@ -18,7 +18,7 @@ This tooling follows the same patterns as the GCP HCP **gecko/orlop** codegen:
 | Command                | Purpose                                                         |
 | ---------------------- | --------------------------------------------------------------- |
 | `passthrough-gen`      | Generate passthrough struct types from HyperShift API types     |
-| `marker-scanner`       | Extract `+seaplane:` marker metadata from Go types            |
+| `marker-scanner`       | Extract `+seaplane:` marker metadata from Go types              |
 | `openapi-gen`          | Generate OpenAPI v3 schemas via controller-tools CRD extraction |
 | `conversion-gen`       | Generate JSON-roundtrip conversion functions (CRD ↔ REST)       |
 | `crd-variants`         | Produce CRD variants filtered by feature gates                  |
@@ -62,7 +62,7 @@ The top-level Makefile exposes the following targets for running the codegen pip
 | Target                | Description                                                     |
 | --------------------- | --------------------------------------------------------------- |
 | `codegen-passthrough` | Generate passthrough types from HyperShift into `api/v1alpha1/` |
-| `codegen-registry`    | Generate field metadata registry from `+seaplane:` markers    |
+| `codegen-registry`    | Generate field metadata registry from `+seaplane:` markers      |
 | `codegen-conversion`  | Generate REST types and Project/Unproject conversion functions  |
 | `codegen-verify`      | Verify codegen outputs compile (`api` + `seaplane-api`)         |
 | `codegen`             | Run full pipeline: passthrough + registry + verify              |

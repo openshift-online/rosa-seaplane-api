@@ -39,8 +39,8 @@ The API server caps total request header size at 16 KiB (`MaxHeaderBytes` on
 the `http.Server`). This is sufficient for SigV4 `Authorization` headers
 (~300 bytes) and session tokens (~400 bytes) with a large safety margin.
 
-| Setting                   | Default | Description                                      |
-| ------------------------- | ------- | ------------------------------------------------ |
+| Setting                    | Default | Description                                                                                                                                                                |
+| -------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MAX_REQUEST_HEADER_BYTES` | `16384` | Target maximum request header block in bytes (16 KiB). Go adds 4096 bytes of internal buffer slop, so the actual accepted size is up to `MAX_REQUEST_HEADER_BYTES + 4096`. |
 
 ## Server timeouts
@@ -49,12 +49,12 @@ The API server enforces connection timeouts on all three HTTP servers (API,
 health, metrics). The health and metrics server timeouts are fixed; only the
 API server values are configurable.
 
-| Setting                       | Default | Description                                                  |
-| ----------------------------- | ------- | ------------------------------------------------------------ |
-| `READ_HEADER_TIMEOUT_SECONDS` | `10`    | Seconds to wait for request headers before closing (Slowloris protection) |
-| `READ_TIMEOUT_SECONDS`        | `30`    | Seconds to read the complete request including body          |
+| Setting                       | Default | Description                                                                                                     |
+| ----------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| `READ_HEADER_TIMEOUT_SECONDS` | `10`    | Seconds to wait for request headers before closing (Slowloris protection)                                       |
+| `READ_TIMEOUT_SECONDS`        | `30`    | Seconds to read the complete request including body                                                             |
 | `WRITE_TIMEOUT_SECONDS`       | `30`    | Seconds from when request headers are read until the response is fully written; includes handler execution time |
-| `IDLE_TIMEOUT_SECONDS`        | `60`    | Seconds before an idle keep-alive connection is closed       |
+| `IDLE_TIMEOUT_SECONDS`        | `60`    | Seconds before an idle keep-alive connection is closed                                                          |
 
 All timeout values must be positive integers. Zero or absent values fall back
 to the defaults shown above.

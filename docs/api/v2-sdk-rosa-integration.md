@@ -91,7 +91,7 @@ the SDK through `r.OCMClient.*` and `r.FetchCluster()` (`pkg/rosa/runner.go`,
 
 ### 4. Auth models diverge
 
-|                       | v1 (OCM)                                       | v2 (Seaplane)                                            |
+|                       | v1 (OCM)                                       | v2 (Seaplane)                                              |
 | --------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
 | Credential            | OCM SSO tokens (`rosa login`, `config.Load()`) | AWS IAM (SigV4)                                            |
 | Endpoint              | Global `api.openshift.com`                     | Per-region Platform API endpoint                           |
@@ -211,8 +211,8 @@ Two other alternatives were rejected earlier and remain rejected:
 | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Output drift between v1 and v2 paths                                                               | Reuse v1 printers via the display mapper; acceptance e2e tests (`hcp_cluster_test.go`, `hcp_machine_pool_test.go`) are the contract                                     |
 | Duplicated command-flow logic                                                                      | The duplicated part is precisely what _must_ differ (validation backed by endpoints that don't exist in v2); keep v2 run functions thin and share flag parsing/printing |
-| Interactive mode in v2 (`--interactive` prompts source region/version/machine-type lists from OCM) | Phase 1: disable interactive under `--seaplane`; later source lists from AWS APIs or Platform API when available                                                      |
-| Flag surface ambiguity (~300 create-cluster flags, many meaningless in v2)                         | Explicit allowlist per v2 command; anything else errors with "not supported with --seaplane"                                                                          |
+| Interactive mode in v2 (`--interactive` prompts source region/version/machine-type lists from OCM) | Phase 1: disable interactive under `--seaplane`; later source lists from AWS APIs or Platform API when available                                                        |
+| Flag surface ambiguity (~300 create-cluster flags, many meaningless in v2)                         | Explicit allowlist per v2 command; anything else errors with "not supported with --seaplane"                                                                            |
 | Display mapper completeness                                                                        | Populate only fields the printers read for the acceptance-test commands; grow test-by-test                                                                              |
 
 ## Relationship to the "migrate directly to client-go" vision
@@ -234,11 +234,11 @@ and mismatch validation that Story 3 implementations and tests must follow.
 
 ### Precedence (highest wins)
 
-| Priority | Source                        | What it sets                                                                                                                                  |
-| -------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1        | `--seaplane-url <url>` flag | Explicit endpoint URL; skips all other endpoint resolution                                                                                    |
-| 2        | Built-in region→endpoint map  | Endpoint looked up by resolved region (see below)                                                                                             |
-| 3        | Discovery (future)            | Reserved for a future service-discovery mechanism; not implemented in the initial version — if precedence 1 and 2 both miss, resolution fails |
+| Priority | Source                       | What it sets                                                                                                                                  |
+| -------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1        | `--seaplane-url <url>` flag  | Explicit endpoint URL; skips all other endpoint resolution                                                                                    |
+| 2        | Built-in region→endpoint map | Endpoint looked up by resolved region (see below)                                                                                             |
+| 3        | Discovery (future)           | Reserved for a future service-discovery mechanism; not implemented in the initial version — if precedence 1 and 2 both miss, resolution fails |
 
 ### Region derivation (highest wins)
 
@@ -253,11 +253,11 @@ clear error: `"region is required for --seaplane mode: set --region, AWS_DEFAULT
 
 ### Error behavior
 
-| Condition                                                                                          | Behavior                                                                                                      |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| No region resolvable                                                                               | Fatal error before SDK client construction (see message above)                                                |
+| Condition                                                                                        | Behavior                                                                                                    |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| No region resolvable                                                                             | Fatal error before SDK client construction (see message above)                                              |
 | Region resolved but not present in the built-in region→endpoint map and `--seaplane-url` not set | Fatal error: `"no Platform API endpoint known for region %s; use --seaplane-url to specify one explicitly"` |
-| `--seaplane-url` set but no region resolvable                                                    | Fatal error: region is still required for SigV4 signing even when the endpoint is explicit                    |
+| `--seaplane-url` set but no region resolvable                                                    | Fatal error: region is still required for SigV4 signing even when the endpoint is explicit                  |
 
 ### Region/endpoint mismatch validation
 
