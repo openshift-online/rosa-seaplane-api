@@ -1,0 +1,29 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.platformApi.app.name }}
+  namespace: {{ .Values.platformApi.namespace }}
+  labels:
+    app: {{ .Values.platformApi.app.name }}
+spec:
+  type: {{ .Values.platformApi.service.type }}
+  selector:
+    app: {{ .Values.platformApi.app.name }}
+  ports:
+    - name: http
+      port: {{ .Values.platformApi.service.ports.http }}
+      targetPort: {{ .Values.platformApi.service.ports.http }}
+      protocol: TCP
+    - name: api
+      port: {{ .Values.platformApi.service.ports.api }}
+      targetPort: api
+      protocol: TCP
+    - name: health
+      port: {{ .Values.platformApi.service.ports.health }}
+      targetPort: health
+      protocol: TCP
+    - name: metrics
+      port: {{ .Values.platformApi.service.ports.metrics }}
+      targetPort: metrics
+      protocol: TCP
