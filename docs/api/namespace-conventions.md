@@ -16,13 +16,13 @@ The account ID comes from the authenticated caller. seaplane-api rejects a suppl
 namespace that does not match the caller's canonical account namespace and sets the
 namespace itself when the request omits it.
 
-| Resource        | Namespace             | Name                         |
-| --------------- | --------------------- | ---------------------------- |
-| Cluster         | `account-<accountID>` | Client-selected DNS label    |
-| NodePool        | `account-<accountID>` | `<cluster>.<child>`          |
-| Placement       | `account-<accountID>` | `<cluster>.placement`        |
-| OidcConfig      | `account-<accountID>` | Client-selected name         |
-| DNSReservation  | `account-<accountID>` | Client-selected name         |
+| Resource       | Namespace             | Name                      |
+| -------------- | --------------------- | ------------------------- |
+| Cluster        | `account-<accountID>` | Client-selected DNS label |
+| NodePool       | `account-<accountID>` | `<cluster>.<child>`       |
+| Placement      | `account-<accountID>` | `<cluster>.placement`     |
+| OidcConfig     | `account-<accountID>` | Client-selected name      |
+| DNSReservation | `account-<accountID>` | Client-selected name      |
 
 Names identify human-facing resources; FleetDB UIDs identify object incarnations.
 NodePool resolves its parent using the Cluster-name prefix and account namespace,

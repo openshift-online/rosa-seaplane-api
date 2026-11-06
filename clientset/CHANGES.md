@@ -4,16 +4,13 @@
 
 - Remove incorrect kubelet association from ClusterConfiguration
 
-
 ## 0.1.25 Oct 29 2026
 
 - feat(api): support HCP custom DNS domains
 
-
 ## 0.1.24 Oct 26 2026
 
 - ROSAENG-68147 | feat(pathbind): support Terraform partial updates
-
 
 ## 0.1.23 Oct 23 2026
 
@@ -21,17 +18,14 @@
 - ROSAENG-68185 | feat: aws tags cluster/np day2
 - ROSAENG-68185 | feat: allow day2 aws tag changes
 
-
 ## 0.1.22 Oct 22 2026
 
 - ROSAENG-65107 | chore: Enable node drain grace period for v2
-
 
 ## 0.1.21 Oct 21 2026
 
 - Rename platform-api to seaplane-api
 - Rename ROSA HyperFleet to ROSA Seaplane
-
 
 ## 0.1.20 Oct 16 2026
 
@@ -41,12 +35,10 @@
 - ROSAENG-68177: feat: expose capabilities via mirror type
 - ROSAENG-65211 | chore: Enable windowsLI for v2
 
-
 ## 0.1.19 Oct 15 2026
 
 - chore: adjust pathbind templates
 - ROSAENG-67909 | feat: identity-flip - client-supplied name + account namespace
-
 
 ## 0.1.18 Oct 13 2026
 
@@ -55,7 +47,6 @@
 - Expose OIDC providers in cluster auth
 - [docs-agent] Fix client-pathbinding docs and prettier formatting
 - ROSAENG-74297: chore: seed CHANGES.md
-
 
 ## 0.1.17 Oct 08 2026
 

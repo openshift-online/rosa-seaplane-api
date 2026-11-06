@@ -59,6 +59,7 @@ seaplane-api/go.mod                     ← requires: fleetdb, api
 hack/api-codegen/go.mod                 ← codegen tools (openapi-gen, crd-variants, conversion-gen)
 hack/clientset/cmd/bridge-gen/go.mod      ← bridge and platform generation for clientset
 hack/tools/go.mod                       ← dev tooling dependencies
+test/go.mod                             ← E2E and integration tests
 ```
 
 Cross-module refs use permanent `replace` directives to sibling dirs.
