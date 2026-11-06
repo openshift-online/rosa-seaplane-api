@@ -35,9 +35,9 @@ This document:
    write modes — can be enabled based on the hosted cluster's **OCP version** in addition to
    the customer's feature set.
 
-**TL;DR**: Follow the openshift/api model of separating *gate enablement conditions*
-(version × feature set, maintained as data in a gate registry) from *field-level marker
-content* (which stays gate-keyed and unchanged) from *enforcement* (our field-metadata
+**TL;DR**: Follow the openshift/api model of separating _gate enablement conditions_
+(version × feature set, maintained as data in a gate registry) from _field-level marker
+content_ (which stays gate-keyed and unchanged) from _enforcement_ (our field-metadata
 registry and platform API validators, already built). Unlike openshift/api — whose API server
 serves exactly one OCP version per deployment, so version is handled by release branching —
 our platform API serves customers whose clusters run **many OCP versions concurrently**, so
@@ -66,22 +66,22 @@ per-version graduation data and thread the cluster's OCP version into validation
 
 ### 1.2 What is built and wired today (verified in the working tree)
 
-| Capability | State | Evidence |
-| --- | --- | --- |
-| Visibility + write-mode markers | ✅ Widely used | Throughout `api/v1alpha1/` (incl. generated passthrough types) |
-| Feature-gate marker (`+openshift:enable:FeatureGate`) | ✅ Used on 8 fields | `api/v1alpha1/configuration.go` (kubelet-advanced ×3, machine-config ×1), `api/v1alpha1/public/{kubeletconfig,machineconfigspec}_types.go` (×4) |
-| Gate registry | ⚠️ Exists, duplicated | `hack/api-codegen/pkg/featuregate/registry.go` and hand-mirrored `platform-api/internal/codegen/featuregate/registry.go`; 6 gates defined |
-| Field-metadata registry (Go + JSON) | ✅ Generated and imported | `hack/api-codegen/pkg/registry/field_metadata.{go,json}`; platform-api imports it |
-| Platform API write validation | ✅ Wired for Cluster/NodePool | `platform-api/pkg/validation/field_validator.go`; handlers call `ValidateCreate`/`ValidateUpdate` |
-| Feature-set resolution at runtime | ❌ **Not wired** | All 4 call sites hardcode `featuregate.Default`: `platform-api/pkg/handlers/cluster.go:163,392`, `nodepool.go:212,333` |
-| Per-account entitlements (`customerHasGate`) | ❌ Not implemented | No entitlement lookup exists in platform-api |
-| Per-feature-set CRD variants | ⚠️ Tool exists, **not in pipeline** | `hack/api-codegen/cmd/crd-variants` variant mode exists, but `make manifests` only invokes `--strip-passthrough-cel`; no variant YAMLs are committed; operator installs base CRDs only |
-| Gate-aware write-mode markers | ⚠️ Mechanism merged, **zero adoption** | Scanner/validator/codegen + tests exist (ROSAENG-61570); no field in `api/` uses `FeatureGateAwareWriteMode` |
-| Version awareness | ❌ Absent | `IsGateEnabled(gate, featureSet)` is a pure function of entitlement stage; no OCP-version input anywhere |
-| Reference validator in hack | ⚠️ Dead code, diverging | `hack/api-codegen/pkg/validation/validator.go` (explicit `EnabledGates` input model) is imported by nothing outside its module |
+| Capability                                            | State                                  | Evidence                                                                                                                                                                               |
+| ----------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Visibility + write-mode markers                       | ✅ Widely used                         | Throughout `api/v1alpha1/` (incl. generated passthrough types)                                                                                                                         |
+| Feature-gate marker (`+openshift:enable:FeatureGate`) | ✅ Used on 8 fields                    | `api/v1alpha1/configuration.go` (kubelet-advanced ×3, machine-config ×1), `api/v1alpha1/public/{kubeletconfig,machineconfigspec}_types.go` (×4)                                        |
+| Gate registry                                         | ⚠️ Exists, duplicated                  | `hack/api-codegen/pkg/featuregate/registry.go` and hand-mirrored `platform-api/internal/codegen/featuregate/registry.go`; 6 gates defined                                              |
+| Field-metadata registry (Go + JSON)                   | ✅ Generated and imported              | `hack/api-codegen/pkg/registry/field_metadata.{go,json}`; platform-api imports it                                                                                                      |
+| Platform API write validation                         | ✅ Wired for Cluster/NodePool          | `platform-api/pkg/validation/field_validator.go`; handlers call `ValidateCreate`/`ValidateUpdate`                                                                                      |
+| Feature-set resolution at runtime                     | ❌ **Not wired**                       | All 4 call sites hardcode `featuregate.Default`: `platform-api/pkg/handlers/cluster.go:163,392`, `nodepool.go:212,333`                                                                 |
+| Per-account entitlements (`customerHasGate`)          | ❌ Not implemented                     | No entitlement lookup exists in platform-api                                                                                                                                           |
+| Per-feature-set CRD variants                          | ⚠️ Tool exists, **not in pipeline**    | `hack/api-codegen/cmd/crd-variants` variant mode exists, but `make manifests` only invokes `--strip-passthrough-cel`; no variant YAMLs are committed; operator installs base CRDs only |
+| Gate-aware write-mode markers                         | ⚠️ Mechanism merged, **zero adoption** | Scanner/validator/codegen + tests exist (ROSAENG-61570); no field in `api/` uses `FeatureGateAwareWriteMode`                                                                           |
+| Version awareness                                     | ❌ Absent                              | `IsGateEnabled(gate, featureSet)` is a pure function of entitlement stage; no OCP-version input anywhere                                                                               |
+| Reference validator in hack                           | ⚠️ Dead code, diverging                | `hack/api-codegen/pkg/validation/validator.go` (explicit `EnabledGates` input model) is imported by nothing outside its module                                                         |
 
 **Correction to the record**: `feature-gated-write-mode-design.md` is headed
-"✅ Implemented… Complete and ready for use". The accurate status is: the *mechanism* (marker
+"✅ Implemented… Complete and ready for use". The accurate status is: the _mechanism_ (marker
 parsing, registry generation, validator support, tests) is merged, but **no field adopts it**
 and the runtime gate resolution it depends on (feature sets, entitlements) is not wired. The
 doc's status header has been updated to point here.
@@ -111,7 +111,7 @@ every module in this repo).
 ### 2.1 Gate enablement is data: version × cluster profile × feature set
 
 openshift/api keeps a **feature-gate registry** in its `features` package. Each gate declares
-a list of *enablement conditions*, each a conjunction of a version set, a cluster-profile
+a list of _enablement conditions_, each a conjunction of a version set, a cluster-profile
 set, and feature sets, via a fluent builder:
 
 ```go
@@ -138,7 +138,7 @@ func (s *featureGateStatus) isEnabled(version uint64, clusterProfile ClusterProf
 Note what this buys them:
 
 - **Version predicates are first-class** (`inVersion(4, greaterThanOrEqual)`) — a gate is
-  TechPreview from 4.17 and GA (added to `inDefault()`) from 4.19 by *editing registry data*,
+  TechPreview from 4.17 and GA (added to `inDefault()`) from 4.19 by _editing registry data_,
   not code.
 - Gates carry **governance metadata** (owning Jira component, responsible person,
   enhancement PR) and fail registration without it.
@@ -179,12 +179,12 @@ check.
 
 ### 2.4 Where version lives — and why we differ
 
-| Concern | openshift/api | HyperFleet platform API |
-| --- | --- | --- |
+| Concern                               | openshift/api                                                                            | HyperFleet platform API                                                                     |
+| ------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | One served OCP version per deployment | Yes — repo is branched per release; per-version schema differences ride release branches | **No** — one platform API serves accounts whose clusters run many OCP versions concurrently |
-| Gate enablement per version | Registry data (version predicates) → payload manifests per version-group | Must be **runtime** resolution: (account feature set, cluster OCP version) → enabled gates |
-| Field content per gate | Markers → per-feature-set CRD variants | Markers → field-metadata registry → platform API validation (REST gateway, not served CRDs) |
-| Enforcement | Served CRD variant (structural) | `FieldValidator` on every write (already built) |
+| Gate enablement per version           | Registry data (version predicates) → payload manifests per version-group                 | Must be **runtime** resolution: (account feature set, cluster OCP version) → enabled gates  |
+| Field content per gate                | Markers → per-feature-set CRD variants                                                   | Markers → field-metadata registry → platform API validation (REST gateway, not served CRDs) |
+| Enforcement                           | Served CRD variant (structural)                                                          | `FieldValidator` on every write (already built)                                             |
 
 This is the central architectural difference: **we cannot branch per OCP version, so version
 must join feature set as a runtime dimension of gate resolution.** Everything else about the
@@ -195,7 +195,7 @@ artifacts — transfers directly.
 
 A fair challenge raised in review: the `HostedCluster` spec is OCP-version-agnostic and the
 HCP's control-plane operator silently ignores fields it does not understand, so version
-constraints arguably belong *on the Hypershift passthrough fields* ("this only works with
+constraints arguably belong _on the Hypershift passthrough fields_ ("this only works with
 HCPs at OCP 5.1+") rather than duplicated in Hyperfleet — one source of truth instead of
 two, and it matches Hypershift owning the pass-through part of the API.
 
@@ -203,14 +203,14 @@ Our position (and the trade-off we accept):
 
 1. **Hypershift markers alone do not protect the customer.** Because the CPO silently
    drops unknown fields, a marker on a Hypershift type is documentation until something
-   *enforces* it. The only component that sees the customer request, the account
+   _enforces_ it. The only component that sees the customer request, the account
    entitlements, and the cluster's OCP version together is the Hyperfleet platform API —
    so enforcement stays here regardless of where the data lives.
 2. **The entitlement dimension has no Hypershift representation.** Account feature sets
    and per-customer enablement (e.g. a Karpenter-style limited-availability rollout) exist
    only in our platform.
 3. **Target state: Hypershift markers as the input to our registry.** When Hypershift
-   annotates passthrough fields with version constraints, we should *generate* our
+   annotates passthrough fields with version constraints, we should _generate_ our
    enablement conditions from those markers instead of hand-curating them — collapsing
    the two sources of truth rather than maintaining parallel ones. Until Hypershift adopts
    such markers, the registry is Hyperfleet-maintained data; drift risk is mitigated by the
@@ -308,7 +308,7 @@ Semantics:
 - A `Max` bound models features removed from the payload.
 - Gates with a single condition `{{Versions: nil, FeatureSets: [Default, ...]}}` behave as
   today's non-versioned gates — **fully backward compatible**.
-- **Unknown/empty version at runtime**: an empty `ocpVersion` matches *only* conditions
+- **Unknown/empty version at runtime**: an empty `ocpVersion` matches _only_ conditions
   whose `Versions` is nil. Consequences:
   - Version-unconstrained gates (`Versions: nil` on every condition) behave exactly as
     today — enabled per feature set even when the version is unknown. This preserves the
@@ -324,13 +324,13 @@ Semantics:
 
 Worked example for `HyperFleetEtcdConfig` above:
 
-| Cluster version | FeatureSet | Enabled? |
-| --- | --- | --- |
-| 4.16.x | any | No — before first condition |
-| 4.17.x / 4.18.x | Default | No |
-| 4.17.x / 4.18.x | TechPreviewNoUpgrade | Yes |
-| 4.19.x | Default | Yes |
-| "" (unknown) | any | No — fail closed (version-constrained gate) |
+| Cluster version | FeatureSet           | Enabled?                                    |
+| --------------- | -------------------- | ------------------------------------------- |
+| 4.16.x          | any                  | No — before first condition                 |
+| 4.17.x / 4.18.x | Default              | No                                          |
+| 4.17.x / 4.18.x | TechPreviewNoUpgrade | Yes                                         |
+| 4.19.x          | Default              | Yes                                         |
+| "" (unknown)    | any                  | No — fail closed (version-constrained gate) |
 
 A tiny semver helper is needed (`NormalizeMajorMinor("4.19.0-ec.3") → "4.19"`, range compare
 on major.minor — and on patch when a bound specifies one; prerelease suffixes ignored).
@@ -400,7 +400,7 @@ HTTP/1.1 400 Bad Request
 ```
 
 The alternative — accepting and silently ignoring — is explicitly rejected by this design.
-The customer can also ask *before* writing, via the discovery API (3.10).
+The customer can also ask _before_ writing, via the discovery API (3.10).
 
 ### 3.5 Wiring the entitlement dimension (required, independent follow-up)
 
@@ -413,8 +413,8 @@ Version-aware gating is only meaningful once the other dimension is real. Concre
    `EnabledGates []string` field on `ValidationContext` — which also gives the unused hack
    reference validator's input model a home. **Overrides must not bypass version
    support**: `IsGateEnabled` remains the sole authority on the version dimension. An
-   override is applied only *after* the registry confirms version compatibility, and may
-   only widen *account/feature-set eligibility* — concretely, the resolver first finds
+   override is applied only _after_ the registry confirms version compatibility, and may
+   only widen _account/feature-set eligibility_ — concretely, the resolver first finds
    conditions matching the cluster's OCP version (fail-closed when the version is unknown
    and the gate is version-constrained), then treats the override as satisfying the
    feature-set component of those conditions. An override can never enable a gate on a
@@ -441,8 +441,8 @@ still match, first-marker-match is retained but treated as a codegen gap to fix.
 ### 3.8 CRD variants (operator side) — optional, deferred
 
 OCP enforces structurally via served CRD variants. Our enforcement point is the platform
-API, and the operator consumes CRs *after* platform validation, so variants are not required
-for correctness. To be explicit about *which CRDs*: these would be **HyperFleet's own
+API, and the operator consumes CRs _after_ platform validation, so variants are not required
+for correctness. To be explicit about _which CRDs_: these would be **HyperFleet's own
 CRDs** — the `Cluster` and `NodePool` CRs generated from `api/v1alpha1/` and served in the
 regional management clusters (consumed by the hyperfleet-operator). The upstream
 Hypershift `HostedCluster` CRD is never variant-ed by us; it is owned by Hypershift.
@@ -460,13 +460,13 @@ the field-metadata registry, and the generated feature-gate matrix — is versio
 deployment, not globally.** During staggered regional rollouts, regions disagree about gate
 enablement.
 
-What is *not* a problem: state is region-local, so skew cannot corrupt data — it only
-changes answers. Mixed OCP versions *within* a region are already handled by per-request
+What is _not_ a problem: state is region-local, so skew cannot corrupt data — it only
+changes answers. Mixed OCP versions _within_ a region are already handled by per-request
 resolution (3.2). The concerns are consistency, truth sources, and rollout ordering:
 
 1. **Regional skew is asymmetric — enforce monotonicity.** Adding enablements in newer
    platform-api versions leaves older regions fail-closed (safe; features appear
-   region-by-region). *Tightening or removing* enablements in newer versions leaves older
+   region-by-region). _Tightening or removing_ enablements in newer versions leaves older
    regions fail-open (a customer can set a field in one region that another region's newer
    API rejects). Rule: gate data changes across platform-api versions must be **monotonic**
    (only add enablements); removals require a deprecation window longer than the maximum
@@ -486,7 +486,7 @@ resolution (3.2). The concerns are consistency, truth sources, and rollout order
    two as a version-locked pair per region, and add a startup or CI check that the
    field-metadata registry matches the served CRDs.
 4. **Graduation is double-gated — ship data early.** A feature needs the cluster on ≥ N
-   *and* the region's platform-api to contain the graduation entry for N. Since the registry
+   _and_ the region's platform-api to contain the graduation entry for N. Since the registry
    is data, conditions for an upcoming OCP version can be committed before that version is
    GA, hiding the rollout lag.
 
@@ -565,13 +565,13 @@ that feeds validation), not deferred to Phase 4.
 
 ## Part 4: Migration plan
 
-| Phase | Content | Depends on |
-| --- | --- | --- |
-| 0 | Consolidate featuregate packages; delete the diverging hack validator; single effective-mode resolver | — |
-| 1 | `ValidationContext` (FeatureSet + OCPVersion); wire account feature-set resolution; replace hardcoded `Default` | 0 |
-| 2 | Version-aware gate registry (`EnableCondition`); semver helper (minor + optional z-stream); generated feature-gate matrix (per-release artifact, "as of platform-api vX" header); `IsGateEnabled(gate, fs, version)` with fail-closed semantics; customer-facing discovery endpoint (see 3.10) | 1 |
-| 3 | First real adoption of `FeatureGateAwareWriteMode` on a production field (e.g. the etcd TechPreview→GA example from ROSAENG-61570), using a version-graduated gate | 2 |
-| 4 (optional) | CRD variant generation in `make manifests`; per-account entitlement overrides on `ValidationContext` (version-compatible only, see 3.5) | 2 |
+| Phase        | Content                                                                                                                                                                                                                                                                                        | Depends on |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 0            | Consolidate featuregate packages; delete the diverging hack validator; single effective-mode resolver                                                                                                                                                                                          | —          |
+| 1            | `ValidationContext` (FeatureSet + OCPVersion); wire account feature-set resolution; replace hardcoded `Default`                                                                                                                                                                                | 0          |
+| 2            | Version-aware gate registry (`EnableCondition`); semver helper (minor + optional z-stream); generated feature-gate matrix (per-release artifact, "as of platform-api vX" header); `IsGateEnabled(gate, fs, version)` with fail-closed semantics; customer-facing discovery endpoint (see 3.10) | 1          |
+| 3            | First real adoption of `FeatureGateAwareWriteMode` on a production field (e.g. the etcd TechPreview→GA example from ROSAENG-61570), using a version-graduated gate                                                                                                                             | 2          |
+| 4 (optional) | CRD variant generation in `make manifests`; per-account entitlement overrides on `ValidationContext` (version-compatible only, see 3.5)                                                                                                                                                        | 2          |
 
 No existing field markers change in any phase. Gates adopt version conditions incrementally,
 exactly as fields adopt gated write-modes incrementally.
@@ -602,10 +602,10 @@ exactly as fields adopt gated write-modes incrementally.
 1. **Entitlement wiring**: is account feature-set resolution a blocking prerequisite for the
    version work (Phase 1 before Phase 2), or can they proceed in parallel given both feed
    the same `ValidationContext`?
-2. **Update-time version source** — *closed in review*: running version
+2. **Update-time version source** — _closed in review_: running version
    (`status.version`, conservative) wins; "configure for the version being upgraded to"
    is a separate concern and out of scope here (peer +1).
-3. **Version granularity** — *amended in review*: major.minor by default, with optional
+3. **Version granularity** — _amended in review_: major.minor by default, with optional
    z-stream bounds (`"4.19.4"`) for features that genuinely graduate mid-z-stream. See 3.2.
 4. **Registry shape**: fluent builder verbatim (OCP familiarity) vs. declarative struct
    literals as sketched (simpler to diff and generate from). Recommendation: declarative,
@@ -622,7 +622,7 @@ exactly as fields adopt gated write-modes incrementally.
    (`ValidationContext.EnabledGates`) from api-management.md — but, per review, overrides
    may only widen account/feature-set eligibility after registry-derived version
    compatibility is confirmed (see 3.5); they can never bypass version conditions.
-9. **Gate data locality** (see 3.9) — *first half closed in review*: gate data stays
+9. **Gate data locality** (see 3.9) — _first half closed in review_: gate data stays
    **deployment-versioned** per regional platform-api (OCP-like, monotonic, fail-closed
    skew). The per-region discovery endpoint ("effective gates for my account and cluster
    version") is in scope of this work — specified in 3.10, shipping with Phase 2 — so CLI
