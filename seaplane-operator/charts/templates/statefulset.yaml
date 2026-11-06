@@ -52,6 +52,20 @@ spec:
             - name: CONTROL_PLANE_OPERATOR_IMAGE
               value: {{ .Values.controlPlaneOperatorImage | quote }}
             {{- end }}
+            {{- if .Values.ecrMirror.enabled }}
+            - name: ECR_MIRROR_REGISTRY_ACCOUNT
+              value: {{ .Values.ecrMirror.registryAccount | quote }}
+            - name: ECR_MIRROR_REGISTRY_REGION
+              value: {{ .Values.ecrMirror.registryRegion | quote }}
+            - name: ECR_MIRROR_REPOSITORY
+              value: {{ .Values.ecrMirror.repository | quote }}
+            - name: ECR_MIRROR_SOURCES
+              value: {{ .Values.ecrMirror.sources | quote }}
+            {{- if .Values.ecrMirror.baseSecretName }}
+            - name: ECR_MIRROR_BASE_SECRET_NAME
+              value: {{ .Values.ecrMirror.baseSecretName | quote }}
+            {{- end }}
+            {{- end }}
           ports:
             - name: health
               containerPort: 8081

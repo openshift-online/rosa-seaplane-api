@@ -19,6 +19,18 @@ alertmanager:
 # value. When empty, no override is applied.
 controlPlaneOperatorImage: ""
 
+# ECR mirror configuration. When enabled, the operator sets imageContentSources
+# on every HostedCluster and redirects ESO pull-secret target to baseSecretName
+# so that ecr-creds-sync can write the merged credentials to pull-secret.
+# All fields except baseSecretName are required when enabled is true.
+ecrMirror:
+  enabled: false
+  registryAccount: ""
+  registryRegion: ""
+  repository: ""
+  sources: ""
+  baseSecretName: ""
+
 postgres:
   secretName: postgres-dsn
   secretKey: dsn

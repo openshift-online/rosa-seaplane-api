@@ -28,6 +28,33 @@ func HostedClusterName(cluster *seaplanev1alpha1.Cluster) string {
 	return cluster.Name
 }
 
+// ECRMirrorConfig holds the zero-egress ECR mirror configuration.
+// When Enabled, the operator populates HostedCluster.spec.imageContentSources
+// to redirect OCP image pulls from quay.io to the configured ECR registry.
+// All four fields must be set together or none at all.
+type ECRMirrorConfig struct {
+	// RegistryAccount is the AWS account ID of the ECR registry.
+	RegistryAccount string
+	// RegistryRegion is the AWS region of the ECR registry.
+	RegistryRegion string
+	// Repository is the ECR repository name (e.g. "my-org/ocp-mirror").
+	Repository string
+	// Sources lists the source registry paths to redirect to the ECR mirror.
+	// Parsed from ECR_MIRROR_SOURCES ("source-a,source-b,...").
+	Sources []string
+	// BaseSecretName is the target Secret name for the ESO ExternalSecret that
+	// syncs /infra/pull-secret from SSM. When set, ESO writes to this Secret
+	// instead of "pull-secret", leaving "pull-secret" exclusively for
+	// ecr-creds-sync to write the merged credentials. When empty, the ESO
+	// ExternalSecret targets "pull-secret" directly (default, non-zero-egress).
+	BaseSecretName string
+}
+
+// Enabled returns true when all four fields are set.
+func (c ECRMirrorConfig) Enabled() bool {
+	return c.RegistryAccount != "" && c.RegistryRegion != "" && c.Repository != "" && len(c.Sources) > 0
+}
+
 // RegionalConfig holds per-region values injected by the operator at startup.
 type RegionalConfig struct {
 	// BaseDomainSuffix is the shared parent zone every cluster's assigned base
@@ -40,6 +67,10 @@ type RegionalConfig struct {
 	// annotation. Development-only override for testing custom
 	// control-plane-operator builds; empty disables the override.
 	ControlPlaneOperatorImage string
+	// ECRMirror, when Enabled, causes the operator to populate
+	// HostedCluster.spec.imageContentSources with mirror entries pointing
+	// OCP image sources at the configured zero-egress ECR registry.
+	ECRMirror ECRMirrorConfig
 }
 
 // Resource is a generated Kubernetes resource with its GVR for desire creation.
