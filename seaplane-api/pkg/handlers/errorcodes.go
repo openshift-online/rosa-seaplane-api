@@ -101,6 +101,17 @@ var (
 	ErrNodePoolValidation APIError
 )
 
+// Rendered HostedCluster and NodePool error codes
+var (
+	ErrRenderedHostedClusterList        APIError
+	ErrRenderedHostedClusterGetNotFound APIError
+	ErrRenderedHostedClusterGetFailed   APIError
+
+	ErrRenderedNodePoolList        APIError
+	ErrRenderedNodePoolGetNotFound APIError
+	ErrRenderedNodePoolGetFailed   APIError
+)
+
 // OidcConfig error codes
 var (
 	ErrOidcConfigList APIError
@@ -248,6 +259,16 @@ func init() {
 
 	// NodePool — Validation
 	ErrNodePoolValidation = APIError{Code: "NODEPOOLS-MGMT-VALIDATION-001", HTTPStatus: http.StatusUnprocessableEntity, Message: "A validation error has occurred, check the errors field for more information"}
+
+	// Rendered HostedCluster — List and Get
+	ErrRenderedHostedClusterList = APIError{Code: "RENDERED-CLUSTERS-MGMT-LIST-001", HTTPStatus: http.StatusInternalServerError, Message: "Failed to list rendered HostedClusters"}
+	ErrRenderedHostedClusterGetNotFound = APIError{Code: "RENDERED-CLUSTERS-MGMT-GET-001", HTTPStatus: http.StatusNotFound, Message: "Rendered HostedCluster not found"}
+	ErrRenderedHostedClusterGetFailed = APIError{Code: "RENDERED-CLUSTERS-MGMT-GET-002", HTTPStatus: http.StatusInternalServerError, Message: "Failed to get rendered HostedCluster"}
+
+	// Rendered NodePool — List and Get
+	ErrRenderedNodePoolList = APIError{Code: "RENDERED-NODEPOOLS-MGMT-LIST-001", HTTPStatus: http.StatusInternalServerError, Message: "Failed to list rendered NodePools"}
+	ErrRenderedNodePoolGetNotFound = APIError{Code: "RENDERED-NODEPOOLS-MGMT-GET-001", HTTPStatus: http.StatusNotFound, Message: "Rendered NodePool not found"}
+	ErrRenderedNodePoolGetFailed = APIError{Code: "RENDERED-NODEPOOLS-MGMT-GET-002", HTTPStatus: http.StatusInternalServerError, Message: "Failed to get rendered NodePool"}
 
 	// OidcConfig — List
 	ErrOidcConfigList = APIError{Code: "OIDCCONFIGS-MGMT-LIST-001", HTTPStatus: http.StatusInternalServerError, Message: "Failed to list OIDC configs"}

@@ -30,11 +30,70 @@ func testScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
 	_ = seaplanev1alpha1.AddToScheme(s)
+	_ = hypershiftv1beta1.AddToScheme(s)
 	return s
 }
 
 func ctxAccount(id string) context.Context {
 	return context.WithValue(context.Background(), middleware.ContextKeyAccountID, id)
+}
+
+func TestClient_RenderedResourcesUseExactAccountScopedKeys(t *testing.T) {
+	accountNamespace := accountNamespace("acct-123")
+	hostedCluster := &hypershiftv1beta1.HostedCluster{ObjectMeta: metav1.ObjectMeta{
+		Name: "my-cluster", Namespace: accountNamespace,
+	}}
+	nodePool := &hypershiftv1beta1.NodePool{ObjectMeta: metav1.ObjectMeta{
+		Name: "my-cluster.workers", Namespace: accountNamespace,
+	}}
+	fc := fake.NewClientBuilder().WithScheme(testScheme()).WithObjects(hostedCluster, nodePool).Build()
+	c := NewClientFrom(fc, slog.Default())
+	ctx := ctxAccount("acct-123")
+
+	gotCluster, err := c.GetRenderedHostedCluster(ctx, hostedCluster.Name)
+	if err != nil || gotCluster.Name != hostedCluster.Name {
+		t.Fatalf("GetRenderedHostedCluster = %#v, %v", gotCluster, err)
+	}
+	gotNodePool, err := c.GetRenderedNodePool(ctx, nodePool.Name)
+	if err != nil || gotNodePool.Name != nodePool.Name {
+		t.Fatalf("GetRenderedNodePool = %#v, %v", gotNodePool, err)
+	}
+	hostedClusters, err := c.ListRenderedHostedClusters(ctx)
+	if err != nil || len(hostedClusters.Items) != 1 {
+		t.Fatalf("ListRenderedHostedClusters = %d, %v", len(hostedClusters.Items), err)
+	}
+	nodePools, err := c.ListRenderedNodePools(ctx)
+	if err != nil || len(nodePools.Items) != 1 {
+		t.Fatalf("ListRenderedNodePools = %d, %v", len(nodePools.Items), err)
+	}
+}
+
+func TestClient_RenderedResourcesPropagateBackendErrors(t *testing.T) {
+	getErr := errors.New("get failed")
+	listErr := errors.New("list failed")
+	fc := fake.NewClientBuilder().WithScheme(testScheme()).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+			return getErr
+		},
+		List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
+			return listErr
+		},
+	}).Build()
+	c := NewClientFrom(fc, slog.Default())
+	ctx := ctxAccount("acct-123")
+
+	if _, err := c.GetRenderedHostedCluster(ctx, "cluster"); !errors.Is(err, getErr) {
+		t.Fatalf("GetRenderedHostedCluster error = %v, want %v", err, getErr)
+	}
+	if _, err := c.GetRenderedNodePool(ctx, "pool"); !errors.Is(err, getErr) {
+		t.Fatalf("GetRenderedNodePool error = %v, want %v", err, getErr)
+	}
+	if _, err := c.ListRenderedHostedClusters(ctx); !errors.Is(err, listErr) {
+		t.Fatalf("ListRenderedHostedClusters error = %v, want %v", err, listErr)
+	}
+	if _, err := c.ListRenderedNodePools(ctx); !errors.Is(err, listErr) {
+		t.Fatalf("ListRenderedNodePools error = %v, want %v", err, listErr)
+	}
 }
 
 func newUIDIndexedClient(t *testing.T) client.Client {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	seaplanedb "github.com/openshift-online/rosa-seaplane-api/seaplane-db"
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,6 +44,9 @@ func NewClient(ctx context.Context, dsn string, logger *slog.Logger) (*Client, e
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("register core scheme: %w", err)
 	}
+	if err := hypershiftv1beta1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register hypershift scheme: %w", err)
+	}
 
 	c, cleanup, err := seaplanedb.NewClient(seaplanedb.Options{
 		Scheme: scheme,
@@ -63,6 +67,45 @@ func NewClientFrom(c client.Client, logger *slog.Logger) *Client {
 // Close releases the underlying connection pool.
 func (c *Client) Close() {
 	c.close()
+}
+
+// GetRenderedHostedCluster retrieves a rendered HostedCluster by name in the
+// authenticated account namespace.
+func (c *Client) GetRenderedHostedCluster(ctx context.Context, name string) (*hypershiftv1beta1.HostedCluster, error) {
+	var rendered hypershiftv1beta1.HostedCluster
+	if err := c.client.Get(ctx, k8stypes.NamespacedName{Namespace: accountNamespace(middleware.GetAccountID(ctx)), Name: name}, &rendered); err != nil {
+		return nil, err
+	}
+	return &rendered, nil
+}
+
+// ListRenderedHostedClusters lists rendered HostedClusters in an account
+// namespace.
+func (c *Client) ListRenderedHostedClusters(ctx context.Context) (*hypershiftv1beta1.HostedClusterList, error) {
+	var list hypershiftv1beta1.HostedClusterList
+	if err := c.client.List(ctx, &list, client.InNamespace(accountNamespace(middleware.GetAccountID(ctx)))); err != nil {
+		return nil, err
+	}
+	return &list, nil
+}
+
+// GetRenderedNodePool retrieves a rendered NodePool by name in the
+// authenticated account namespace.
+func (c *Client) GetRenderedNodePool(ctx context.Context, name string) (*hypershiftv1beta1.NodePool, error) {
+	var rendered hypershiftv1beta1.NodePool
+	if err := c.client.Get(ctx, k8stypes.NamespacedName{Namespace: accountNamespace(middleware.GetAccountID(ctx)), Name: name}, &rendered); err != nil {
+		return nil, err
+	}
+	return &rendered, nil
+}
+
+// ListRenderedNodePools lists rendered NodePools in an account namespace.
+func (c *Client) ListRenderedNodePools(ctx context.Context) (*hypershiftv1beta1.NodePoolList, error) {
+	var list hypershiftv1beta1.NodePoolList
+	if err := c.client.List(ctx, &list, client.InNamespace(accountNamespace(middleware.GetAccountID(ctx)))); err != nil {
+		return nil, err
+	}
+	return &list, nil
 }
 
 // --- Cluster operations ---

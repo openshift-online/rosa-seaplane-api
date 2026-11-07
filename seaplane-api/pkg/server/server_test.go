@@ -12,6 +12,7 @@ import (
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/middleware"
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -174,6 +175,43 @@ func TestServer_NodePoolUpdateRouteAcceptsPatch(t *testing.T) {
 
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("PATCH nodepool status = %d, want %d (route matched and reached authorization)", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestServer_RenderedResourceRoutesAcceptGet(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	scheme := runtime.NewScheme()
+	if err := seaplanev1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	if err := hypershiftv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	db := seaplanedb.NewClientFrom(fake.NewClientBuilder().WithScheme(scheme).Build(), logger)
+	server, err := newConfiguredServer(t, config.NewConfig(), db, logger)
+	if err != nil {
+		t.Fatalf("unexpected error creating server: %v", err)
+	}
+
+	for _, tc := range []struct {
+		path       string
+		wantStatus int
+	}{
+		{"/api/v0/renderedhostedclusters", http.StatusForbidden},
+		{"/api/v0/renderedhostedclusters/test-id", http.StatusNotFound},
+		{"/api/v0/renderednodepools", http.StatusForbidden},
+		{"/api/v0/renderednodepools/test-id", http.StatusNotFound},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			request.Header.Set(middleware.HeaderAccountID, "123456789012")
+			request.Header.Set(middleware.HeaderCallerARN, "arn:aws:iam::123456789012:user/no-grants")
+			recorder := httptest.NewRecorder()
+			server.apiServer.Handler.ServeHTTP(recorder, request)
+			if recorder.Code != tc.wantStatus {
+				t.Fatalf("GET %s status = %d, want %d", tc.path, recorder.Code, tc.wantStatus)
+			}
+		})
 	}
 }
 
