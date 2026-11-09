@@ -5,6 +5,7 @@ import (
 	"maps"
 	"path"
 	"slices"
+	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
@@ -48,6 +49,12 @@ func ClusterResources(cluster *seaplanev1alpha1.Cluster, oidcSigningKeyExternal 
 	}
 	if cluster.Spec.AdditionalTrustBundle != nil {
 		resources = append(resources, additionalTrustBundle(clusterID, ns, *cluster.Spec.AdditionalTrustBundle))
+	}
+
+	// Create ConfigMap for registry additional trusted CA certificates if specified
+	if len(cluster.Spec.RegistryAdditionalTrustedCA) > 0 {
+		resources = append(resources,
+			registryAdditionalCA(clusterID, ns, cluster.Spec.RegistryAdditionalTrustedCA))
 	}
 
 	if oidcSigningKeyExternal {
@@ -157,6 +164,33 @@ func additionalTrustBundle(clusterID, ns, bundle string) Resource {
 	}
 }
 
+const registryAdditionalCAName = "registry-additional-ca"
+
+func registryAdditionalCA(clusterID, ns string, caCerts map[string]string) Resource {
+	// Normalize registry hostnames to valid ConfigMap keys by encoding colons as ".." (OpenShift convention).
+	normalizedData := make(map[string]string, len(caCerts))
+	for hostname, cert := range caCerts {
+		normalizedData[strings.ReplaceAll(hostname, ":", "..")] = cert
+	}
+
+	return Resource{
+		Group: "", Version: "v1", Resource: "configmaps",
+		Name: registryAdditionalCAName, Namespace: ns,
+		Object: &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      registryAdditionalCAName,
+				Namespace: ns,
+				Labels: map[string]string{
+					"seaplane.io/cluster-id":    clusterID,
+					"seaplane.io/resource-type": "registry-additional-ca",
+				},
+			},
+			Data: normalizedData,
+		},
+	}
+}
+
 func pullSecret(clusterID, ns string) Resource {
 	return Resource{
 		Group: "external-secrets.io", Version: "v1", Resource: "externalsecrets",
@@ -253,6 +287,19 @@ func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClust
 			hcSpec.AdditionalTrustBundle = nil
 		} else {
 			hcSpec.AdditionalTrustBundle = &corev1.LocalObjectReference{Name: additionalTrustBundleName}
+		}
+	}
+
+	// AdditionalTrustedCA mapping (requires ConfigMap to be created)
+	if len(cluster.Spec.RegistryAdditionalTrustedCA) > 0 {
+		if hcSpec.Configuration == nil {
+			hcSpec.Configuration = &hypershiftv1beta1.ClusterConfiguration{}
+		}
+		if hcSpec.Configuration.Image == nil {
+			hcSpec.Configuration.Image = &configv1.ImageSpec{}
+		}
+		hcSpec.Configuration.Image.AdditionalTrustedCA = configv1.ConfigMapNameReference{
+			Name: registryAdditionalCAName,
 		}
 	}
 

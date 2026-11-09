@@ -30,6 +30,14 @@ type ClusterSpec struct {
 	// +kubebuilder:validation:MaxLength=1048576
 	// +optional
 	AdditionalTrustBundle *string `json:"additionalTrustBundle,omitempty"`
+	// RegistryAdditionalTrustedCA is a map of registry hostname to PEM-encoded CA
+	// certificates that should be trusted when pulling images from those registries.
+	// The operator materializes this into a ConfigMap and references it in the
+	// HostedCluster's ImageSpec.
+	// +seaplane:write-mode=mutable
+	// +kubebuilder:validation:MaxProperties=256
+	// +optional
+	RegistryAdditionalTrustedCA map[string]string `json:"registryAdditionalTrustedCA,omitempty"`
 	// Tags are customer-defined AWS tags applied to AWS resources for this
 	// cluster and its NodePools. The operator propagates changes to the
 	// HostedCluster and NodePool resources after creation.
