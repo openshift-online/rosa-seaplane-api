@@ -74,7 +74,11 @@ func TestInstanceTypeArchitecture(t *testing.T) {
 		{"x2gd.2xlarge", archARM64},
 		{"im4gn.2xlarge", archARM64},
 		{"is4gen.medium", archARM64},
-		{"g5g.2xlarge", archARM64}, // GPU family on Graviton
+		{"g5g.2xlarge", archARM64},   // GPU family on Graviton
+		{"i4g.xlarge", archARM64},    // Storage-optimized Graviton2
+		{"i8g.2xlarge", archARM64},   // Storage-optimized Graviton4
+		{"i8ge.16xlarge", archARM64}, // Storage-optimized Graviton4
+		{"hpc7g.4xlarge", archARM64}, // HPC on Graviton3E
 		// Degenerate input
 		{"", archAMD64},
 	} {

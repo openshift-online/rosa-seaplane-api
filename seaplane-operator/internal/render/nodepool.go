@@ -23,10 +23,10 @@ const (
 // gravitonFamilyRegex matches the EC2 instance families built on Graviton
 // (ARM) processors: the Graviton variants of the compute/memory/burstable
 // families (c6g..c8g, m6g..m8g, r6g..r8g and their d/n variants, t4g), the
-// a1 family, x2gd, the Graviton storage families (im4gn, is4gen) and the
-// Graviton GPU family (g5g). GPU families without the trailing "g"
+// a1 family, x2gd, the Graviton storage families (im4gn, is4gen, i4g, i8g)
+// and the Graviton GPU family (g5g). GPU families without the trailing "g"
 // (g4dn, g5, g6) are x86_64 and intentionally do not match.
-var gravitonFamilyRegex = regexp.MustCompile(`^(?:a1|t4g|[cmr][0-9]+g[a-z]*|x2gd|im4gn|is4gen|g5g)$`)
+var gravitonFamilyRegex = regexp.MustCompile(`^(?:a1|t4g|[cmri][0-9]+g[a-z]*|x2gd|im4gn|is4gen|g5g|hpc7g)$`)
 
 // instanceTypeArchitecture maps an EC2 instance type to the CPU architecture
 // HyperShift must use when resolving the node image. It is a POC stand-in for
