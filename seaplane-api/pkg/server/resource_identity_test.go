@@ -17,7 +17,7 @@ func TestCustomerResourceIdentity(t *testing.T) {
 	}{
 		{
 			kind: "Cluster", path: "clusters", name: "new", createID: "new", storedID: "database-uid",
-			body: `{"metadata":{"name":"new","uid":"database-uid"},"spec":{"hostedCluster":{"release":{"image":""},"networking":{},"platform":{"type":"AWS"}}}}`,
+			body: `{"metadata":{"name":"new","uid":"database-uid"},"spec":{"hostedCluster":{"release":{"image":"` + resourceTestReleaseImage + `"},"networking":{},"platform":{"type":"AWS"}}}}`,
 		},
 		{
 			kind: "NodePool", path: "nodepools", name: "parent.new",

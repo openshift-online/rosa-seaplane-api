@@ -2,6 +2,7 @@ package render
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
@@ -540,6 +541,30 @@ func TestHostedClusterInfraIDManagedOidcConfig(t *testing.T) {
 	want := "2130539814aa400396a3f3b860e04a1c"
 	if got := hc.Spec.InfraID; got != want {
 		t.Errorf("infraID = %q, want %q", got, want)
+	}
+}
+
+func TestValidateReleaseImage(t *testing.T) {
+	cluster := testCluster()
+	if err := ValidateReleaseImage(cluster); err != nil {
+		t.Fatalf("ValidateReleaseImage() error = %v, want nil", err)
+	}
+
+	cluster.Spec.HostedCluster.Release.Image = ""
+	err := ValidateReleaseImage(cluster)
+	if err == nil || !strings.Contains(err.Error(), "spec.hostedCluster.release.image is required") {
+		t.Fatalf("ValidateReleaseImage() error = %v, want missing release image error", err)
+	}
+}
+
+// Deletion renders the resource set only to flip ApplyDesires; a missing
+// release image must not block it.
+func TestClusterResourcesWithoutReleaseImage(t *testing.T) {
+	cluster := testCluster()
+	cluster.Spec.HostedCluster.Release.Image = ""
+
+	if _, err := ClusterResources(cluster, false, "f7a3.0.example.com", ""); err != nil {
+		t.Fatalf("ClusterResources() error = %v, want nil", err)
 	}
 }
 
