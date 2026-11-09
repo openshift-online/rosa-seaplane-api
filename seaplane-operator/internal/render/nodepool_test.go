@@ -72,6 +72,7 @@ func TestInstanceTypeArchitecture(t *testing.T) {
 		{"t4g.medium", archARM64},
 		{"a1.large", archARM64},
 		{"x2gd.2xlarge", archARM64},
+		{"x8g.2xlarge", archARM64},
 		{"im4gn.2xlarge", archARM64},
 		{"is4gen.medium", archARM64},
 		{"g5g.2xlarge", archARM64},   // GPU family on Graviton
@@ -95,6 +96,7 @@ func TestNodePoolResourceDerivesArchFromInstanceType(t *testing.T) {
 		want         string
 	}{
 		{"m6g.xlarge", archARM64},
+		{"x8g.2xlarge", archARM64},
 		{"m5.xlarge", archAMD64},
 		// The default instance type (t3a.xlarge) must also get an explicit arch.
 		{"", archAMD64},
