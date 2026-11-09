@@ -58,11 +58,6 @@ type HostedClusterSpecPassthrough struct {
 	// +seaplane:write-mode=service-set
 	// +optional
 	OperatorConfiguration *hypershiftv1beta1.OperatorConfiguration `json:"operatorConfiguration,omitempty"`
-	// imageContentSources specifies image mirrors that can be used by cluster
-	// +k8s:openapi-gen=true
-	// +seaplane:write-mode=mutable
-	// +optional
-	ImageContentSources []hypershiftv1beta1.ImageContentSource `json:"imageContentSources,omitempty"`
 	// fips indicates whether this cluster's nodes will be running in FIPS mode.
 	// +k8s:openapi-gen=true
 	// +seaplane:write-mode=service-set

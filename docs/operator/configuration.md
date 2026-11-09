@@ -38,10 +38,11 @@ for every cluster, redirecting OCP image pulls from `quay.io` to the
 configured zero-egress ECR registry. This is a platform-managed override —
 customers do not set `imageContentSources` directly.
 
-The first four variables must be set together, or none at all. Setting some but
-not all causes the operator to exit with an error at startup.
-`ECR_MIRROR_BASE_SECRET_NAME` is optional but **strongly recommended** when
-`ecr-creds-sync` is also deployed — see the note below.
+All five variables must be set together, or none at all. Setting some but not
+all — including omitting `ECR_MIRROR_BASE_SECRET_NAME` — causes the operator to
+exit with an error at startup. Setting `ECR_MIRROR_BASE_SECRET_NAME` to
+`"pull-secret"` is also rejected; use a different name such as
+`base-pull-secret`.
 
 | Variable | Description |
 | -------- | ----------- |
@@ -51,15 +52,12 @@ not all causes the operator to exit with an error at startup.
 | `ECR_MIRROR_SOURCES` | Comma-separated list of source registry paths to redirect to the ECR mirror |
 | `ECR_MIRROR_BASE_SECRET_NAME` | Target Secret name for the ESO ExternalSecret. See note below. |
 
-> **Race condition warning:** When `ecr-creds-sync` is deployed alongside this
-> operator and `ECR_MIRROR_BASE_SECRET_NAME` is not set, both ESO and
-> `ecr-creds-sync` write to the same `pull-secret`. ESO re-syncs every hour
-> and overwrites the ECR token with the SSM content (which does not contain
-> ECR credentials), leaving nodes without ECR access until `ecr-creds-sync`
-> reconciles again. Set `ECR_MIRROR_BASE_SECRET_NAME` to a different name
-> (e.g. `base-pull-secret`) so ESO writes the SSM credentials there while
-> `ecr-creds-sync` reads from it and writes the merged result to `pull-secret`
-> exclusively.
+> **ESO coordination:** `ECR_MIRROR_BASE_SECRET_NAME` must be set to a name
+> other than `pull-secret` (e.g. `base-pull-secret`). The operator redirects
+> the ESO ExternalSecret to that name so ESO writes the SSM credentials there
+> while `ecr-creds-sync` reads from it and writes the merged result (SSM
+> credentials + ECR token) to `pull-secret`. This prevents ESO and
+> `ecr-creds-sync` from overwriting each other.
 
 **Example:**
 
@@ -75,7 +73,7 @@ ECR_MIRROR_BASE_SECRET_NAME=base-pull-secret
 
 The operator logs one of the following on startup:
 
-- `ECR mirror disabled` — none of the four variables are set; clusters use original image sources
+- `ECR mirror disabled` — none of the five variables are set; clusters use original image sources
 - `ECR mirror enabled account=… region=… repository=… sources=N` — mirror is active
 - Error and exit — partial configuration detected; missing variables are named
 

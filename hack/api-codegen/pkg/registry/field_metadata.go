@@ -497,7 +497,8 @@ var FieldRegistry = TypedFieldRegistry{
 		},
 		"spec.hostedCluster.imageContentSources": {
 			FieldPath: "spec.hostedCluster.imageContentSources",
-			WriteMode: Mutable,
+			WriteMode: ServiceSet,
+			Hidden:    true,
 			OwnerType: "Cluster",
 			OwnerGVK:  "seaplane.io/v1alpha1.Cluster",
 		},

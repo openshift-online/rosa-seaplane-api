@@ -467,7 +467,8 @@
   },
   {
     "fieldPath": "spec.hostedCluster.imageContentSources",
-    "writeMode": "mutable",
+    "writeMode": "service-set",
+    "hidden": true,
     "ownerType": "Cluster",
     "ownerGVK": "seaplane.io/v1alpha1.Cluster"
   },

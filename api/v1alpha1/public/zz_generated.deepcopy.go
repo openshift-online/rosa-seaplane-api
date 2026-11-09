@@ -549,13 +549,6 @@ func (in *HostedClusterSpecPassthrough) DeepCopyInto(out *HostedClusterSpecPasst
 		*out = new(v1beta1.OperatorConfiguration)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.ImageContentSources != nil {
-		in, out := &in.ImageContentSources, &out.ImageContentSources
-		*out = make([]v1beta1.ImageContentSource, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
 	if in.PausedUntil != nil {
 		in, out := &in.PausedUntil, &out.PausedUntil
 		*out = new(string)

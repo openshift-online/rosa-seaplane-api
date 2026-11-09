@@ -2495,33 +2495,6 @@ components:
                           fips:
                               description: fips indicates whether this cluster's nodes will be running in FIPS mode.
                               type: boolean
-                          imageContentSources:
-                              description: imageContentSources specifies image mirrors that can be used by cluster
-                              items:
-                                  description: |-
-                                      ImageContentSource specifies image mirrors that can be used by cluster nodes
-                                      to pull content. For cluster workloads, if a container image registry host of
-                                      the pullspec matches Source then one of the Mirrors are substituted as hosts
-                                      in the pullspec and tried in order to fetch the image.
-                                  properties:
-                                      mirrors:
-                                          description: mirrors are one or more repositories that may also contain the same images.
-                                          items:
-                                              maxLength: 255
-                                              type: string
-                                          maxItems: 255
-                                          type: array
-                                          x-kubernetes-list-type: set
-                                      source:
-                                          description: |-
-                                              source is the repository that users refer to, e.g. in image pull
-                                              specifications.
-                                          maxLength: 255
-                                          type: string
-                                  required:
-                                      - source
-                                  type: object
-                              type: array
                           issuerURL:
                               description: issuerURL is an OIDC issuer URL which will be used as the issuer in all
                               type: string
@@ -5571,33 +5544,6 @@ components:
                                       fips:
                                           description: fips indicates whether this cluster's nodes will be running in FIPS mode.
                                           type: boolean
-                                      imageContentSources:
-                                          description: imageContentSources specifies image mirrors that can be used by cluster
-                                          items:
-                                              description: |-
-                                                  ImageContentSource specifies image mirrors that can be used by cluster nodes
-                                                  to pull content. For cluster workloads, if a container image registry host of
-                                                  the pullspec matches Source then one of the Mirrors are substituted as hosts
-                                                  in the pullspec and tried in order to fetch the image.
-                                              properties:
-                                                  mirrors:
-                                                      description: mirrors are one or more repositories that may also contain the same images.
-                                                      items:
-                                                          maxLength: 255
-                                                          type: string
-                                                      maxItems: 255
-                                                      type: array
-                                                      x-kubernetes-list-type: set
-                                                  source:
-                                                      description: |-
-                                                          source is the repository that users refer to, e.g. in image pull
-                                                          specifications.
-                                                      maxLength: 255
-                                                      type: string
-                                              required:
-                                                  - source
-                                              type: object
-                                          type: array
                                       issuerURL:
                                           description: issuerURL is an OIDC issuer URL which will be used as the issuer in all
                                           type: string
@@ -8996,33 +8942,6 @@ components:
           fips:
               description: fips indicates whether this cluster's nodes will be running in FIPS mode.
               type: boolean
-          imageContentSources:
-              description: imageContentSources specifies image mirrors that can be used by cluster
-              items:
-                  description: |-
-                      ImageContentSource specifies image mirrors that can be used by cluster nodes
-                      to pull content. For cluster workloads, if a container image registry host of
-                      the pullspec matches Source then one of the Mirrors are substituted as hosts
-                      in the pullspec and tried in order to fetch the image.
-                  properties:
-                      mirrors:
-                          description: mirrors are one or more repositories that may also contain the same images.
-                          items:
-                              maxLength: 255
-                              type: string
-                          maxItems: 255
-                          type: array
-                          x-kubernetes-list-type: set
-                      source:
-                          description: |-
-                              source is the repository that users refer to, e.g. in image pull
-                              specifications.
-                          maxLength: 255
-                          type: string
-                  required:
-                      - source
-                  type: object
-              type: array
           issuerURL:
               description: issuerURL is an OIDC issuer URL which will be used as the issuer in all
               type: string

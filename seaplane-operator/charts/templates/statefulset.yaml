@@ -53,6 +53,8 @@ spec:
               value: {{ .Values.controlPlaneOperatorImage | quote }}
             {{- end }}
             {{- if .Values.ecrMirror.enabled }}
+            - name: ECR_MIRROR_ENABLED
+              value: "true"
             - name: ECR_MIRROR_REGISTRY_ACCOUNT
               value: {{ .Values.ecrMirror.registryAccount | quote }}
             - name: ECR_MIRROR_REGISTRY_REGION
@@ -61,10 +63,8 @@ spec:
               value: {{ .Values.ecrMirror.repository | quote }}
             - name: ECR_MIRROR_SOURCES
               value: {{ .Values.ecrMirror.sources | quote }}
-            {{- if .Values.ecrMirror.baseSecretName }}
             - name: ECR_MIRROR_BASE_SECRET_NAME
               value: {{ .Values.ecrMirror.baseSecretName | quote }}
-            {{- end }}
             {{- end }}
           ports:
             - name: health

@@ -33,6 +33,7 @@ import (
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -293,8 +294,8 @@ func main() {
 //     when ecr-creds-sync is active so that ESO and ecr-creds-sync write to
 //     separate Secrets.
 //
-// The first four must be set together or none at all; partial configuration
-// causes the operator to exit. ECR_MIRROR_BASE_SECRET_NAME is optional.
+// All five must be set together or none at all; partial configuration causes
+// the operator to exit.
 // ecrAccountRE validates that an ECR registry account ID is exactly 12 digits.
 var ecrAccountRE = regexp.MustCompile(`^\d{12}$`)
 
@@ -307,23 +308,13 @@ var ecrRegionRE = regexp.MustCompile(`^[a-z]{2}(-[a-z]+)+-\d+$`)
 // Must start and end with an alphanumeric character.
 var ecrRepositoryRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]*[a-z0-9]$|^[a-z0-9]$`)
 
-// k8sNameRE validates a Kubernetes resource name: lowercase alphanumerics and
-// hyphens, must start and end with an alphanumeric. Matches DNS label rules.
-var k8sNameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
-
-// buildECRMirrorConfig reads and validates the ECR mirror environment variables,
-// returning a populated ECRMirrorConfig or calling os.Exit on invalid input.
-// See the block comment above for the full variable reference.
-func buildECRMirrorConfig() render.ECRMirrorConfig {
-	account := os.Getenv("ECR_MIRROR_REGISTRY_ACCOUNT")
-	region := os.Getenv("ECR_MIRROR_REGISTRY_REGION")
-	repo := os.Getenv("ECR_MIRROR_REPOSITORY")
-	sourcesRaw := os.Getenv("ECR_MIRROR_SOURCES")
-	baseSecretName := os.Getenv("ECR_MIRROR_BASE_SECRET_NAME")
-
-	if account == "" && region == "" && repo == "" && sourcesRaw == "" {
-		setupLog.Info("ECR mirror disabled: ECR_MIRROR_REGISTRY_ACCOUNT, ECR_MIRROR_REGISTRY_REGION, ECR_MIRROR_REPOSITORY, and ECR_MIRROR_SOURCES are not set")
-		return render.ECRMirrorConfig{}
+// parseECRMirrorConfig validates the five ECR mirror env var values and returns
+// a populated ECRMirrorConfig, or an error describing the first problem found.
+// Returns a zero ECRMirrorConfig (and nil error) when all five inputs are empty
+// (mirror disabled). The caller is responsible for logging and process exit.
+func parseECRMirrorConfig(account, region, repo, sourcesRaw, baseSecretName string) (render.ECRMirrorConfig, error) {
+	if account == "" && region == "" && repo == "" && sourcesRaw == "" && baseSecretName == "" {
+		return render.ECRMirrorConfig{}, nil
 	}
 
 	var missing []string
@@ -339,55 +330,78 @@ func buildECRMirrorConfig() render.ECRMirrorConfig {
 	if sourcesRaw == "" {
 		missing = append(missing, "ECR_MIRROR_SOURCES")
 	}
+	if baseSecretName == "" {
+		missing = append(missing, "ECR_MIRROR_BASE_SECRET_NAME")
+	}
 	if len(missing) > 0 {
-		setupLog.Error(nil, "ECR mirror partially configured — set all four env vars or none",
-			"missing", missing)
-		os.Exit(1)
+		return render.ECRMirrorConfig{}, fmt.Errorf("ECR mirror partially configured — set all five env vars or none; missing: %s", strings.Join(missing, ", "))
 	}
 
 	if !ecrAccountRE.MatchString(account) {
-		setupLog.Error(nil, "ECR_MIRROR_REGISTRY_ACCOUNT must be a 12-digit AWS account ID", "value", account)
-		os.Exit(1)
+		return render.ECRMirrorConfig{}, fmt.Errorf("ECR_MIRROR_REGISTRY_ACCOUNT must be a 12-digit AWS account ID, got %q", account)
 	}
 	if !ecrRegionRE.MatchString(region) {
-		setupLog.Error(nil, "ECR_MIRROR_REGISTRY_REGION must be a valid AWS region (e.g. us-east-1)", "value", region)
-		os.Exit(1)
+		return render.ECRMirrorConfig{}, fmt.Errorf("ECR_MIRROR_REGISTRY_REGION must be a valid AWS region (e.g. us-east-1), got %q", region)
 	}
 	if !ecrRepositoryRE.MatchString(repo) {
-		setupLog.Error(nil, "ECR_MIRROR_REPOSITORY must contain only lowercase letters, digits, hyphens, underscores, periods, and slashes", "value", repo)
-		os.Exit(1)
+		return render.ECRMirrorConfig{}, fmt.Errorf("ECR_MIRROR_REPOSITORY must contain only lowercase letters, digits, hyphens, underscores, periods, and slashes, got %q", repo)
 	}
-	if baseSecretName != "" && !k8sNameRE.MatchString(baseSecretName) {
-		setupLog.Error(nil, "ECR_MIRROR_BASE_SECRET_NAME must be a valid Kubernetes name (lowercase alphanumerics and hyphens)", "value", baseSecretName)
-		os.Exit(1)
+	if problems := k8svalidation.IsDNS1123Subdomain(baseSecretName); len(problems) > 0 {
+		return render.ECRMirrorConfig{}, fmt.Errorf("ECR_MIRROR_BASE_SECRET_NAME must be a valid Kubernetes resource name: %s", strings.Join(problems, ", "))
+	}
+	if baseSecretName == "pull-secret" {
+		return render.ECRMirrorConfig{}, fmt.Errorf("ECR_MIRROR_BASE_SECRET_NAME must not be %q: ecr-creds-sync writes to pull-secret directly; set it to a different name (e.g. base-pull-secret) so ESO and ecr-creds-sync do not conflict", "pull-secret")
 	}
 
 	sources, err := render.ParseECRSources(sourcesRaw)
 	if err != nil {
-		setupLog.Error(err, "invalid ECR_MIRROR_SOURCES")
-		os.Exit(1)
+		return render.ECRMirrorConfig{}, fmt.Errorf("ECR_MIRROR_SOURCES: %w", err)
 	}
 
 	// Validate the rendered mirror URI length. HyperShift CRD enforces
 	// MaxLength=255 on each mirror string in ImageContentSource.mirrors.
 	mirrorURI := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s", account, region, repo)
 	if len(mirrorURI) > render.ImageContentSourceMaxLength {
-		setupLog.Error(nil, "rendered ECR mirror URI exceeds HyperShift MaxLength=255",
-			"length", len(mirrorURI), "max", render.ImageContentSourceMaxLength)
-		os.Exit(1)
+		return render.ECRMirrorConfig{}, fmt.Errorf("rendered ECR mirror URI length %d exceeds HyperShift MaxLength=%d", len(mirrorURI), render.ImageContentSourceMaxLength)
 	}
 
-	setupLog.Info("ECR mirror enabled",
-		"sources", len(sources),
-		"baseSecretName", baseSecretName,
-	)
 	return render.ECRMirrorConfig{
 		RegistryAccount: account,
 		RegistryRegion:  region,
 		Repository:      repo,
 		Sources:         sources,
 		BaseSecretName:  baseSecretName,
+	}, nil
+}
+
+// buildECRMirrorConfig reads ECR mirror configuration from environment variables,
+// logs the result, and exits on invalid input. See the block comment above for
+// the full variable reference.
+func buildECRMirrorConfig() render.ECRMirrorConfig {
+	cfg, err := parseECRMirrorConfig(
+		os.Getenv("ECR_MIRROR_REGISTRY_ACCOUNT"),
+		os.Getenv("ECR_MIRROR_REGISTRY_REGION"),
+		os.Getenv("ECR_MIRROR_REPOSITORY"),
+		os.Getenv("ECR_MIRROR_SOURCES"),
+		os.Getenv("ECR_MIRROR_BASE_SECRET_NAME"),
+	)
+	if err != nil {
+		setupLog.Error(err, "invalid ECR mirror configuration")
+		os.Exit(1)
 	}
+	if cfg.RegistryAccount == "" {
+		if os.Getenv("ECR_MIRROR_ENABLED") == "true" {
+			setupLog.Error(nil, "ECR mirror is enabled (ECR_MIRROR_ENABLED=true) but all ECR_MIRROR_* variables are empty — SSM parameters may not be populated; check /infra/image-registry/* in the RC account")
+			os.Exit(1)
+		}
+		setupLog.Info("ECR mirror disabled: ECR_MIRROR_REGISTRY_ACCOUNT, ECR_MIRROR_REGISTRY_REGION, ECR_MIRROR_REPOSITORY, ECR_MIRROR_SOURCES, and ECR_MIRROR_BASE_SECRET_NAME are not set")
+		return render.ECRMirrorConfig{}
+	}
+	setupLog.Info("ECR mirror enabled",
+		"sources", len(cfg.Sources),
+		"baseSecretName", cfg.BaseSecretName,
+	)
+	return cfg
 }
 
 // envInt reads an integer environment variable, returning fallback when unset.
