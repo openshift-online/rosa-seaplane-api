@@ -21,6 +21,10 @@ func candidateResource(resource authz.Resource, name string) authz.Resource {
 }
 
 func (h *ClusterHandler) clusterResource(cr *v1.Cluster) authz.Resource {
+	return clusterAuthzResource(cr)
+}
+
+func clusterAuthzResource(cr *v1.Cluster) authz.Resource {
 	// The seaplane-db UID identifies this object incarnation independently of its name.
 	return authz.Resource{
 		Kind:      authz.Cluster,
@@ -31,13 +35,17 @@ func (h *ClusterHandler) clusterResource(cr *v1.Cluster) authz.Resource {
 }
 
 func (h *NodePoolHandler) nodePoolResource(ctx context.Context, np *v1.NodePool) (authz.Resource, error) {
+	return nodePoolAuthzResource(ctx, h.db, np)
+}
+
+func nodePoolAuthzResource(ctx context.Context, db *seaplanedb.Client, np *v1.NodePool) (authz.Resource, error) {
 	owner := metav1.GetControllerOf(np)
 	// A pool without its current owned parent reads as not found; this is the only parent load.
 	notFound := &authz.Failure{Stage: authz.StageResourceLoading, Err: apierrors.NewNotFound(v1.GroupVersion.WithResource("nodepools").GroupResource(), np.Name)}
 	if owner == nil || owner.Kind != "Cluster" || owner.UID == "" || np.Labels[clusterUIDLabel] != string(owner.UID) {
 		return authz.Resource{}, notFound
 	}
-	parent, err := h.db.GetCluster(ctx, owner.Name)
+	parent, err := db.GetCluster(ctx, owner.Name)
 	if seaplanedb.IsNotFound(err) || (err == nil && parent.UID != owner.UID) {
 		return authz.Resource{}, notFound
 	}

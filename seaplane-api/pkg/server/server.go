@@ -46,6 +46,8 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 	infoHandler := apphandlers.NewInfoHandler(logger)
 	clusterHandler := apphandlers.NewClusterHandler(dbClient, cfg.Regional.OIDCIssuerBaseURL, cfg.Regional.DefaultClusterExpiration, authorizer, logger)
 	nodePoolHandler := apphandlers.NewNodePoolHandler(dbClient, authorizer, logger)
+	renderedHostedClusterHandler := apphandlers.NewRenderedHostedClusterHandler(dbClient, authorizer, logger)
+	renderedNodePoolHandler := apphandlers.NewRenderedNodePoolHandler(dbClient, authorizer, logger)
 	oidcConfigHandler := apphandlers.NewOidcConfigHandler(dbClient, cfg.Regional.OIDCIssuerBaseURL, authorizer, logger, cfg.Regional.AWSRegion)
 	dnsReservationHandler := apphandlers.NewDNSReservationHandler(dbClient, authorizer, logger)
 	accountsHandler := apphandlers.NewAccountsHandler(dbClient, cfg.Regional.AccountID, logger)
@@ -148,6 +150,14 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 	nodePoolRouter.HandleFunc("/{id}/labels", nodePoolHandler.Labels).Methods(http.MethodGet, http.MethodPatch)
 	nodePoolRouter.HandleFunc("/{id}", nodePoolHandler.Update).Methods(http.MethodPatch, http.MethodPut)
 	nodePoolRouter.HandleFunc("/{id}", nodePoolHandler.Delete).Methods(http.MethodDelete)
+
+	// Read-only rendered HyperShift resources.
+	renderedHostedClusterRouter := apiRouter.PathPrefix("/api/v0/renderedhostedclusters").Subrouter()
+	renderedHostedClusterRouter.HandleFunc("", renderedHostedClusterHandler.List).Methods(http.MethodGet)
+	renderedHostedClusterRouter.HandleFunc("/{id}", renderedHostedClusterHandler.Get).Methods(http.MethodGet)
+	renderedNodePoolRouter := apiRouter.PathPrefix("/api/v0/renderednodepools").Subrouter()
+	renderedNodePoolRouter.HandleFunc("", renderedNodePoolHandler.List).Methods(http.MethodGet)
+	renderedNodePoolRouter.HandleFunc("/{id}", renderedNodePoolHandler.Get).Methods(http.MethodGet)
 
 	// OidcConfig routes
 	oidcConfigRouter := resourceRouter.PathPrefix("/api/v0/oidc_configs").Subrouter()
