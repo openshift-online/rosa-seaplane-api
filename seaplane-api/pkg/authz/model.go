@@ -10,8 +10,6 @@ import (
 type Identity struct {
 	AccountID string
 	CallerARN string
-	// IsAllowlisted grants full access to the account's own resources (temporary allowlist).
-	IsAllowlisted bool
 }
 
 type Action string
@@ -76,11 +74,10 @@ type Resource struct {
 	ParentCluster  *ParentCluster
 }
 
-// Provenance identifies the policy/attachment revisions or startup bundle behind a decision.
+// Provenance identifies the stored policy/attachment revisions behind a decision.
 type Provenance struct {
 	DiagnosticID       string
 	PolicyID           string
-	BundleHash         string
 	AttachmentID       string
 	PolicyRevision     string
 	AttachmentRevision string
@@ -96,7 +93,6 @@ type Stage string
 const (
 	StageNone             Stage = ""
 	StageResolution       Stage = "resolution"
-	StageParsing          Stage = "parsing"
 	StageBinding          Stage = "binding"
 	StageEntityValidation Stage = "entity_validation"
 	StageEvaluation       Stage = "evaluation"

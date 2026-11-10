@@ -19,9 +19,7 @@ func TestDocumentationExamplesPinnedCedar(t *testing.T) {
 	for _, example := range examples {
 		policy := string(example[1])
 		t.Run(strings.Split(policy, "\n")[0], func(t *testing.T) {
-			b := bundleFixture()
-			b["policies"].([]map[string]any)[0]["content"] = policy
-			a := fixtureAuthorizer(t, b)
+			a := resolvedFixture(t, region, grantRecords([]grant{{id: "example", content: policy, principal: roleARN}}))
 			p, err := a.Prepare(t.Context(), testIdentity(sessionARN), testRequestContext())
 			if err != nil {
 				t.Fatal(err)

@@ -33,5 +33,5 @@ seaplane-api/go.mod              ← requires: seaplane-db, api
 ## Docs
 
 - [OpenAPI spec](api/v1alpha1/public/openapi.yaml)
-- [Authorization](docs/authz/README.md) ([target design](docs/authz/design.md))
+- [Authorization](docs/authz/README.md)
 - [Konflux / Quay image tags](docs/konflux/quay-image-tags.md)

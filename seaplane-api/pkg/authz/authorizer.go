@@ -8,24 +8,11 @@ import (
 	"slices"
 
 	cedar "github.com/cedar-policy/cedar-go"
-	"github.com/cedar-policy/cedar-go/x/exp/schema/resolved"
 	"github.com/cedar-policy/cedar-go/x/exp/schema/validate"
 	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 )
 
 type evaluator func(*cedar.PolicySet, cedar.EntityMap, cedar.Request) (cedar.Decision, cedar.Diagnostic, error)
-
-// Authorizer selects validated policies once per request in a fixed service region.
-type Authorizer struct {
-	bundleHash string
-	customer   []policyAttachment
-	allowlist  *cedar.Policy
-	region     string
-	accounts   map[string]struct{}
-	model      *resolved.Schema
-	validator  *validate.Validator
-	evaluate   evaluator
-}
 
 // Prepared owns concrete immutable policy inputs for one identity and request.
 type Prepared struct {
@@ -40,27 +27,14 @@ type Prepared struct {
 	evaluate       evaluator
 }
 
-// BundleHash returns the SHA-256 hash of the bundle file loaded at startup.
-func (a *Authorizer) BundleHash() string { return a.bundleHash }
-
-// IsAccountRegistered checks enrollment in the startup snapshot, not permission grants.
-// A canceled context returns false.
-func (a *Authorizer) IsAccountRegistered(ctx context.Context, account string) bool {
-	if ctx.Err() != nil {
-		return false
-	}
-	_, exists := a.accounts[account]
-	return exists
-}
-
 // nativeEvaluate returns Cedar's decision and diagnostics for the supplied policies, entities, and request.
 func nativeEvaluate(set *cedar.PolicySet, entities cedar.EntityMap, req cedar.Request) (cedar.Decision, cedar.Diagnostic, error) {
 	decision, diagnostics := cedar.Authorize(set, entities, req)
 	return decision, diagnostics, nil
 }
 
-// Prepare freezes applicable policies, caller identity, and request context for all checks in one request.
-func (a *Authorizer) Prepare(ctx context.Context, id Identity, req RequestContext) (*Prepared, error) {
+// prepareResolved freezes stored policies, caller identity, and context for one request.
+func (s *Store) prepareResolved(ctx context.Context, id Identity, req RequestContext, records []ResolvedAttachment) (*Prepared, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, newFailure(StageResolution, err)
 	}
@@ -77,38 +51,42 @@ func (a *Authorizer) Prepare(ctx context.Context, id Identity, req RequestContex
 		day = 7
 	}
 	requestLabels := entityUID("RequestLabels", "request")
-	prepared := &Prepared{identity: id, region: a.region, principal: entityUID("Principal", id.CallerARN), entities: make(cedar.EntityMap), policies: cedar.NewPolicySet(), provenance: make(map[cedar.PolicyID]Provenance), validator: a.validator, evaluate: a.evaluate,
+	prepared := &Prepared{identity: id, region: s.config.Region, principal: entityUID("Principal", id.CallerARN), entities: make(cedar.EntityMap), policies: cedar.NewPolicySet(), provenance: make(map[cedar.PolicyID]Provenance), validator: s.validator, evaluate: nativeEvaluate,
 		requestContext: cedar.NewRecord(cedar.RecordMap{
-			"region": cedar.String(a.region), "accountId": cedar.String(id.AccountID), "principalArn": cedar.String(id.CallerARN),
+			"region": cedar.String(s.config.Region), "accountId": cedar.String(id.AccountID), "principalArn": cedar.String(id.CallerARN),
 			"sourceIp": cedar.String(req.SourceIP), "userAgent": cedar.String(req.UserAgent),
 			"requestTime":   cedar.NewRecord(cedar.RecordMap{"unixSeconds": cedar.Long(timestamp.Unix()), "dayOfWeek": cedar.Long(day), "hour": cedar.Long(timestamp.Hour())}),
 			"requestLabels": requestLabels,
 		}),
 	}
 	prepared.entities[requestLabels] = cedar.Entity{UID: requestLabels, Tags: resourceTags(req.RequestLabels)}
-	for uid, action := range a.model.Actions {
+	for uid, action := range s.model.Actions {
 		prepared.entities[uid] = action.Entity
 	}
 	attrs := cedar.NewRecord(cedar.RecordMap{"account": cedar.String(id.AccountID)})
 	parents := []cedar.EntityUID{}
-	for _, binding := range a.customer {
-		if !matchesPrincipal(binding.principal, caller) || !appliesInRegion(binding.scope, binding.region, a.region) {
+	for _, record := range records {
+		binding, policy := record.Attachment, record.Policy
+		principal, err := parsePrincipal(binding.PrincipalARN)
+		if err != nil {
+			return nil, newFailure(StageBinding, err)
+		}
+		if !matchesPrincipal(principal, caller) || !appliesInRegion(string(binding.Scope), binding.Region, s.config.Region) {
 			continue
 		}
-		diagnosticID := cedar.PolicyID(binding.DiagnosticID)
-		prepared.policies.Add(diagnosticID, binding.policy)
-		prepared.provenance[diagnosticID] = binding.Provenance
-		if binding.principal.kind == "role" {
-			role := entityUID("Role", binding.principal.original)
+		provenance := Provenance{DiagnosticID: bindingDiagnosticID(binding), PolicyID: policy.ID, AttachmentID: binding.ID, PolicyRevision: policy.Revision, AttachmentRevision: binding.Revision}
+		bound, err := s.bindPolicy(policy.Content, policy.ID, principal)
+		if err != nil {
+			return nil, newFailure(StageBinding, err, provenance)
+		}
+		diagnosticID := cedar.PolicyID(provenance.DiagnosticID)
+		prepared.policies.Add(diagnosticID, bound)
+		prepared.provenance[diagnosticID] = provenance
+		if principal.kind == "role" {
+			role := entityUID("Role", principal.original)
 			prepared.entities[role] = cedar.Entity{UID: role, Attributes: attrs}
 			parents = append(parents, role)
 		}
-	}
-	// Checks pin resources to the caller's account, so this grant covers only its own resources.
-	if id.IsAllowlisted {
-		diagnosticID := cedar.PolicyID("allowlist/" + id.AccountID)
-		prepared.policies.Add(diagnosticID, a.allowlist)
-		prepared.provenance[diagnosticID] = Provenance{DiagnosticID: string(diagnosticID), PolicyID: "allowlist", BundleHash: a.bundleHash}
 	}
 	prepared.entities[prepared.principal] = cedar.Entity{UID: prepared.principal, Parents: cedar.NewEntityUIDSet(parents...), Attributes: attrs}
 	if err := prepared.validator.Entities(prepared.entities); err != nil {

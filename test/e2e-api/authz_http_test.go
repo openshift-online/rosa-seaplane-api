@@ -3,7 +3,6 @@ package e2e_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -99,16 +98,21 @@ func TestAuthzHTTP(t *testing.T) {
 		t.Fatal("Podman is required by seaplane-db testinfra: ", err)
 	}
 	authzClearAWS(t)
-	bundle, err := os.ReadFile("testdata/authz-http.json")
+	fixture, err := os.ReadFile("testdata/resource-grants.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	configPath := filepath.Join(output, "authz-config.json")
-
+	dynamoEndpoint, dynamoProxy := authzDynamo(t)
+	for _, account := range []string{authzAccount, authzOtherAccount, "333333333333"} {
+		authzSeedAdmin(t, dynamoEndpoint, account)
+	}
+	t.Setenv("AWS_ACCESS_KEY_ID", "local")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "local")
+	t.Setenv("AWS_ENDPOINT_URL_DYNAMODB", dynamoEndpoint)
 	db := testinfra.StartPostgres(t)
 	start := func(t *testing.T, name string) *authzProcess {
 		t.Helper()
-		return authzStartProcess(t, binary, configPath, db.ConnStr, output, name)
+		return authzStartProcess(t, binary, db.ConnStr, output, name)
 	}
 	scheme := runtime.NewScheme()
 	if err := seaplanev1.AddToScheme(scheme); err != nil {
@@ -133,9 +137,8 @@ func TestAuthzHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle = bytes.ReplaceAll(bundle, []byte(`"@@RUNTIME_FAULT_POLICY@@"`), encodedPolicy)
-	bundle = bytes.ReplaceAll(bundle, []byte("@@BLUE_CLUSTER_UID@@"), []byte(authzStoredClusters[1].id))
-	authzWriteFile(t, configPath, bundle)
+	fixture = bytes.ReplaceAll(fixture, []byte(`"@@RUNTIME_FAULT_POLICY@@"`), encodedPolicy)
+	fixture = bytes.ReplaceAll(fixture, []byte("@@BLUE_CLUSTER_UID@@"), []byte(authzStoredClusters[1].id))
 	process := start(t, "initial")
 	t.Cleanup(process.stop)
 	if !t.Run("infrastructure", func(t *testing.T) {
@@ -154,6 +157,22 @@ func TestAuthzHTTP(t *testing.T) {
 		return
 	}
 
+	// Management requires enrollment, so every grant owner is enrolled before seeding.
+	for _, account := range []string{authzAccount, authzOtherAccount} {
+		requester := NewAPIClient(process.apiURL)
+		requester.CallerARN = authzAdmin(account)
+		response, err := requester.Get(authzClustersPath, account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		authzAssertStatus(t, response, http.StatusForbidden)
+		authzManagementRequest(t, process, authzAccount, "POST", "/api/v0/accounts", "", map[string]string{"accountId": account}, http.StatusNoContent)
+	}
+	authzManagementRequest(t, process, authzAccount, "POST", "/api/v0/accounts", "", map[string]string{"accountId": "333333333333"}, http.StatusNoContent)
+	grants := authzSeedGrants(t, process, fixture)
+	// 333333333333 keeps its stored grant but is unenrolled again; the grant must not admit it.
+	authzManagementRequest(t, process, authzAccount, "DELETE", "/api/v0/accounts/333333333333", "", nil, http.StatusNoContent)
+
 	blueOne, blueOneName := authzStoredClusters[1].id, authzStoredClusters[1].name
 	blueTwo := authzStoredClusters[3].id
 	foreignName := authzStoredClusters[4].name
@@ -169,6 +188,7 @@ func TestAuthzHTTP(t *testing.T) {
 		{"ARN-B enrolled no grants list", "arn:aws:iam::222222222222:user/bob", authzOtherAccount, "", "deny", http.StatusForbidden},
 		{"ARN-B enrolled no grants describe", "arn:aws:iam::222222222222:user/bob", authzOtherAccount, "/" + foreignName, "deny", http.StatusForbidden},
 		{"same account no grants", authzUser("bob"), authzAccount, "", "deny", http.StatusForbidden},
+		{"seeded admin has no resource grants", authzAdmin(authzAccount), authzAccount, "", "deny", http.StatusForbidden},
 		{"unregistered broad policy", "arn:aws:iam::333333333333:user/unregistered", "333333333333", "", "", http.StatusForbidden},
 		{"missing account", alice, "", "", "", http.StatusForbidden},
 		{"missing ARN", "", authzAccount, "", "", http.StatusForbidden},
@@ -242,10 +262,11 @@ func TestAuthzHTTP(t *testing.T) {
 			if err != nil || len(log) < len(beforeLog) {
 				t.Fatalf("read request failure log: %v", err)
 			}
-			bundleHash := fmt.Sprintf("%x", sha256.Sum256(bundle))
-			authzAssertFailureLog(t, log[len(beforeLog):], tc.operation, bundleHash)
-			if bytes.Contains(response.Body, []byte(bundleHash)) {
-				t.Error("failure response exposed configuration bundle hash")
+			authzAssertFailureLog(t, log[len(beforeLog):], tc.operation, grants.policies["runtime-fault"], grants.attachments["error-forbid"])
+			for _, secret := range []string{grants.policies["runtime-fault"].Revision, grants.attachments["error-forbid"].ID, grants.attachments["error-forbid"].Revision} {
+				if bytes.Contains(response.Body, []byte(secret)) {
+					t.Error("failure response exposed persistent grant identity or revision")
+				}
 			}
 			t.Logf("%s HTTP %d body %s", tc.operation, response.StatusCode, response.Body)
 		})
@@ -274,38 +295,6 @@ func TestAuthzHTTP(t *testing.T) {
 		items := authzReadList(t, response, 4, 50, 0)
 		if detailed := authzDetailedIDs(items); len(items) != 4 || len(detailed) != 4 {
 			t.Errorf("list-only got %d items, details for %v", len(items), detailed)
-		}
-	})
-	t.Run("account allowlist grants and revokes in seaplane-db", func(t *testing.T) {
-		const newcomer = "333333333333"
-		send := func(method, path, account, body string) *APIResponse {
-			request, err := http.NewRequest(method, process.apiURL+path, strings.NewReader(body))
-			if err != nil {
-				t.Fatal(err)
-			}
-			request.Header.Set("X-Amz-Account-Id", account)
-			request.Header.Set("X-Amz-Caller-Arn", "arn:aws:iam::"+account+":user/allowlist")
-			return authzRawRequest(t, request)
-		}
-		unregistered := func() bool {
-			return bytes.Contains(send(http.MethodGet, authzClustersPath, newcomer, "").Body, []byte("Account is not registered"))
-		}
-		if !unregistered() {
-			t.Fatal("newcomer admitted before enrollment")
-		}
-		authzAssertStatus(t, send(http.MethodPost, "/api/v0/accounts", newcomer, `{"accountId":"`+newcomer+`"}`), http.StatusForbidden)
-		if code := send(http.MethodPost, "/api/v0/accounts", authzAccount, `{"accountId":"`+newcomer+`"}`).StatusCode; code != http.StatusNoContent {
-			t.Fatalf("enroll status = %d, want 204", code)
-		}
-		// Allowlisted accounts get full access to their own resources.
-		if code := send(http.MethodGet, authzClustersPath, newcomer, "").StatusCode; code != http.StatusOK {
-			t.Fatalf("allowlisted newcomer list status = %d, want 200", code)
-		}
-		if code := send(http.MethodDelete, "/api/v0/accounts/"+newcomer, authzAccount, "").StatusCode; code != http.StatusNoContent {
-			t.Fatalf("revoke status = %d, want 204", code)
-		}
-		if !unregistered() {
-			t.Fatal("revoked newcomer still admitted")
 		}
 	})
 	t.Run("broad list still excludes foreign account", func(t *testing.T) {
@@ -359,41 +348,14 @@ func TestAuthzHTTP(t *testing.T) {
 		authzResourceOperations(t, process, store)
 	})
 
-	t.Run("startup snapshot and restart enrollment", func(t *testing.T) {
-		var replacement struct {
-			FormatVersion      int               `json:"formatVersion"`
-			RegisteredAccounts []string          `json:"registeredAccounts"`
-			Policies           []json.RawMessage `json:"policies"`
-			Attachments        []json.RawMessage `json:"attachments"`
-		}
-		if err := json.Unmarshal(bundle, &replacement); err != nil {
-			t.Fatal(err)
-		}
-		replacement.RegisteredAccounts = []string{authzOtherAccount}
-		content, err := json.Marshal(replacement)
-		if err != nil {
-			t.Fatal(err)
-		}
-		authzWriteFile(t, configPath, content)
-		response := authzMeasuredGet(t, process, authzClustersPath+"/"+blueOneName, alice, authzAccount, "DescribeCluster", "allow")
-		authzAssertStatus(t, response, http.StatusOK)
-		process.stop()
-		restarted := start(t, "restarted")
-		defer restarted.stop()
-		authzWaitReady(t, restarted)
-		response = authzMeasuredGet(t, restarted, authzClustersPath+"/"+blueOneName, alice, authzAccount, "", "")
-		authzAssertStatus(t, response, http.StatusForbidden)
-		authzWriteFile(t, configPath, []byte(`{"formatVersion":1,"registeredAccounts":["111111111111"],"policies":[],"attachments":[`))
-		response = authzMeasuredGet(t, restarted, authzClustersPath+"/"+blueOneName, alice, authzAccount, "", "")
-		authzAssertStatus(t, response, http.StatusForbidden)
+	t.Run("live grant edit revoke and frozen request", func(t *testing.T) {
+		authzLiveGrants(t, process, dynamoProxy, grants)
 	})
-	for _, invalid := range []struct{ name, content string }{
-		{"malformed", `{"formatVersion":1,"attachments":[`},
-		{"unsupported-version", `{"formatVersion":999,"registeredAccounts":[],"policies":[],"attachments":[]}`},
+	for _, invalid := range []struct{ name, env string }{
+		{"missing-table", "AUTHZ_POLICY_TABLE="},
 	} {
-		t.Run("invalid startup "+invalid.name, func(t *testing.T) {
-			authzWriteFile(t, configPath, []byte(invalid.content))
-			invalidProcess := start(t, invalid.name)
+		t.Run("invalid authorization startup "+invalid.name, func(t *testing.T) {
+			invalidProcess := authzStartProcess(t, binary, db.ConnStr, output, invalid.name, invalid.env)
 			defer invalidProcess.stop()
 			authzAssertRejected(t, invalidProcess)
 		})
@@ -416,7 +378,7 @@ func authzClearAWS(t *testing.T) {
 	// Remove every credential source, including inherited profiles and container credentials.
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, "AWS_") {
+		if strings.HasPrefix(key, "AWS_") || strings.HasPrefix(key, "AUTHZ_") && !strings.HasPrefix(key, "AUTHZ_HTTP_") {
 			t.Setenv(key, "")
 		}
 	}
@@ -483,7 +445,8 @@ func authzMarkLateFault(t *testing.T, store client.Client) (earlier, fault *seap
 	return &candidates.Items[0], last
 }
 
-func authzStartProcess(t *testing.T, binary, config, dsn, output, name string) *authzProcess {
+// authzStartProcess runs the API binary; env entries override the valid defaults.
+func authzStartProcess(t *testing.T, binary, dsn, output, name string, env ...string) *authzProcess {
 	t.Helper()
 	// Hold all three reservations until port selection is complete to prevent duplicate picks.
 	var listeners []net.Listener
@@ -511,10 +474,12 @@ func authzStartProcess(t *testing.T, binary, config, dsn, output, name string) *
 	}
 	process.cmd = exec.Command(binary, "serve", "--api-port", ports[0], "--health-port", ports[1], "--metrics-port", ports[2])
 	process.cmd.Env = append(os.Environ(),
-		"POSTGRES_DSN="+dsn, "AUTHZ_CONFIG_FILE="+config, "AWS_ACCOUNT_ID="+authzAccount,
+		"POSTGRES_DSN="+dsn, "AWS_ACCOUNT_ID="+authzAccount,
+		"AUTHZ_POLICY_TABLE=authz-policies", "AUTHZ_GLOBAL_TABLE=authz-global", "AUTHZ_REGIONAL_TABLE=authz-regional",
 		"API_BIND_ADDRESS=127.0.0.1", "HEALTH_BIND_ADDRESS=127.0.0.1", "METRICS_BIND_ADDRESS=127.0.0.1",
 		"TARGET_GROUP_ARN=arn:aws:elasticloadbalancing:"+authzRegion+":"+authzAccount+":targetgroup/authz-http/fixture",
 	)
+	process.cmd.Env = append(process.cmd.Env, env...)
 	process.cmd.Stdout, process.cmd.Stderr = log, log
 	for _, listener := range listeners {
 		_ = listener.Close()
@@ -611,19 +576,18 @@ func authzAssertRejected(t *testing.T, process *authzProcess) {
 	}
 }
 
-func authzAssertFailureLog(t *testing.T, log []byte, operation, bundleHash string) {
+func authzAssertFailureLog(t *testing.T, log []byte, operation string, policy authzPolicy, attachment authzAttachment) {
 	t.Helper()
 	decoder := json.NewDecoder(bytes.NewReader(log))
 	failures := 0
 	for decoder.More() {
 		var entry struct {
 			Message    string `json:"msg"`
-			BundleHash string `json:"bundle_hash"`
 			Operation  string `json:"operation"`
 			Stage      string `json:"stage"`
 			Cause      string `json:"cause"`
 			Provenance []struct {
-				DiagnosticID, PolicyID, BundleHash, AttachmentID string
+				DiagnosticID, PolicyID, AttachmentID, PolicyRevision, AttachmentRevision string
 			}
 			Diagnostics []struct {
 				Policy   string `json:"policy"`
@@ -640,13 +604,13 @@ func authzAssertFailureLog(t *testing.T, log []byte, operation, bundleHash strin
 			continue
 		}
 		failures++
-		if entry.BundleHash != bundleHash || entry.Operation != operation || entry.Stage != "evaluation" || entry.Cause != "cedar evaluation diagnostics" || len(entry.Provenance) != 1 || len(entry.Diagnostics) != 1 {
+		if entry.Operation != operation || entry.Stage != "evaluation" || entry.Cause != "cedar evaluation diagnostics" || len(entry.Provenance) != 1 || len(entry.Diagnostics) != 1 {
 			t.Fatalf("failure log lost evaluation cause or unique provenance: %s", log)
 		}
 		provenance := entry.Provenance[0]
 		diagnostic := entry.Diagnostics[0]
-		if provenance.DiagnosticID != "attachment/error-forbid" || provenance.PolicyID != "runtime-fault" || provenance.AttachmentID != "error-forbid" || provenance.BundleHash != bundleHash || diagnostic.Policy != provenance.DiagnosticID || !strings.Contains(diagnostic.Message, "integer overflow") || diagnostic.Position.Line < 1 {
-			t.Fatalf("failure log lost actual attachment bundle hash or native overflow diagnostic: %s", log)
+		if provenance.DiagnosticID != attachment.Scope+"/"+attachment.Region+"/"+attachment.ID || provenance.PolicyID != policy.ID || provenance.AttachmentID != attachment.ID || provenance.PolicyRevision != policy.Revision || provenance.AttachmentRevision != attachment.Revision || diagnostic.Policy != provenance.DiagnosticID || !strings.Contains(diagnostic.Message, "integer overflow") || diagnostic.Position.Line < 1 {
+			t.Fatalf("failure log lost actual persistent grant revisions or native overflow diagnostic: %s", log)
 		}
 	}
 	if failures != 1 {

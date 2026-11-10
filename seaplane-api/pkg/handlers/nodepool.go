@@ -34,10 +34,10 @@ type NodePoolHandler struct {
 	db         *seaplanedb.Client
 	validator  *validation.FieldValidator
 	logger     *slog.Logger
-	authorizer *authz.Authorizer
+	authorizer authz.Resolver
 }
 
-func NewNodePoolHandler(db *seaplanedb.Client, authorizer *authz.Authorizer, logger *slog.Logger) *NodePoolHandler {
+func NewNodePoolHandler(db *seaplanedb.Client, authorizer authz.Resolver, logger *slog.Logger) *NodePoolHandler {
 	if authorizer == nil {
 		panic("node pool authorizer is required")
 	}

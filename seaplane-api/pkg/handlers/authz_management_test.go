@@ -62,7 +62,7 @@ func TestManagementErrorPrivacy(t *testing.T) {
 	}
 }
 
-// TestManagementErrors preserves typed service failures and writer guidance as structured Status responses.
+// TestManagementErrors preserves typed service failures as structured Status responses.
 func TestManagementErrors(t *testing.T) {
 	h := NewManagementHandler(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for _, tc := range []struct {
@@ -71,7 +71,6 @@ func TestManagementErrors(t *testing.T) {
 	}{
 		{authz.ErrValidation, 422}, {authz.ErrManagementDenied, 403}, {authz.ErrManagedPolicy, 403},
 		{authz.ErrNotFound, 404}, {authz.ErrConflict, 409}, {authz.ErrUnavailable, 503},
-		{&authz.WrongWriterError{Region: "us-west-2"}, 409},
 		{&authz.Failure{}, 500},
 		{&authz.Failure{Err: authz.ErrNotFound}, 500},
 		{&authz.Failure{Err: authz.ErrValidation}, 500},
@@ -81,13 +80,6 @@ func TestManagementErrors(t *testing.T) {
 		h.writeError(w, tc.err)
 		if w.Code != tc.code {
 			t.Fatalf("%v: %d %s", tc.err, w.Code, w.Body)
-		}
-		if _, ok := tc.err.(*authz.WrongWriterError); ok {
-			var status metav1.Status
-			_ = json.Unmarshal(w.Body.Bytes(), &status)
-			if w.Header().Get("X-Authz-Writer-Region") != "us-west-2" || status.Details == nil || status.Details.Causes[0].Field != "writerRegion" {
-				t.Fatalf("missing guidance: %s", w.Body)
-			}
 		}
 	}
 }
