@@ -45,6 +45,8 @@ type ServiceSetFieldsHostedCluster struct {
 	Fips bool `json:"fips,omitempty"`
 	// Image is service-set (platform-managed, hidden from API)
 	Image string `json:"image,omitempty"`
+	// ImageContentSources is service-set (platform-managed, hidden from API)
+	ImageContentSources []hypershiftv1beta1.ImageContentSource `json:"imageContentSources,omitempty"`
 	// InfraID is service-set (platform-managed, hidden from API)
 	InfraID string `json:"infraID,omitempty"`
 	// InfrastructureAvailabilityPolicy is service-set (platform-managed, hidden from API)

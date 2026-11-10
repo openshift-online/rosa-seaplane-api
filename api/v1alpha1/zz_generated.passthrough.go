@@ -127,8 +127,8 @@ type HostedClusterSpecPassthrough struct {
 	// +optional
 	AuditWebhook *corev1.LocalObjectReference `json:"auditWebhook,omitempty"`
 	// imageContentSources specifies image mirrors that can be used by cluster
-	// +k8s:openapi-gen=true
-	// +seaplane:write-mode=mutable
+	// +k8s:openapi-gen=false
+	// +seaplane:write-mode=service-set
 	// +optional
 	ImageContentSources []hypershiftv1beta1.ImageContentSource `json:"imageContentSources,omitempty"`
 	// additionalTrustBundle is a local reference to a ConfigMap that must have a "ca-bundle.crt" key

@@ -167,11 +167,6 @@ resources:
               goType: string
               operations:
                 - create
-            - path: spec.hostedCluster.imageContentSources
-              goType: array(object)
-              operations:
-                - create
-                - update
             - path: spec.hostedCluster.networking.allocateNodeCIDRs
               goType: string
               operations:
