@@ -115,34 +115,15 @@ func (s *Store) CreateAttachment(ctx context.Context, spec AttachmentSpec) (Stor
 	if spec.Scope == RegionalScope {
 		binding.Region = s.config.Region
 	}
-	return s.writeAttachment(ctx, binding, "")
-}
-
-// UpdateAttachment changes an attachment's policy reference and returns the updated attachment.
-// It returns ErrConflict if expected does not match the stored revision.
-func (s *Store) UpdateAttachment(ctx context.Context, scope AttachmentScope, id, expected string, policy PolicyRef) (StoredAttachment, error) {
-	binding, err := s.GetAttachment(ctx, scope, id)
-	if err != nil {
-		return StoredAttachment{}, err
-	}
-	if !isRevision(expected) || binding.Revision != expected {
-		return StoredAttachment{}, ErrConflict
-	}
-	binding.Policy, binding.Revision = policy, uuid.NewString()
-	return s.writeAttachment(ctx, binding, expected)
+	return s.writeAttachment(ctx, binding)
 }
 
 // writeAttachment saves an attachment and its principal lookup record in one transaction.
-// It checks the attachment's expected revision and the referenced policy's revision.
-func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment, expected string) (StoredAttachment, error) {
+// It fails if the attachment exists or the referenced policy's revision changed.
+func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment) (StoredAttachment, error) {
 	table, err := s.attachmentTable(binding.Scope)
 	if err != nil {
 		return StoredAttachment{}, err
-	}
-	if binding.Scope == GlobalScope {
-		if err := s.requireWriter(); err != nil {
-			return StoredAttachment{}, err
-		}
 	}
 	if err := s.checkAttachment(binding); err != nil {
 		return StoredAttachment{}, fmt.Errorf("%w: %w", ErrValidation, err)
@@ -159,19 +140,13 @@ func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment, e
 	if err != nil {
 		return StoredAttachment{}, err
 	}
-	condition := conditionCreateOnly
-	var values map[string]types.AttributeValue
-	if expected != "" {
-		condition = conditionMatchRevision
-		values = map[string]types.AttributeValue{":expected": &types.AttributeValueMemberS{Value: expected}}
-	}
 	writes := []types.TransactWriteItem{}
 	for _, pk := range []string{"ACCOUNT#" + s.config.AccountID, principalKey(principal)} {
 		item, err := storeItem(pk, "ATTACHMENT#"+binding.ID, binding.Revision, binding)
 		if err != nil {
 			return StoredAttachment{}, err
 		}
-		writes = append(writes, types.TransactWriteItem{Put: &types.Put{TableName: &table, Item: item, ConditionExpression: &condition, ExpressionAttributeValues: values}})
+		writes = append(writes, types.TransactWriteItem{Put: &types.Put{TableName: &table, Item: item, ConditionExpression: aws.String(conditionCreateOnly)}})
 	}
 	writes = append(writes, types.TransactWriteItem{ConditionCheck: &types.ConditionCheck{TableName: &s.config.PolicyTable, Key: storeKey("ACCOUNT#"+policy.OwnerAccountID, "POLICY#"+policy.ID), ConditionExpression: aws.String("revision = :policy"), ExpressionAttributeValues: map[string]types.AttributeValue{":policy": &types.AttributeValueMemberS{Value: policy.Revision}}}})
 	_, err = s.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{TransactItems: writes})
@@ -184,11 +159,6 @@ func (s *Store) writeAttachment(ctx context.Context, binding StoredAttachment, e
 // DeleteAttachment deletes an attachment and its principal lookup record.
 // It returns ErrConflict if expected does not match the stored revision.
 func (s *Store) DeleteAttachment(ctx context.Context, scope AttachmentScope, id, expected string) error {
-	if scope == GlobalScope {
-		if err := s.requireWriter(); err != nil {
-			return err
-		}
-	}
 	binding, err := s.GetAttachment(ctx, scope, id)
 	if err != nil {
 		return err

@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -33,23 +32,22 @@ type Server struct {
 	redisCloser   io.Closer
 }
 
-// New creates a Server with separate resource and management authorization dependencies.
-// A nil management service leaves management routes unregistered.
-func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Authorizer, management *authz.Management, logger *slog.Logger) (*Server, error) {
-	if authorizer == nil {
-		return nil, fmt.Errorf("authorizer is required")
+// New creates a server using mandatory stored authorization.
+func New(cfg *config.Config, dbClient *seaplanedb.Client, authorization *authz.Service, logger *slog.Logger) (*Server, error) {
+	if authorization == nil {
+		return nil, fmt.Errorf("authorization service is required")
 	}
-	logger = logger.With("region", cfg.Regional.AWSRegion, "bundle_hash", authorizer.BundleHash())
+	logger = logger.With("region", cfg.Regional.AWSRegion)
 
 	// Create handlers
 	healthHandler := apphandlers.NewHealthHandler(logger)
 	infoHandler := apphandlers.NewInfoHandler(logger)
-	clusterHandler := apphandlers.NewClusterHandler(dbClient, cfg.Regional.OIDCIssuerBaseURL, cfg.Regional.DefaultClusterExpiration, authorizer, logger)
-	nodePoolHandler := apphandlers.NewNodePoolHandler(dbClient, authorizer, logger)
-	renderedHostedClusterHandler := apphandlers.NewRenderedHostedClusterHandler(dbClient, authorizer, logger)
-	renderedNodePoolHandler := apphandlers.NewRenderedNodePoolHandler(dbClient, authorizer, logger)
-	oidcConfigHandler := apphandlers.NewOidcConfigHandler(dbClient, cfg.Regional.OIDCIssuerBaseURL, authorizer, logger, cfg.Regional.AWSRegion)
-	dnsReservationHandler := apphandlers.NewDNSReservationHandler(dbClient, authorizer, logger)
+	clusterHandler := apphandlers.NewClusterHandler(dbClient, cfg.Regional.OIDCIssuerBaseURL, cfg.Regional.DefaultClusterExpiration, authorization, logger)
+	nodePoolHandler := apphandlers.NewNodePoolHandler(dbClient, authorization, logger)
+	renderedHostedClusterHandler := apphandlers.NewRenderedHostedClusterHandler(dbClient, authorization, logger)
+	renderedNodePoolHandler := apphandlers.NewRenderedNodePoolHandler(dbClient, authorization, logger)
+	oidcConfigHandler := apphandlers.NewOidcConfigHandler(dbClient, cfg.Regional.OIDCIssuerBaseURL, authorization, logger, cfg.Regional.AWSRegion)
+	dnsReservationHandler := apphandlers.NewDNSReservationHandler(dbClient, authorization, logger)
 	accountsHandler := apphandlers.NewAccountsHandler(dbClient, cfg.Regional.AccountID, logger)
 
 	// Create API router
@@ -110,28 +108,38 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorizer *authz.Auth
 		apiRouter.Use(rl.Middleware)
 	}
 
-	if management != nil {
-		managementRouter := apiRouter.PathPrefix("/api/v0/authz").Subrouter()
-		managementRouter.Use(middleware.RequireIdentity(logger, management.IsAccountRegistered))
-		h := apphandlers.NewManagementHandler(management, logger)
-		managementRouter.HandleFunc("/policies", h.CreatePolicy).Methods(http.MethodPost)
-		managementRouter.HandleFunc("/policies", h.ListPolicies).Methods(http.MethodGet)
-		managementRouter.HandleFunc("/policies/{id}", h.GetPolicy).Methods(http.MethodGet)
-		managementRouter.HandleFunc("/policies/{id}", h.UpdatePolicy).Methods(http.MethodPut)
-		managementRouter.HandleFunc("/policies/{id}", h.DeletePolicy).Methods(http.MethodDelete)
-		managementRouter.HandleFunc("/attachments", h.CreateAttachment).Methods(http.MethodPost)
-		managementRouter.HandleFunc("/attachments", h.ListAttachments).Methods(http.MethodGet)
-		managementRouter.HandleFunc("/attachments/{id}", h.DeleteAttachment).Methods(http.MethodDelete)
+	// Management and resource routes both require database enrollment; lookup errors deny.
+	isEnrolled := func(ctx context.Context, accountID string) bool {
+		if dbClient == nil {
+			return false
+		}
+		enrolled, err := dbClient.IsAccountEnrolled(ctx, accountID)
+		if err != nil {
+			logger.Error("account enrollment lookup failed", "error", err, "account_id", accountID)
+			return false
+		}
+		return enrolled
 	}
 
-	resourceRouter := apiRouter.NewRoute().Subrouter()
-	resourceRouter.Use(allowlistAccounts(authorizer, dbClient, logger))
-	resourceRouter.Use(middleware.RequireIdentity(logger, func(ctx context.Context, accountID string) bool {
-		return authorizer.IsAccountRegistered(ctx, accountID) || middleware.IsAllowlisted(ctx)
-	}))
+	managementRouter := apiRouter.PathPrefix("/api/v0/authz").Subrouter()
+	managementRouter.Use(middleware.RequireIdentity(logger, isEnrolled))
+	h := apphandlers.NewManagementHandler(authorization, logger)
+	managementRouter.HandleFunc("/policies", h.CreatePolicy).Methods(http.MethodPost)
+	managementRouter.HandleFunc("/policies", h.ListPolicies).Methods(http.MethodGet)
+	managementRouter.HandleFunc("/policies/{id}", h.GetPolicy).Methods(http.MethodGet)
+	managementRouter.HandleFunc("/policies/{id}", h.UpdatePolicy).Methods(http.MethodPut)
+	managementRouter.HandleFunc("/policies/{id}", h.DeletePolicy).Methods(http.MethodDelete)
+	managementRouter.HandleFunc("/attachments", h.CreateAttachment).Methods(http.MethodPost)
+	managementRouter.HandleFunc("/attachments", h.ListAttachments).Methods(http.MethodGet)
+	managementRouter.HandleFunc("/attachments/{id}", h.DeleteAttachment).Methods(http.MethodDelete)
 
-	resourceRouter.HandleFunc("/api/v0/accounts", accountsHandler.Enroll).Methods(http.MethodPost)
-	resourceRouter.HandleFunc("/api/v0/accounts/{id}", accountsHandler.Unenroll).Methods(http.MethodDelete)
+	accountsRouter := apiRouter.PathPrefix("/api/v0/accounts").Subrouter()
+	accountsRouter.Use(middleware.RequireIdentity(logger, func(context.Context, string) bool { return true }))
+	accountsRouter.HandleFunc("", accountsHandler.Enroll).Methods(http.MethodPost)
+	accountsRouter.HandleFunc("/{id}", accountsHandler.Unenroll).Methods(http.MethodDelete)
+
+	resourceRouter := apiRouter.NewRoute().Subrouter()
+	resourceRouter.Use(middleware.RequireIdentity(logger, isEnrolled))
 
 	// Cluster routes
 	clusterRouter := resourceRouter.PathPrefix("/api/v0/clusters").Subrouter()
@@ -309,26 +317,3 @@ func intOrDefault(n, def int) int {
 	}
 	return n
 }
-
-// allowlistAccounts marks requests from accounts outside the bundle that are on the
-// seaplane-db allowlist. The bundle stays authoritative: its accounts are never marked.
-// shortcut: one allowlist read per request for accounts outside the bundle; DynamoDB replaces it.
-func allowlistAccounts(authorizer *authz.Authorizer, db *seaplanedb.Client, logger *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			accountID := middleware.GetAccountID(r.Context())
-			if db != nil && allowlistAccountPattern.MatchString(accountID) && !authorizer.IsAccountRegistered(r.Context(), accountID) {
-				enrolled, err := db.IsAccountEnrolled(r.Context(), accountID)
-				if err != nil {
-					// Fail closed: a lookup error leaves the request unmarked.
-					logger.Error("account allowlist lookup failed", "error", err, "account_id", accountID)
-				} else if enrolled {
-					r = r.WithContext(middleware.WithAllowlisted(r.Context()))
-				}
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-var allowlistAccountPattern = regexp.MustCompile(`^\d{12}$`)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,7 +22,8 @@ func TestManagementLocalEndpoint(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			t.Error(err)
 		}
-		if input.TableName != "policies" || !strings.HasSuffix(r.Header.Get("X-Amz-Target"), ".PutItem") {
+		// An ungranted caller's management request only looks up its grants.
+		if input.TableName != "global-attachments" || !strings.HasSuffix(r.Header.Get("X-Amz-Target"), ".Query") {
 			t.Errorf("unexpected request %s %+v", r.Header.Get("X-Amz-Target"), input)
 		}
 		w.Header().Set("Content-Type", "application/x-amz-json-1.0")
@@ -33,30 +35,17 @@ func TestManagementLocalEndpoint(t *testing.T) {
 	t.Setenv("AWS_ACCESS_KEY_ID", "local")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "local")
 	t.Setenv("AWS_ENDPOINT_URL_DYNAMODB", endpoint.URL)
-	t.Setenv("AUTHZ_MANAGEMENT_CONFIG_FILE", startupFile(t, startupManagement))
+	setStartupTables(t)
 	cfg, err := awsconfig.LoadDefaultConfig(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	management, err := loadManagement(startupCommand(t), cfg)
+	management, err := loadAuthorization(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy, err := management.CreatePolicy(t.Context(), authz.ManagementCaller{AccountID: "123456789012", CallerARN: "arn:aws:sts::123456789012:assumed-role/admin/session", Request: authz.RequestContext{RequestTime: time.Now()}}, "read", `permit(principal, action in Seaplane::Action::"ReadOnly", resource);`)
-	if err != nil || policy.Revision == "" || calls != 1 {
-		t.Fatalf("policy=%+v calls=%d error=%v", policy, calls, err)
-	}
-}
-
-// TestManagementStartupFail rejects invalid supplied management config before a PostgreSQL connection is attempted.
-func TestManagementStartupFail(t *testing.T) {
-	t.Setenv("AWS_REGION", "us-east-1")
-	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
-	t.Setenv("AUTHZ_CONFIG_FILE", startupFile(t, startupBundle))
-	t.Setenv("AUTHZ_MANAGEMENT_CONFIG_FILE", startupFile(t, "formatVersion: 99"))
-	t.Setenv("POSTGRES_DSN", "invalid postgres connection")
-	err := runServe(startupCommand(t), nil)
-	if err == nil || !strings.Contains(err.Error(), "management config") {
-		t.Fatalf("want management validation before DB startup, got %v", err)
+	_, err = management.ListPolicies(t.Context(), authz.ManagementCaller{AccountID: "123456789012", CallerARN: "arn:aws:sts::123456789012:assumed-role/admin/session", Request: authz.RequestContext{RequestTime: time.Now()}})
+	if !errors.Is(err, authz.ErrManagementDenied) || calls == 0 {
+		t.Fatalf("calls=%d error=%v", calls, err)
 	}
 }

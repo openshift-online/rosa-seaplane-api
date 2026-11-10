@@ -2,7 +2,6 @@ package authz
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"slices"
 	"testing"
@@ -16,9 +15,18 @@ import (
 // empty region is global, and empty owner is the test account.
 type grant struct{ id, policy, content, principal, region, owner string }
 
-func grants(list ...grant) ([]map[string]any, []map[string]any) {
-	policies, attachments := []map[string]any{}, []map[string]any{}
-	seen := map[string]bool{}
+func grantRecords(list []grant) []ResolvedAttachment {
+	records := []ResolvedAttachment{}
+	policies := map[string]string{}
+	for _, g := range list {
+		policyID := g.policy
+		if policyID == "" {
+			policyID = g.id
+		}
+		if g.content != "" {
+			policies[policyID] = g.content
+		}
+	}
 	for _, g := range list {
 		policyID := g.policy
 		if policyID == "" {
@@ -28,23 +36,13 @@ func grants(list ...grant) ([]map[string]any, []map[string]any) {
 		if owner == "" {
 			owner = accountID
 		}
-		if !seen[policyID] {
-			seen[policyID] = true
-			policies = append(policies, map[string]any{"id": policyID, "ownerAccountID": owner, "content": g.content})
-		}
-		attachment := map[string]any{"id": g.id, "policyID": policyID, "principalARN": g.principal, "scope": "global"}
+		scope := GlobalScope
 		if g.region != "" {
-			attachment["scope"], attachment["region"] = "regional", g.region
+			scope = RegionalScope
 		}
-		attachments = append(attachments, attachment)
+		records = append(records, ResolvedAttachment{Policy: StoredPolicy{ID: policyID, Content: policies[policyID], OwnerAccountID: owner, Revision: "policy-revision"}, Attachment: StoredAttachment{ID: g.id, AttachmentSpec: AttachmentSpec{Policy: PolicyRef{ID: policyID, Kind: CustomPolicy}, PrincipalARN: g.principal, Scope: scope}, Region: g.region, Revision: "attachment-revision"}})
 	}
-	return policies, attachments
-}
-
-func grantBundle(customer []grant) map[string]any {
-	b := map[string]any{"formatVersion": 1, "registeredAccounts": []string{accountID}}
-	b["policies"], b["attachments"] = grants(customer...)
-	return b
+	return records
 }
 
 func TestDecisions(t *testing.T) {
@@ -124,10 +122,7 @@ unless { resource.hasTag("example.com/blocked") };`
 			if tc.resource.Kind == "" {
 				tc.resource = testCluster()
 			}
-			a, err := LoadConfig(configFile(t, encodeBundle(t, grantBundle(tc.customer))), tc.serviceRegion)
-			if err != nil {
-				t.Fatal(err)
-			}
+			a := resolvedFixture(t, tc.serviceRegion, grantRecords(tc.customer))
 			d := decide(t, a, Identity{AccountID: tc.account, CallerARN: tc.caller}, tc.action, tc.resource)
 			if d.Allowed != tc.allowed {
 				t.Fatalf("allowed = %v, want %v: %+v", d.Allowed, tc.allowed, d)
@@ -148,7 +143,7 @@ unless { resource.hasTag("example.com/blocked") };`
 }
 
 func TestPrepareRejects(t *testing.T) {
-	a := fixtureAuthorizer(t, bundleFixture())
+	a := resolvedFixture(t, region, readFixture())
 	identities := []Identity{{AccountID: "123", CallerARN: userARN}, {AccountID: "", CallerARN: userARN}, {AccountID: accountID, CallerARN: "arn:aws:iam::210987654321:user/alice"}}
 	for _, arn := range []string{
 		"", "arn:aws-us-gov:iam::123456789012:user/alice", "arn:aws:s3::123456789012:user/alice", "arn:aws:iam:us-east-1:123456789012:user/alice",
@@ -177,7 +172,7 @@ func TestPrepareRejects(t *testing.T) {
 }
 
 func TestCheckRejectsResource(t *testing.T) {
-	a := fixtureAuthorizer(t, bundleFixture())
+	a := resolvedFixture(t, region, readFixture())
 	p, err := a.Prepare(t.Context(), testIdentity(sessionARN), testRequestContext())
 	if err != nil {
 		t.Fatal(err)
@@ -213,77 +208,11 @@ func TestCheckRejectsResource(t *testing.T) {
 	_ = checkFailure(t, err, StageEvaluation)
 }
 
-// A failing forbid beside a valid permit must stop the operation, and every
-// diagnostic must map to a known attachment.
-func TestEvaluationFailures(t *testing.T) {
-	bundle := grantBundle([]grant{
-		{id: "role-read", policy: "read", content: readPermit, principal: roleARN},
-		{id: "forbid-a", policy: "forbid", content: `forbid(principal, action == Seaplane::Action::"DescribeCluster", resource) when { resource.account == "blocked" };`, principal: sessionARN},
-		{id: "forbid-b", policy: "forbid", principal: roleARN},
-	})
-	for _, name := range []string{"evaluator error", "allow plus failing forbid", "unknown reason", "unknown and known diagnostics"} {
-		t.Run(name, func(t *testing.T) {
-			a := fixtureAuthorizer(t, bundle)
-			var native cedar.Diagnostic
-			a.evaluate = evaluationScenario(t, name, &native)
-			p, err := a.Prepare(t.Context(), testIdentity(sessionARN), testRequestContext())
-			if err != nil {
-				t.Fatal(err)
-			}
-			before := p.provenance["attachment/forbid-b"]
-			d, err := p.Check(t.Context(), DescribeCluster, testCluster())
-			if d.Allowed || len(d.Provenance) != 0 {
-				t.Fatalf("diagnostics produced usable decision: %+v", d)
-			}
-			f := checkFailure(t, err, StageEvaluation)
-			if len(native.Errors) > 0 && (len(f.Provenance) != 1 || f.Provenance[0].AttachmentID != "forbid-a" || f.Provenance[0].PolicyID != "forbid" || len(f.Diagnostics) != 1 || f.Diagnostics[0].PolicyID != native.Errors[0].PolicyID) {
-				t.Fatalf("bad diagnostic mapping: %+v", f)
-			}
-			if name == "unknown and known diagnostics" && (len(f.Provenance) != 1 || f.Provenance[0].AttachmentID != "forbid-a" || len(f.Diagnostics) != 2) {
-				t.Fatalf("known provenance lost beside unknown diagnostic: %+v", f)
-			}
-			if !reflect.DeepEqual(before, p.provenance["attachment/forbid-b"]) {
-				t.Fatal("another attachment's provenance changed")
-			}
-		})
-	}
-}
-
-func evaluationScenario(t *testing.T, name string, native *cedar.Diagnostic) evaluator {
-	t.Helper()
-	return func(set *cedar.PolicySet, entities cedar.EntityMap, req cedar.Request) (cedar.Decision, cedar.Diagnostic, error) {
-		switch name {
-		case "evaluator error":
-			return cedar.Allow, cedar.Diagnostic{}, errors.New("engine failure")
-		case "unknown reason":
-			return cedar.Allow, cedar.Diagnostic{Reasons: []cedar.DiagnosticReason{{PolicyID: "not-in-set"}}}, nil
-		case "unknown and known diagnostics":
-			return cedar.Allow, cedar.Diagnostic{Errors: []cedar.DiagnosticError{{PolicyID: "-unknown", Message: "bad"}, {PolicyID: "attachment/forbid-a", Message: "known"}}}, nil
-		}
-		// Remove the account attribute so forbid-a fails at runtime while the permit still allows.
-		broken := entities[req.Resource]
-		broken.Attributes = cedar.NewRecord(cedar.RecordMap{"region": cedar.String(region)})
-		entities[req.Resource] = broken
-		// Point forbid-b at another session so exactly one attachment fails.
-		injected := cedar.NewPolicySet()
-		for id, policy := range set.All() {
-			injected.Add(id, policy)
-		}
-		injected.Add("attachment/forbid-b", parsePolicy(t, `forbid(principal == Seaplane::Principal::"arn:aws:sts::123456789012:assumed-role/readers/session-b", action == Seaplane::Action::"DescribeCluster", resource) when { resource.account == "blocked" };`))
-		decision, diagnostics := cedar.Authorize(injected, entities, req)
-		*native = diagnostics
-		if decision != cedar.Allow || len(diagnostics.Errors) != 1 {
-			t.Fatalf("native diagnostic fixture changed: %s %+v", decision, diagnostics)
-		}
-		return decision, diagnostics, nil
-	}
-}
-
 func TestPreparedRequest(t *testing.T) {
-	a := fixtureAuthorizer(t, bundleFixture())
+	a := resolvedFixture(t, region, readFixture())
 
 	t.Run("context is frozen in UTC", func(t *testing.T) {
-		frozen := fixtureAuthorizer(t, bundleFixture())
+		frozen := resolvedFixture(t, region, readFixture())
 		var observed []cedar.Record
 		frozen.evaluate = func(_ *cedar.PolicySet, _ cedar.EntityMap, req cedar.Request) (cedar.Decision, cedar.Diagnostic, error) {
 			observed = append(observed, req.Context)
@@ -320,86 +249,4 @@ func TestPreparedRequest(t *testing.T) {
 			})
 		}
 	})
-}
-
-func TestResourceEntities(t *testing.T) {
-	a, err := LoadConfig(configFile(t, encodeBundle(t, bundleFixture())), "us-west-2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, err := a.Prepare(t.Context(), testIdentity(sessionARN), testRequestContext())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct {
-		action   Action
-		resource Resource
-		uid      string
-	}{
-		{ListClusters, testCollection(), "123456789012/us-west-2/clusters"},
-		{DescribeCluster, Resource{Kind: Cluster, ID: "cluster", AccountID: accountID}, "123456789012/us-west-2/cluster"},
-		{DescribeNodePool, Resource{Kind: NodePool, ID: "workers", AccountID: accountID, ParentCluster: &ParentCluster{ID: "parent", AccountID: accountID}}, "123456789012/us-west-2/parent/workers"},
-		{DescribeOIDCConfig, Resource{Kind: OIDCConfig, ID: "oidc", AccountID: accountID}, "123456789012/us-west-2/oidc"},
-		{ListDNSReservations, Resource{Kind: Collection, CollectionKind: DNSReservation, AccountID: accountID}, "123456789012/us-west-2/dns_reservations"},
-		{DescribeDNSReservation, Resource{Kind: DNSReservation, ID: "zone", AccountID: accountID}, "123456789012/us-west-2/zone"},
-	} {
-		t.Run(string(tc.action), func(t *testing.T) {
-			entities, uid, err := p.resourceEntities(tc.action, tc.resource)
-			if err != nil || string(uid.ID) != tc.uid {
-				t.Fatalf("resource UID = %s, want %s: %v", uid, tc.uid, err)
-			}
-			if tc.resource.Kind == NodePool {
-				if _, exists := entities[entityUID("Cluster", "123456789012/us-west-2/parent")]; !exists {
-					t.Fatal("parent did not use the service region")
-				}
-			}
-		})
-	}
-}
-
-// Allowlisted callers get full access to their own account's resources, and nothing beyond it.
-func TestAllowlistedFullAccess(t *testing.T) {
-	a := fixtureAuthorizer(t, map[string]any{"formatVersion": 1, "registeredAccounts": []string{}, "policies": []any{}, "attachments": []any{}})
-	id := testIdentity(userARN)
-	if decide(t, a, id, DeleteCluster, testCluster()).Allowed {
-		t.Fatal("caller without grants was allowed")
-	}
-	id.IsAllowlisted = true
-	for _, check := range []struct {
-		action   Action
-		resource Resource
-	}{{DeleteCluster, testCluster()}, {ListClusters, testCollection()}, {LabelResource, testCluster()}} {
-		if d := decide(t, a, id, check.action, check.resource); !d.Allowed || len(d.Provenance) != 1 || d.Provenance[0].DiagnosticID != "allowlist/"+accountID {
-			t.Fatalf("%s: allowlisted caller not granted by the allowlist: %+v", check.action, d)
-		}
-	}
-	foreign := testCluster()
-	foreign.AccountID = "999999999999"
-	p, err := a.Prepare(t.Context(), id, testRequestContext())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := p.Check(t.Context(), DescribeCluster, foreign); err == nil {
-		t.Fatal("allowlist grant reached another account's resource")
-	}
-}
-
-// A label grant can be limited to the labels the request writes (typeid's relabel escalation).
-func TestRequestLabels(t *testing.T) {
-	a := fixtureAuthorizer(t, grantBundle([]grant{{id: "g", principal: roleARN, content: `permit(principal, action == Seaplane::Action::"LabelResource", resource)
-unless { context.requestLabels.hasTag("team") && context.requestLabels.getTag("team") != "blue" };`}}))
-	for _, tc := range []struct {
-		labels  map[string]string
-		allowed bool
-	}{{nil, true}, {map[string]string{"team": "blue"}, true}, {map[string]string{"team": "red", "other": "x"}, false}} {
-		req := testRequestContext()
-		req.RequestLabels = tc.labels
-		p, err := a.Prepare(t.Context(), testIdentity(sessionARN), req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if d, err := p.Check(t.Context(), LabelResource, testCluster()); err != nil || d.Allowed != tc.allowed {
-			t.Errorf("labels %v: allowed = %v (%v), want %v", tc.labels, d.Allowed, err, tc.allowed)
-		}
-	}
 }

@@ -13,7 +13,9 @@ servers:
 
 paths:
   /authz/policies:
-    description: Account-scoped management. Bootstrap administrators need no legacy account enrollment. Resource grants remain separate.
+    description: >-
+      Administrators manage policies and permissions for their AWS account.
+      Managing clusters and other resources requires enrollment and explicit permissions.
     post:
       operationId: createAuthzPolicy
       requestBody:
@@ -24,7 +26,7 @@ paths:
               $ref: "#/components/schemas/AuthzPolicyCreate"
       responses:
         "201":
-          description: Committed policy revision; replication to other regions is asynchronous
+          description: Committed policy revision
           content:
             application/json:
               schema:
@@ -65,7 +67,7 @@ paths:
           $ref: "#/components/responses/AuthzError"
     put:
       operationId: updateAuthzPolicy
-      description: Global writer only. Managed policies are immutable (403).
+      description: Managed policies are immutable (403).
       parameters:
         - $ref: "#/components/parameters/AuthzIfMatch"
       requestBody:
@@ -85,7 +87,7 @@ paths:
           $ref: "#/components/responses/AuthzError"
     delete:
       operationId: deleteAuthzPolicy
-      description: Global writer only. Managed policies are immutable (403).
+      description: Managed policies are immutable (403).
       parameters:
         - $ref: "#/components/parameters/AuthzIfMatch"
       responses:
@@ -96,7 +98,7 @@ paths:
   /authz/attachments:
     post:
       operationId: createAuthzAttachment
-      description: Global writes require the account writer; regional writes stay local. Region and owner are server-assigned.
+      description: Region and owner are server-assigned. Both attachment scopes use the local tables.
       requestBody:
         required: true
         content:
@@ -146,13 +148,6 @@ paths:
         "200":
           $ref: "#/components/responses/AuthzDeleted"
         default:
-          $ref: "#/components/responses/AuthzError"
-  /authz/check:
-    description: Removed. This delivery does not rebuild authorization checks.
-    post:
-      operationId: removedAuthzCheck
-      responses:
-        "404":
           $ref: "#/components/responses/AuthzError"
   /clusters/{id}/labels:
     parameters:
@@ -994,23 +989,14 @@ components:
       description: |
         Kubernetes Status error. 400 malformed JSON, unknown fields, trailing JSON,
         query or If-Match; 422 policy/input validation; 403 denied or managed policy;
-        404 missing; 409 stale revision or wrong writer; 503 backend unavailable;
-        500 authorization evaluation failure. Wrong writer includes
-        X-Authz-Writer-Region and details.causes field writerRegion. Retry the
-        authenticated request in that region; the writer reauthorizes locally.
-        Never fail over a global write to another region. Replicas may still use
-        old policy or attachment data after a successful commit or deletion.
-      headers:
-        X-Authz-Writer-Region:
-          description: Required region for global mutations on wrong-writer 409
-          schema:
-            type: string
+        404 missing; 409 stale revision; 503 backend unavailable;
+        500 authorization evaluation failure.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     AuthzDeleted:
-      description: Committed deletion; other regions may still use old data
+      description: Committed deletion
       content:
         application/json:
           schema:

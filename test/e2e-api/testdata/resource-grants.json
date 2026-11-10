@@ -1,6 +1,4 @@
 {
-  "formatVersion": 1,
-  "registeredAccounts": ["111111111111", "222222222222"],
   "policies": [
     {
       "id": "list",
