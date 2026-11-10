@@ -11,6 +11,9 @@
 	generate-openapi verify-openapi swagger-ui \
 	image-api image-operator image-push-api image-push-operator
 
+helm-lint: ## Lint the platform-api Helm chart
+	helm lint platform-api/charts
+
 # ── Configuration ────────────────────────────────────────────────────────
 
 IMAGE_REPO_API      ?= quay.io/openshift-online/rosa-seaplane-api
