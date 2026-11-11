@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/go-toolset:9.8-1794208260 AS builder
+FROM registry.access.redhat.com/hi/go:latest-fips-builder@sha256:e424db07a04673ec9c732981d3d97e96044cce39215f5c528d4f549e45eb1c2c AS builder
 USER root
 
 ARG TARGETOS=linux
@@ -24,7 +24,7 @@ RUN cd seaplane-api && \
     -o /app/rosa-seaplane-api \
     ./cmd
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1794186349
+FROM registry.access.redhat.com/hi/go:latest-fips@sha256:275df00eba7680ddee0a3701af59af981a4c9a6fad41a84e0bc371c778ed21e8
 
 ARG VERSION=0.0.1
 ARG RELEASE=1

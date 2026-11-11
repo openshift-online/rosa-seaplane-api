@@ -1,10 +1,22 @@
 # CI build-root image for rosa-seaplane-api.
-# Extends the standard Go builder with rootless podman support so that
-# integration tests can spin up containers (e.g. postgres) via nested podman.
-FROM registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.26-openshift-4.23
+# Uses the same digest-pinned Hummingbird FIPS Go builder as the production
+# images, extended with rootless podman support so that integration tests can
+# spin up containers (e.g. postgres) via nested podman.
+FROM registry.access.redhat.com/hi/go:latest-fips-builder@sha256:e424db07a04673ec9c732981d3d97e96044cce39215f5c528d4f549e45eb1c2c
+
+USER root
 
 RUN dnf install -y podman fuse-overlayfs --setopt=install_weak_deps=False && dnf clean all && \
     setcap cap_setuid+ep /usr/bin/newuidmap && \
     setcap cap_setgid+ep /usr/bin/newgidmap && \
     echo '1000:10000:65536' >> /etc/subuid && \
     echo '1000:10000:65536' >> /etc/subgid
+
+# ci-operator runs the test container under an arbitrary UID, so the Go caches
+# have to live in world-writable directories outside the cloned source tree.
+RUN mkdir -p /go /tmp/.cache/go-build /tmp/gomodcache && \
+    chmod 777 /go /tmp/.cache/go-build /tmp/gomodcache
+
+ENV GOPATH=/go
+ENV GOCACHE=/tmp/.cache/go-build
+ENV GOMODCACHE=/tmp/gomodcache

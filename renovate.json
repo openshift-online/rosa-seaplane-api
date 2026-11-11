@@ -15,7 +15,9 @@
   "dockerfile": {
     "managerFilePatterns": [
       "/^Dockerfile$/",
-      "/^ci\\/Containerfile$/"
+      "/^ci\\/Containerfile$/",
+      "/^seaplane-api\\/Containerfile$/",
+      "/^seaplane-operator\\/Containerfile$/"
     ]
   },
   "tekton": {
