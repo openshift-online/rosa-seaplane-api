@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"strconv"
@@ -41,6 +42,7 @@ import (
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	v1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-operator/internal/cincinnati"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-operator/internal/controller"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-operator/internal/dynamo"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-operator/internal/dynamo/statusstream"
@@ -57,6 +59,9 @@ func main() {
 	var probeAddr string
 	var awsRegion string
 	var baseDomain string
+	var cincinnatiURL string
+	var cincinnatiArch string
+	var channelRefreshInterval time.Duration
 	var maxConcurrentReconciles int
 	var watcherPollInterval time.Duration
 	var watcherRelistInterval time.Duration
@@ -66,6 +71,11 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&awsRegion, "aws-region", "", "AWS region for DynamoDB and EKS (required).")
 	flag.StringVar(&baseDomain, "base-domain", "", "DNS base domain for hosted clusters (required).")
+	flag.StringVar(&cincinnatiURL, "cincinnati-url", "https://api.openshift.com/api/upgrades_info/v1/graph",
+		"Cincinnati upgrade graph endpoint.")
+	flag.StringVar(&cincinnatiArch, "cincinnati-arch", "multi", "Cincinnati release architecture.")
+	flag.DurationVar(&channelRefreshInterval, "channel-refresh-interval", 10*time.Minute,
+		"How often to refresh Channel release snapshots.")
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 10,
 		"Maximum number of concurrent reconciles per controller.")
 	flag.DurationVar(&watcherPollInterval, "dynamo-poll-interval", 0,
@@ -165,6 +175,21 @@ func main() {
 	eventRouter := controller.NewEventRouter()
 	clusterStatusEvents := make(chan event.GenericEvent, 256)
 	nodePoolStatusEvents := make(chan event.GenericEvent, 256)
+
+	cincinnatiClient, err := cincinnati.NewClient(cincinnatiURL, cincinnatiArch, &http.Client{Timeout: 15 * time.Second})
+	if err != nil {
+		setupLog.Error(err, "Failed to configure Cincinnati client")
+		os.Exit(1)
+	}
+	if err := (&controller.ChannelReconciler{
+		Client:                  mgr.GetClient(),
+		Feed:                    cincinnatiClient,
+		RefreshInterval:         channelRefreshInterval,
+		MaxConcurrentReconciles: maxConcurrentReconciles,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "channel")
+		os.Exit(1)
+	}
 
 	if err := (&controller.ClusterReconciler{
 		Client:                  mgr.GetClient(),

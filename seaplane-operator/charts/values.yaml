@@ -8,6 +8,12 @@ image:
 awsRegion: ""
 baseDomain: ""
 
+# Cincinnati graph feed used to populate Channel status.releases.
+channel:
+  cincinnatiURL: https://api.openshift.com/api/upgrades_info/v1/graph
+  arch: multi
+  refreshInterval: 10m
+
 # Optional regional Alertmanager base URL for lifecycle silence reconciliation.
 # When unset, the silence reconciler is not started.
 alertmanager:

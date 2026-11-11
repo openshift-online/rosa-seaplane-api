@@ -1,5 +1,9 @@
 # Changes
 
+## Unreleased
+
+- Add region-local Channel resources and Cincinnati release snapshots, defaulting to the multi-architecture graph. Default Z selection and cluster targeting are not yet implemented.
+
 ## 0.1.28 Nov 03 2026
 
 - ROSAENG-67911 | refactor: keep namespace sharding, document why
