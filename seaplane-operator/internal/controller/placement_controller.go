@@ -44,11 +44,6 @@ type PlacementReconciler struct {
 	MaxConcurrentReconciles int
 }
 
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=seaplane.io,resources=placements,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=seaplane.io,resources=placements/status,verbs=get;update;patch
-
 func (r *PlacementReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 

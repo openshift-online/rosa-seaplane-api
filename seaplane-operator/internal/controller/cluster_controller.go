@@ -76,15 +76,6 @@ type ClusterReconciler struct {
 	MaxConcurrentReconciles int
 }
 
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters/finalizers,verbs=update
-// +kubebuilder:rbac:groups=seaplane.io,resources=nodepools,verbs=get;list;watch;delete
-// +kubebuilder:rbac:groups=seaplane.io,resources=placements,verbs=get;list;watch;delete
-// +kubebuilder:rbac:groups=seaplane.io,resources=oidcconfigs,verbs=get;list;watch;update
-// +kubebuilder:rbac:groups=seaplane.io,resources=dnsreservations,verbs=get;list;watch;create;delete
-// +kubebuilder:rbac:groups=seaplane.io,resources=indices,verbs=get;list;watch;create;delete
-
 // oidcSigningKeyExternal reports whether cluster's referenced OidcConfig is unmanaged
 func (r *ClusterReconciler) oidcSigningKeyExternal(ctx context.Context, cluster *seaplanev1alpha1.Cluster) (bool, error) {
 	if cluster.Spec.OidcConfigID == "" {

@@ -563,27 +563,10 @@ func TestClient_DNSReservationOperations(t *testing.T) {
 	}
 }
 
-func TestClient_ManifestAndManagementClusterOperations(t *testing.T) {
+func TestClient_ManagementClusterOperations(t *testing.T) {
 	ctx := context.Background()
 	fc := fake.NewClientBuilder().WithScheme(testScheme()).Build()
 	c := NewClientFrom(fc, slog.New(slog.NewTextHandler(os.Stdout, nil)))
-
-	manifest := &seaplanev1alpha1.Manifest{ObjectMeta: metav1.ObjectMeta{Name: "my-manifest"}}
-	if err := c.CreateManifest(ctx, "management", manifest); err != nil {
-		t.Fatalf("CreateManifest: %v", err)
-	}
-	if manifest.Namespace != "management" {
-		t.Fatalf("Manifest namespace = %q, want management", manifest.Namespace)
-	}
-	if _, err := c.GetManifest(ctx, "management", "my-manifest"); err != nil {
-		t.Fatalf("GetManifest: %v", err)
-	}
-	if err := c.DeleteManifest(ctx, "management", "my-manifest"); err != nil {
-		t.Fatalf("DeleteManifest: %v", err)
-	}
-	if _, err := c.GetManifest(ctx, "management", "my-manifest"); !IsNotFound(err) {
-		t.Fatalf("GetManifest after delete error = %v, want NotFound", err)
-	}
 
 	managementCluster := &seaplanev1alpha1.ManagementCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc-one", Namespace: "ignored"}}
 	if err := c.CreateManagementCluster(ctx, managementCluster); err != nil {

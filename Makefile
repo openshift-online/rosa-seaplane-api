@@ -415,7 +415,31 @@ generate: codegen-passthrough codegen-conversion generate-deepcopy manifests gen
 verify-pathbind-draft: generate-pathbind-draft
 	git diff --exit-code clientset/pathbind/pathbind-draft.yaml
 
-verify: verify-codegen verify-conversion verify-clientset verify-openapi verify-pathbind-draft verify-mod
+# verify-no-k8s-rbac fails if Kubernetes RBAC / kustomize deploy scaffold is
+# re-added. The operator runs on pgruntime (PostgreSQL) and never calls the
+# kube-apiserver, so it needs no RBAC. See the "No Kubernetes API, No RBAC"
+# section in CLAUDE.md and seaplane-operator/config/crd/README.md.
+.PHONY: verify-no-k8s-rbac
+verify-no-k8s-rbac:
+	@fail=0; \
+	for d in default manager rbac network-policy prometheus samples; do \
+		if [ -e seaplane-operator/config/$$d ]; then \
+			echo "ERROR: seaplane-operator/config/$$d was re-added; operator needs no k8s RBAC/kustomize scaffold (see CLAUDE.md)"; fail=1; \
+		fi; \
+	done; \
+	for f in clusterrole.yaml clusterrolebinding.yaml role.yaml rolebinding.yaml; do \
+		if [ -e seaplane-operator/charts/templates/$$f ]; then \
+			echo "ERROR: seaplane-operator/charts/templates/$$f was re-added; operator needs no k8s RBAC (see CLAUDE.md)"; fail=1; \
+		fi; \
+	done; \
+	if grep -rnq --include="*.go" "kubebuilder:rbac" seaplane-operator/ api/ 2>/dev/null; then \
+		echo "ERROR: +kubebuilder:rbac marker re-added; operator needs no k8s RBAC (see CLAUDE.md):"; \
+		grep -rn --include="*.go" "kubebuilder:rbac" seaplane-operator/ api/; fail=1; \
+	fi; \
+	if [ $$fail -ne 0 ]; then exit 1; fi; \
+	echo "verify-no-k8s-rbac: OK (no k8s RBAC / deploy scaffold present)"
+
+verify: verify-codegen verify-conversion verify-clientset verify-openapi verify-pathbind-draft verify-mod verify-no-k8s-rbac
 
 CONVERSION_OUTPUT_DIR   ?= seaplane-api/pkg/conversion/v1alpha1
 CONVERSION_OUTPUT_PKG   ?= github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/conversion

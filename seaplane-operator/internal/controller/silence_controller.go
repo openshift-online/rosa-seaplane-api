@@ -44,9 +44,6 @@ type SilenceReconciler struct {
 	MaxConcurrentReconciles int
 }
 
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters/status,verbs=get
-
 func (r *SilenceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	if r.SilenceClient == nil {
