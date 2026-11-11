@@ -16,15 +16,26 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 # Suite-level knobs: sane defaults, overridable via environment.
-export CLUSTER_NAME="${CLUSTER_NAME:-hf-e2e-$(date +%s)}"
+# CLUSTER_NAME incorporates CLUSTER_PREFIX and the suite name so concurrent
+# suites in a shared AWS account cannot stamp on each other's resources.
+export CLUSTER_NAME="${CLUSTER_NAME:-${CLUSTER_PREFIX:-}rosa-cli-$(date +%s)}"
 export TEST_PROFILE="${TEST_PROFILE:-rosa-hcp-basic}"
+# seaplane-sanity default mirrors ci/e2e-tests.sh nightly behavior. rosa cli
+# e2e is moving to test-profile-driven scoping (4 profiles planned, with
+# hyperfleet-sanity as a possible 5th); until then the label filter is the knob.
 export ROSA_LABEL_FILTER="${ROSA_LABEL_FILTER:-seaplane-sanity}"
 export OPERATOR_ROLES_PREFIX="${OPERATOR_ROLES_PREFIX:-${CLUSTER_NAME}}"
+
+# TODO(ROSAENG-75289): wire E2E_SUITE_TIMEOUT into ginkgo --timeout so a
+# suite timeout produces a clean junit report entry instead of a SIGTERM.
 
 # Skip cleanup specs only when explicitly asked (e.g. debugging a failure).
 if [[ -n "${E2E_SKIP_CLEANUP:-}" ]]; then
   echo "E2E_SKIP_CLEANUP is set — cleanup specs will be skipped"
-  export ROSA_LABEL_FILTER="${ROSA_LABEL_FILTER},!cleanup"
+  export ROSA_LABEL_FILTER="${ROSA_LABEL_FILTER:+${ROSA_LABEL_FILTER},}!cleanup"
 fi
+
+# Defensive guard: fail clearly if the script is moved/symlinked elsewhere.
+[[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
 
 exec make test-e2e-rosa-cli

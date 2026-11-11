@@ -10,4 +10,5 @@
 #   - must be isolated: no reliance on other suites, no ordering assumptions
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+[[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
 exec make test-e2e-platform-monitoring
