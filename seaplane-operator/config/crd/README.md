@@ -7,9 +7,10 @@ Placement, ManagementCluster, Index, …).
 ## What they are used for
 
 - **Tests only.** `envtest`-backed controller tests load them via
-  `CRDDirectoryPaths` (see `seaplane-operator/internal/controller/suite_test.go`
-  and `seaplane-db/test/parity`), so the test apiserver validates resources
-  against the real schema.
+  `CRDDirectoryPaths` (see `seaplane-operator/internal/controller/suite_test.go`),
+  so the test apiserver validates resources against the real schema. (The
+  `seaplane-db/test/parity` suite uses its own fixtures under
+  `seaplane-db/examples/crd`, not these files.)
 - They are **generated**, never hand-edited. `make manifests` regenerates
   `bases/` from the Go types in `api/v1alpha1` (controller-gen + a CEL strip
   pass). Edit the Go types, then run `make manifests`.

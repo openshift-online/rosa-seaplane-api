@@ -131,17 +131,6 @@ func (f *fakeDynamo) DeleteDesireSpec(_ context.Context, _, suffix, docID string
 	return nil
 }
 
-func (f *fakeDynamo) findApply(resource, name string) *dynamo.ApplyDesire {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, a := range f.applies {
-		if a.Spec.TargetItem.Resource == resource && a.Spec.TargetItem.Name == name {
-			return a
-		}
-	}
-	return nil
-}
-
 // countSpecCleanups counts ApplyDesire and ReadDesire spec cleanups in deletedSpecs.
 func (f *fakeDynamo) countSpecCleanups() (apply, read int) {
 	f.mu.Lock()

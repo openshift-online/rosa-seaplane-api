@@ -427,11 +427,10 @@ verify-no-k8s-rbac:
 			echo "ERROR: seaplane-operator/config/$$d was re-added; operator needs no k8s RBAC/kustomize scaffold (see CLAUDE.md)"; fail=1; \
 		fi; \
 	done; \
-	for f in clusterrole.yaml clusterrolebinding.yaml role.yaml rolebinding.yaml; do \
-		if [ -e seaplane-operator/charts/templates/$$f ]; then \
-			echo "ERROR: seaplane-operator/charts/templates/$$f was re-added; operator needs no k8s RBAC (see CLAUDE.md)"; fail=1; \
-		fi; \
-	done; \
+	if grep -rlE "^kind:[[:space:]]+(Cluster)?Role(Binding)?[[:space:]]*$$" seaplane-operator/charts/templates 2>/dev/null | grep -q .; then \
+		echo "ERROR: a Helm template defines an RBAC resource (Role/RoleBinding/ClusterRole/ClusterRoleBinding); operator needs no k8s RBAC (see CLAUDE.md):"; \
+		grep -rlE "^kind:[[:space:]]+(Cluster)?Role(Binding)?[[:space:]]*$$" seaplane-operator/charts/templates; fail=1; \
+	fi; \
 	if grep -rnq --include="*.go" "kubebuilder:rbac" seaplane-operator/ api/ 2>/dev/null; then \
 		echo "ERROR: +kubebuilder:rbac marker re-added; operator needs no k8s RBAC (see CLAUDE.md):"; \
 		grep -rn --include="*.go" "kubebuilder:rbac" seaplane-operator/ api/; fail=1; \
