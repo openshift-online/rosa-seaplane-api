@@ -20,4 +20,12 @@ cd "${REPO_ROOT}"
 export BASE_URL="${BASE_URL:-${E2E_BASE_URL:-}}"
 export RHOBS_API_URL="${RHOBS_API_URL:-${E2E_RHOBS_API_URL:-}}"
 
+# Fail fast on a missing monitoring URL: the suite skips (and Ginkgo
+# reports success with no junit) when it is empty, which would silently
+# turn a broken environment into a green run.
+if [[ -z "${RHOBS_API_URL}" ]]; then
+  echo "ERROR: neither RHOBS_API_URL nor E2E_RHOBS_API_URL is set — monitoring suite cannot run" >&2
+  exit 1
+fi
+
 exec make test-e2e-platform-monitoring

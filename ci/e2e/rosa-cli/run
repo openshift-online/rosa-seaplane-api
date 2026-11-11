@@ -21,7 +21,14 @@ cd "${REPO_ROOT}"
 [[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
 
 # The Makefile target reads BASE_URL; map the documented E2E_* input.
+# The rosa sanity suite reads SEAPLANE_URL — export it too, and fail fast
+# when no URL is available so the suite cannot silently skip.
 export BASE_URL="${BASE_URL:-${E2E_BASE_URL:-}}"
+export SEAPLANE_URL="${SEAPLANE_URL:-${BASE_URL}}"
+if [[ -z "${SEAPLANE_URL}" ]]; then
+  echo "ERROR: neither BASE_URL nor E2E_BASE_URL is set — rosa-cli suite cannot run" >&2
+  exit 1
+fi
 
 # Suite-level knobs: sane defaults, overridable via environment.
 # CLUSTER_NAME incorporates CLUSTER_PREFIX and the suite name so concurrent
@@ -30,8 +37,11 @@ export BASE_URL="${BASE_URL:-${E2E_BASE_URL:-}}"
 # the generated default stays short: prefix + "hf-" + 4 hex chars (<= 18
 # for prefixes up to 11 chars, e.g. "eph-a1b2c3-").
 if [[ -z "${CLUSTER_NAME:-}" ]]; then
-  CLUSTER_NAME="${CLUSTER_PREFIX:-}hf-$(printf '%04x' $((RANDOM % 65536)))"
-  export CLUSTER_NAME="${CLUSTER_NAME:0:18}"
+  # Truncate the prefix FIRST so the random suffix always survives: budget
+  # 18 chars total, "hf-xxxx" suffix is 7, so the prefix gets at most 11.
+  _prefix="${CLUSTER_PREFIX:-}"
+  [[ ${#_prefix} -gt 11 ]] && _prefix="${_prefix:0:11}"
+  export CLUSTER_NAME="${_prefix}hf-$(printf '%04x' $((RANDOM % 65536)))"
 fi
 export TEST_PROFILE="${TEST_PROFILE:-rosa-hcp-basic}"
 # seaplane-sanity default mirrors ci/e2e-tests.sh nightly behavior. rosa cli

@@ -91,7 +91,8 @@ $(PATHBIND_GEN): $(wildcard clientset/cmd/pathbind-gen/*.go clientset/cmd/pathbi
 	cd clientset && go build -o $(PATHBIND_GEN) ./cmd/pathbind-gen
 
 $(GINKGO): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR); go build -tags=tools -o $(abspath $(TOOLS_BIN_DIR))/ginkgo github.com/onsi/ginkgo/v2/ginkgo
+	cd $(TOOLS_DIR); go build -tags=tools -o $(abspath $(TOOLS_BIN_DIR))/ginkgo.tmp github.com/onsi/ginkgo/v2/ginkgo
+	mv $(abspath $(TOOLS_BIN_DIR))/ginkgo.tmp $(GINKGO)
 
 # ── Help ─────────────────────────────────────────────────────────────────
 
@@ -270,7 +271,7 @@ test-e2e-rosa-cli: $(GINKGO)
 	export WORKSPACE="$$ROSA_TMPDIR" && \
 	if [ -n "$(ROSA_SKIP)$(ROSA_LABEL_FILTER)" ]; then \
 		echo "Running with custom ginkgo filters..." && \
-		$(GINKGO) run -v --timeout 3h \
+		$(GINKGO) run -v --timeout 3h --fail-on-empty \
 			--junit-report=junit-rosa-cli.xml \
 			--output-dir=$(TEST_OUTPUT_DIR) \
 			$(if $(ROSA_SKIP),--skip="$(ROSA_SKIP)") \
