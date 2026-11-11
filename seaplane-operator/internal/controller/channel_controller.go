@@ -11,8 +11,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const (
@@ -107,7 +109,7 @@ func (r *ChannelReconciler) updateChannelStatus(ctx context.Context, channel *v1
 func (r *ChannelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
-		For(&v1alpha1.Channel{}).
+		For(&v1alpha1.Channel{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named("channel").
 		Complete(r)
 }

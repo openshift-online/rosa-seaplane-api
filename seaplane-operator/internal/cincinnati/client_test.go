@@ -148,3 +148,27 @@ func TestNewClientAndRequestContext(t *testing.T) {
 		t.Error("ListReleases accepted canceled context")
 	}
 }
+
+func TestNewClientDoesNotExposeURLSecrets(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		url    string
+		secret string
+	}{
+		{name: "password", url: "https://user:private-password@example.com/graph", secret: "private-password"},
+		{name: "token query", url: "https://example.com/graph?access_token=private-token", secret: "private-token"},
+		{name: "token fragment", url: "https://example.com/graph#access_token=private-token", secret: "private-token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := NewClient(tc.url, "multi", nil)
+			if err == nil {
+				t.Fatal("expected URL validation to fail")
+			}
+			if strings.Contains(err.Error(), tc.secret) {
+				t.Fatalf("URL validation error exposed a credential: %s", err)
+			}
+		})
+	}
+}

@@ -35,9 +35,9 @@ spec:
           args:
             - --aws-region={{ required "awsRegion is required" .Values.awsRegion }}
             - --base-domain={{ required "baseDomain is required" .Values.baseDomain }}
-            - --cincinnati-url={{ .Values.channel.cincinnatiURL | quote }}
-            - --cincinnati-arch={{ .Values.channel.arch | quote }}
-            - --channel-refresh-interval={{ .Values.channel.refreshInterval | quote }}
+            - {{ printf "--cincinnati-url=%s" .Values.channel.cincinnatiURL | quote }}
+            - {{ printf "--cincinnati-arch=%s" .Values.channel.arch | quote }}
+            - {{ printf "--channel-refresh-interval=%s" .Values.channel.refreshInterval | quote }}
             - --health-probe-bind-address=:8081
           env:
             - name: POSTGRES_DSN

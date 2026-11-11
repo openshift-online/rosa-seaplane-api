@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,7 +38,7 @@ type Client struct {
 func NewClient(baseURL, arch string, httpClient *http.Client) (*Client, error) {
 	endpoint, err := url.Parse(baseURL)
 	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "https" && endpoint.Scheme != "http") || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
-		return nil, fmt.Errorf("invalid Cincinnati URL %q", baseURL)
+		return nil, errors.New("invalid cincinnati URL")
 	}
 	if strings.TrimSpace(arch) == "" {
 		return nil, fmt.Errorf("cincinnati architecture must not be empty")
