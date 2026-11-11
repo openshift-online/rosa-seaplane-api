@@ -40,7 +40,7 @@ func NewClient(baseURL, arch string, httpClient *http.Client) (*Client, error) {
 		return nil, fmt.Errorf("invalid Cincinnati URL %q", baseURL)
 	}
 	if strings.TrimSpace(arch) == "" {
-		return nil, fmt.Errorf("Cincinnati architecture must not be empty")
+		return nil, fmt.Errorf("cincinnati architecture must not be empty")
 	}
 	if endpoint.Path == "" || endpoint.Path == "/" {
 		endpoint.Path = graphPath
@@ -144,20 +144,20 @@ func (c *Client) ListReleases(ctx context.Context, channel string) ([]v1alpha1.C
 	var feed graph
 	decodeErr := decoder.Decode(&feed)
 	if limited.N == 0 {
-		return nil, fmt.Errorf("Cincinnati graph exceeds %d bytes", maxGraphBytes)
+		return nil, fmt.Errorf("cincinnati graph exceeds %d bytes", maxGraphBytes)
 	}
 	if decodeErr != nil {
 		return nil, fmt.Errorf("decode Cincinnati graph: %w", decodeErr)
 	}
 	if feed.Nodes == nil {
-		return nil, fmt.Errorf("Cincinnati graph has no nodes")
+		return nil, fmt.Errorf("cincinnati graph has no nodes")
 	}
 	decodeErr = decoder.Decode(new(any))
 	if limited.N == 0 {
-		return nil, fmt.Errorf("Cincinnati graph exceeds %d bytes", maxGraphBytes)
+		return nil, fmt.Errorf("cincinnati graph exceeds %d bytes", maxGraphBytes)
 	}
 	if decodeErr != io.EOF {
-		return nil, fmt.Errorf("Cincinnati graph has trailing data: %v", decodeErr)
+		return nil, fmt.Errorf("cincinnati graph has trailing data: %v", decodeErr)
 	}
 
 	type sortedRelease struct {
@@ -168,10 +168,10 @@ func (c *Client) ListReleases(ctx context.Context, channel string) ([]v1alpha1.C
 	seen := make(map[string]string, len(feed.Nodes))
 	for _, node := range feed.Nodes {
 		if node.Version == "" || node.Metadata == nil {
-			return nil, fmt.Errorf("Cincinnati graph contains a node without version or metadata")
+			return nil, fmt.Errorf("cincinnati graph contains a node without version or metadata")
 		}
 		if node.Payload == "" {
-			return nil, fmt.Errorf("Cincinnati release %q has no payload image", node.Version)
+			return nil, fmt.Errorf("cincinnati release %q has no payload image", node.Version)
 		}
 		if !belongsToChannel(node.Metadata[channelMetadata], channel) {
 			continue
@@ -185,7 +185,7 @@ func (c *Client) ListReleases(ctx context.Context, channel string) ([]v1alpha1.C
 		}
 		if image, ok := seen[node.Version]; ok {
 			if image != node.Payload {
-				return nil, fmt.Errorf("Cincinnati release %q has conflicting payload images", node.Version)
+				return nil, fmt.Errorf("cincinnati release %q has conflicting payload images", node.Version)
 			}
 			continue
 		}
@@ -196,7 +196,7 @@ func (c *Client) ListReleases(ctx context.Context, channel string) ([]v1alpha1.C
 		})
 	}
 	if len(releases) == 0 {
-		return nil, fmt.Errorf("Cincinnati graph has no releases for channel %q and minor %d.%d", channel, major, minor)
+		return nil, fmt.Errorf("cincinnati graph has no releases for channel %q and minor %d.%d", channel, major, minor)
 	}
 	slices.SortFunc(releases, func(a, b sortedRelease) int {
 		if order := a.version.Compare(b.version); order != 0 {
