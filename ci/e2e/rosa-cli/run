@@ -1,24 +1,38 @@
 #!/usr/bin/env bash
 # E2E suite entry point: `rosa-cli`
 #
-# Standard contract for the rosa-hyperfleet parallel e2e runner:
-#   - cwd may be anywhere; we resolve the repo root ourselves
+# Standard contract for the rosa-seaplane parallel e2e runner:
+#   - cwd may be anywhere; the repository root is resolved via git
 #   - inputs come from the environment (e2e.env / E2E_SUITE_ENV), e.g.:
-#       E2E_BASE_URL, E2E_CUSTOMER_ACCOUNT_ID, AWS_PROFILE / CUSTOMER_AWS_PROFILE
-#       ROSA_REPO_URL / ROSA_REPO_BRANCH (pin registry supplies these when
-#       running under the new workflow; Makefile defaults apply otherwise)
+#       BASE_URL / E2E_BASE_URL, E2E_CUSTOMER_ACCOUNT_ID, AWS_PROFILE /
+#       CUSTOMER_AWS_PROFILE, ROSA_REPO_URL / ROSA_REPO_BRANCH (pin registry
+#       supplies these when running under the new workflow; Makefile
+#       defaults apply otherwise)
 #   - exit 0 = pass, non-zero = fail; junit/logs go to $ARTIFACT_DIR
 #     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
 #   - must be isolated: no reliance on other suites, no ordering assumptions
 #   - resources created here (cluster, operator roles) are named after
 #     CLUSTER_NAME and cleaned up by the suite's own cleanup specs
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+
+# Resolve the repository root via git (robust to any cwd/layout).
+REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+[[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
+
+# The Makefile target reads BASE_URL; map the documented E2E_* input.
+export BASE_URL="${BASE_URL:-${E2E_BASE_URL:-}}"
 
 # Suite-level knobs: sane defaults, overridable via environment.
 # CLUSTER_NAME incorporates CLUSTER_PREFIX and the suite name so concurrent
 # suites in a shared AWS account cannot stamp on each other's resources.
-export CLUSTER_NAME="${CLUSTER_NAME:-${CLUSTER_PREFIX:-}rosa-cli-$(date +%s)}"
+# The rosa sanity spec asserts cluster names are at most 18 characters, so
+# the generated default stays short: prefix + "hf-" + 4 hex chars (<= 18
+# for prefixes up to 11 chars, e.g. "eph-a1b2c3-").
+if [[ -z "${CLUSTER_NAME:-}" ]]; then
+  CLUSTER_NAME="${CLUSTER_PREFIX:-}hf-$(printf '%04x' $((RANDOM % 65536)))"
+  export CLUSTER_NAME="${CLUSTER_NAME:0:18}"
+fi
 export TEST_PROFILE="${TEST_PROFILE:-rosa-hcp-basic}"
 # seaplane-sanity default mirrors ci/e2e-tests.sh nightly behavior. rosa cli
 # e2e is moving to test-profile-driven scoping (4 profiles planned, with
@@ -26,16 +40,23 @@ export TEST_PROFILE="${TEST_PROFILE:-rosa-hcp-basic}"
 export ROSA_LABEL_FILTER="${ROSA_LABEL_FILTER:-seaplane-sanity}"
 export OPERATOR_ROLES_PREFIX="${OPERATOR_ROLES_PREFIX:-${CLUSTER_NAME}}"
 
+# JUnit reports must land outside the temporary rosa clone the Makefile
+# builds and deletes: resolve the default output dir to an absolute path
+# while leaving explicit ARTIFACT_DIR / TEST_OUTPUT_DIR untouched.
+if [[ -z "${TEST_OUTPUT_DIR:-}" && -z "${ARTIFACT_DIR:-}" ]]; then
+  export TEST_OUTPUT_DIR="$(mktemp -d)"
+  echo "TEST_OUTPUT_DIR defaulting to ${TEST_OUTPUT_DIR} (outside the temp clone)"
+fi
+
 # TODO(ROSAENG-75289): wire E2E_SUITE_TIMEOUT into ginkgo --timeout so a
 # suite timeout produces a clean junit report entry instead of a SIGTERM.
 
 # Skip cleanup specs only when explicitly asked (e.g. debugging a failure).
+# Ginkgo "," is OR: combine with && so specs must match the filter AND not
+# be labeled cleanup.
 if [[ -n "${E2E_SKIP_CLEANUP:-}" ]]; then
   echo "E2E_SKIP_CLEANUP is set — cleanup specs will be skipped"
-  export ROSA_LABEL_FILTER="${ROSA_LABEL_FILTER:+${ROSA_LABEL_FILTER},}!cleanup"
+  export ROSA_LABEL_FILTER="(${ROSA_LABEL_FILTER}) && !cleanup"
 fi
-
-# Defensive guard: fail clearly if the script is moved/symlinked elsewhere.
-[[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
 
 exec make test-e2e-rosa-cli

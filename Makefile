@@ -249,7 +249,7 @@ test-e2e-sdk: $(GINKGO)
 	$(GINKGO) -vv --timeout=3h --junit-report=junit-sdk.xml \
 		--output-dir=$(TEST_OUTPUT_DIR) ./test/e2e-sdk
 
-test-e2e-rosa-cli:
+test-e2e-rosa-cli: $(GINKGO)
 	@ROSA_TMPDIR=$$(mktemp -d) && \
 	trap "rm -rf $$ROSA_TMPDIR" EXIT && \
 	echo "Temporary directory: $$ROSA_TMPDIR" && \
