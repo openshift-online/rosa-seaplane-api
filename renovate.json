@@ -14,7 +14,7 @@
   },
   "dockerfile": {
     "managerFilePatterns": [
-      "/^Dockerfile$/",
+      "/^seaplane-api\\/Containerfile$/",
       "/^ci\\/Containerfile$/"
     ]
   },
