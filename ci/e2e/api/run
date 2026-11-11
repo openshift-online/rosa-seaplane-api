@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# E2E suite entry point: `api`
+#
+# Standard contract for the rosa-hyperfleet parallel e2e runner:
+#   - cwd may be anywhere; we resolve the repo root ourselves
+#   - inputs come from the environment (e2e.env / E2E_SUITE_ENV), e.g.:
+#       E2E_BASE_URL, E2E_ACCOUNT_ID, E2E_RHOBS_API_URL
+#       E2E_LABEL_FILTER (optional ginkgo label filter)
+#   - exit 0 = pass, non-zero = fail; junit/logs go to $ARTIFACT_DIR
+#     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
+#   - must be isolated: no reliance on other suites, no ordering assumptions
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+exec make test-e2e-api
