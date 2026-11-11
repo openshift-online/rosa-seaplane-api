@@ -45,6 +45,75 @@ func testNodePool() *seaplanev1alpha1.NodePool {
 	}
 }
 
+func TestInstanceTypeArchitecture(t *testing.T) {
+	for _, tc := range []struct {
+		instanceType string
+		want         string
+	}{
+		// x86_64
+		{"m5.xlarge", archAMD64},
+		{"m6a.xlarge", archAMD64}, // AMD EPYC, not ARM despite the "a"
+		{"m7i.2xlarge", archAMD64},
+		{"c5n.large", archAMD64},
+		{"t3a.xlarge", archAMD64},
+		{"g4dn.xlarge", archAMD64}, // GPU family, x86_64
+		{"g5.2xlarge", archAMD64},
+		{"g6.xlarge", archAMD64},
+		{"x2iedn.16xlarge", archAMD64},
+		// Graviton / ARM64
+		{"m6g.xlarge", archARM64},
+		{"m7gd.xlarge", archARM64},
+		{"m8g.large", archARM64},
+		{"c6g.xlarge", archARM64},
+		{"c7gn.xlarge", archARM64},
+		{"c8g.2xlarge", archARM64},
+		{"r8g.2xlarge", archARM64},
+		{"r6gd.xlarge", archARM64},
+		{"t4g.medium", archARM64},
+		{"a1.large", archARM64},
+		{"x2gd.2xlarge", archARM64},
+		{"x8g.2xlarge", archARM64},
+		{"im4gn.2xlarge", archARM64},
+		{"is4gen.medium", archARM64},
+		{"g5g.2xlarge", archARM64},   // GPU family on Graviton
+		{"i4g.xlarge", archARM64},    // Storage-optimized Graviton2
+		{"i8g.2xlarge", archARM64},   // Storage-optimized Graviton4
+		{"i8ge.16xlarge", archARM64}, // Storage-optimized Graviton4
+		{"hpc7g.4xlarge", archARM64}, // HPC on Graviton3E
+		// Degenerate input
+		{"", archAMD64},
+	} {
+		if got := instanceTypeArchitecture(tc.instanceType); got != tc.want {
+			t.Errorf("instanceTypeArchitecture(%q) = %q, want %q", tc.instanceType, got, tc.want)
+		}
+	}
+}
+
+func TestNodePoolResourceDerivesArchFromInstanceType(t *testing.T) {
+	cluster := testCluster()
+	for _, tc := range []struct {
+		instanceType string
+		want         string
+	}{
+		{"m6g.xlarge", archARM64},
+		{"x8g.2xlarge", archARM64},
+		{"m5.xlarge", archAMD64},
+		// The default instance type (t3a.xlarge) must also get an explicit arch.
+		{"", archAMD64},
+	} {
+		np := testNodePool()
+		np.Spec.NodePool.Platform.AWS.InstanceType = tc.instanceType
+		r, err := NodePoolResource(np, cluster)
+		if err != nil {
+			t.Fatalf("NodePoolResource(%q): %v", tc.instanceType, err)
+		}
+		rendered := r.Object.(*hypershiftv1beta1.NodePool)
+		if rendered.Spec.Arch != tc.want {
+			t.Errorf("instance type %q: rendered arch = %q, want %q", tc.instanceType, rendered.Spec.Arch, tc.want)
+		}
+	}
+}
+
 func TestNodePoolResourceGVR(t *testing.T) {
 	r, err := NodePoolResource(testNodePool(), testCluster())
 	if err != nil {

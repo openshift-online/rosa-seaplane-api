@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
@@ -14,8 +15,30 @@ import (
 
 const (
 	defaultRootVolumeSizeGiB                int64 = 300
+	archAMD64                                     = "amd64"
+	archARM64                                     = "arm64"
 	ec2InstanceMetadataHttpTokensAnnotation       = "hypershift.openshift.io/ec2-instance-metadata-http-tokens"
 )
+
+// gravitonFamilyRegex matches the EC2 instance families built on Graviton
+// (ARM) processors: the Graviton variants of the compute/memory/burstable
+// families (c6g..c8g, m6g..m8g, r6g..r8g and their d/n variants, t4g), the
+// a1 family, x2gd, x8g, the Graviton storage families (im4gn, is4gen, i4g,
+// i8g) and the Graviton GPU family (g5g). GPU families without the trailing "g"
+// (g4dn, g5, g6) are x86_64 and intentionally do not match.
+var gravitonFamilyRegex = regexp.MustCompile(`^(?:a1|t4g|[cmri][0-9]+g[a-z]*|x2gd|x8g|im4gn|is4gen|g5g|hpc7g)$`)
+
+// instanceTypeArchitecture maps an EC2 instance type to the CPU architecture
+// HyperShift must use when resolving the node image. It is a POC stand-in for
+// the V2 instance-type catalog (ROSAENG-65248 / ROSAENG-75773): a static
+// family map is sufficient for Graviton, whose families are deterministic.
+func instanceTypeArchitecture(instanceType string) string {
+	family, _, _ := strings.Cut(instanceType, ".")
+	if gravitonFamilyRegex.MatchString(family) {
+		return archARM64
+	}
+	return archAMD64
+}
 
 // NodePoolResource generates the HyperShift NodePool resource for the MC.
 func NodePoolResource(nodePool *seaplanev1alpha1.NodePool, cluster *seaplanev1alpha1.Cluster) (Resource, error) {
@@ -85,6 +108,14 @@ func NodePoolResource(nodePool *seaplanev1alpha1.NodePool, cluster *seaplanev1al
 		// The worker EC2 instances are created by the NodePool, not the
 		// HostedCluster. Inherit Cluster tags, then let NodePool-specific root tags
 		// override matching keys. Direct resourceTags passthrough is not a source.
+		// Derive the node CPU architecture from the instance type. HyperShift
+		// defaults spec.arch to amd64 and the field is immutable upstream, so
+		// leaving it unset breaks Graviton pools: HyperShift resolves an x86_64
+		// AMI and EC2 rejects the launch of an ARM instance type.
+		// POC for ROSAENG-75773; the long-term source of truth is the V2
+		// instance-type catalog (ROSAENG-65248).
+		npSpec.Arch = instanceTypeArchitecture(npSpec.Platform.AWS.InstanceType)
+
 		npSpec.Platform.AWS.ResourceTags = appendSystemTags("", mergeNodePoolTags(cluster.Spec.Tags, nodePool.Spec.Tags))
 	}
 
