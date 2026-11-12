@@ -82,12 +82,6 @@ type NodePoolReconciler struct {
 	MaxConcurrentReconciles int
 }
 
-// +kubebuilder:rbac:groups=seaplane.io,resources=nodepools,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=seaplane.io,resources=nodepools/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=seaplane.io,resources=nodepools/finalizers,verbs=update
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups=seaplane.io,resources=placements,verbs=get;list;watch
-
 func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 

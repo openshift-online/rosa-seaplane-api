@@ -42,7 +42,6 @@ See individual controller docs for detailed creation/deletion flows:
 - [Placement Controller](placement-controller.md) — auto-creates Placement for new Clusters
 - [Cluster Controller](cluster-controller.md) — generates MC resources, manages lifecycle
 - [NodePool Controller](nodepool-controller.md) — generates NodePool resources on MC
-- [Manifest Controller](manifest-controller.md) — deploys arbitrary resources to MC
 
 ## DynamoDB Desire Pattern
 
@@ -70,7 +69,7 @@ documentID = UUIDv5(NamespaceUUID, "{taskKey}/{group}/{version}/{resource}/{name
 ```
 
 - **NamespaceUUID**: `a3f1b2c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c` (shared with kube-applier-aws)
-- **taskKey**: `seaplane-operator` for Cluster/NodePool ApplyDesires, `seaplane-operator-read` for ReadDesires, `seaplane-manifest/{namespace}/{name}` for Manifest (scoped per CR to prevent collisions)
+- **taskKey**: `seaplane-operator` for Cluster/NodePool ApplyDesires, `seaplane-operator-read` for ReadDesires
 
 Same inputs always produce the same UUID, giving natural idempotency — re-reconciling a Cluster writes the same document IDs, updating existing rows rather than creating duplicates.
 

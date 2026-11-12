@@ -19,7 +19,6 @@ var (
 			&Cluster{}, &ClusterList{},
 			&NodePool{}, &NodePoolList{},
 			&ManagementCluster{}, &ManagementClusterList{},
-			&Manifest{}, &ManifestList{},
 			&Placement{}, &PlacementList{},
 		)
 		return nil

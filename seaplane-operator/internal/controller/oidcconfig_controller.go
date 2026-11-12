@@ -56,12 +56,6 @@ type OidcConfigReconciler struct {
 	MaxConcurrentReconciles int
 }
 
-// +kubebuilder:rbac:groups=seaplane.io,resources=oidcconfigs,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=seaplane.io,resources=oidcconfigs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=seaplane.io,resources=oidcconfigs/finalizers,verbs=update
-// +kubebuilder:rbac:groups=seaplane.io,resources=clusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups=seaplane.io,resources=indices,verbs=get;list;watch;create;delete
-
 func (r *OidcConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var oc seaplanev1alpha1.OidcConfig
 	if err := r.Get(ctx, req.NamespacedName, &oc); err != nil {

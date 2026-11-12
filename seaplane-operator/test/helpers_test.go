@@ -16,7 +16,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -64,14 +63,6 @@ func clearFinalizersAndDelete() {
 			nodepools.Items[i].SetFinalizers(nil)
 			_ = c.Update(ctx, &nodepools.Items[i])
 			_ = c.Delete(ctx, &nodepools.Items[i])
-		}
-	}
-	var manifests seaplanev1alpha1.ManifestList
-	if err := c.List(ctx, &manifests); err == nil {
-		for i := range manifests.Items {
-			manifests.Items[i].SetFinalizers(nil)
-			_ = c.Update(ctx, &manifests.Items[i])
-			_ = c.Delete(ctx, &manifests.Items[i])
 		}
 	}
 	var oidcConfigs seaplanev1alpha1.OidcConfigList
@@ -150,24 +141,6 @@ func waitForResourcesGone() (int, error) {
 		}
 	}
 	total += len(nl.Items)
-
-	var ml seaplanev1alpha1.ManifestList
-	if err := c.List(opCtx, &ml); err != nil {
-		return 0, err
-	}
-	for i := range ml.Items {
-		if len(ml.Items[i].Finalizers) > 0 {
-			ml.Items[i].SetFinalizers(nil)
-			if err := c.Update(opCtx, &ml.Items[i]); err != nil {
-				return 0, err
-			}
-		}
-		// Delete after clearing finalizers; treat NotFound as success (already deleted).
-		if err := c.Delete(opCtx, &ml.Items[i]); err != nil && !apierrors.IsNotFound(err) {
-			return 0, err
-		}
-	}
-	total += len(ml.Items)
 
 	for _, cleanup := range []func(context.Context, client.Client) (int, error){
 		cleanupTestPlacements,
@@ -477,53 +450,4 @@ func newTestNodePool(cluster *seaplanev1alpha1.Cluster) *seaplanev1alpha1.NodePo
 	nodePool.Labels = map[string]string{seaplanev1alpha1.ClusterUIDLabel: string(cluster.UID)}
 	nodePool.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(cluster, seaplanev1alpha1.GroupVersion.WithKind("Cluster"))}
 	return nodePool
-}
-
-func newTestManifest(name string) *seaplanev1alpha1.Manifest {
-	return &seaplanev1alpha1.Manifest{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "mc01",
-		},
-		Spec: seaplanev1alpha1.ManifestSpec{
-			ManagementCluster: "mc01",
-			Resources: []seaplanev1alpha1.ResourceTemplate{
-				{
-					Resource: "serviceaccounts",
-					Content: runtime.RawExtension{Raw: []byte(
-						`{"apiVersion":"v1","kind":"ServiceAccount",` +
-							`"metadata":{"name":"e2e-runner","namespace":"e2e-actions"}}`,
-					)},
-				},
-				{
-					Resource: "roles",
-					Content: runtime.RawExtension{Raw: []byte(
-						`{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role",` +
-							`"metadata":{"name":"e2e-runner","namespace":"e2e-actions"},` +
-							`"rules":[{"apiGroups":[""],"resources":["pods/log"],"verbs":["get"]}]}`,
-					)},
-				},
-				{
-					Resource: "rolebindings",
-					Content: runtime.RawExtension{Raw: []byte(
-						`{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding",` +
-							`"metadata":{"name":"e2e-runner","namespace":"e2e-actions"},` +
-							`"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"e2e-runner"},` +
-							`"subjects":[{"kind":"ServiceAccount","name":"e2e-runner","namespace":"e2e-actions"}]}`,
-					)},
-				},
-				{
-					Resource: "jobs",
-					Content: runtime.RawExtension{Raw: []byte(
-						`{"apiVersion":"batch/v1","kind":"Job",` +
-							`"metadata":{"name":"e2e-job-abc123","namespace":"e2e-actions"},` +
-							`"spec":{"template":{"spec":{"serviceAccountName":"e2e-runner",` +
-							`"containers":[{"name":"runner","image":"registry.example.com/e2e-runner:latest"}],` +
-							`"restartPolicy":"Never"}}}}`,
-					)},
-					Watch: true,
-				},
-			},
-		},
-	}
 }

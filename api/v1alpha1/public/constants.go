@@ -44,16 +44,6 @@ const (
 	EC2InstanceMetadataHttpTokensOptional EC2InstanceMetadataHttpTokens = "optional"
 )
 
-// ManifestPhase represents the lifecycle phase of a Manifest.
-// +kubebuilder:validation:Enum=Syncing;Applied;Deleting
-type ManifestPhase string
-
-const (
-	ManifestPhaseSyncing  ManifestPhase = "Syncing"
-	ManifestPhaseApplied  ManifestPhase = "Applied"
-	ManifestPhaseDeleting ManifestPhase = "Deleting"
-)
-
 // NodePoolPhase represents the lifecycle phase of a NodePool.
 // +kubebuilder:validation:Enum=WaitingForCluster;Provisioning;Ready;Deleting
 type NodePoolPhase string

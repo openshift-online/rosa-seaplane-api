@@ -165,7 +165,6 @@ func main() {
 	eventRouter := controller.NewEventRouter()
 	clusterStatusEvents := make(chan event.GenericEvent, 256)
 	nodePoolStatusEvents := make(chan event.GenericEvent, 256)
-	manifestStatusEvents := make(chan event.GenericEvent, 256)
 
 	if err := (&controller.ClusterReconciler{
 		Client:                  mgr.GetClient(),
@@ -206,17 +205,6 @@ func main() {
 		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "placement")
-		os.Exit(1)
-	}
-	if err := (&controller.ManifestReconciler{
-		Client:                  mgr.GetClient(),
-		Scheme:                  mgr.GetScheme(),
-		Dynamo:                  dynamoClient,
-		StatusEvents:            manifestStatusEvents,
-		EventRouter:             eventRouter,
-		MaxConcurrentReconciles: maxConcurrentReconciles,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "manifest")
 		os.Exit(1)
 	}
 	oidcClient := oidc.NewAWSClient(awsCfg)

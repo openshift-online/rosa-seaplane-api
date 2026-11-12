@@ -210,7 +210,6 @@ var _ = BeforeSuite(func() {
 	eventRouter = controller.NewEventRouter()
 	clusterStatusEvents := make(chan event.GenericEvent, 256)
 	nodePoolStatusEvents := make(chan event.GenericEvent, 256)
-	manifestStatusEvents := make(chan event.GenericEvent, 256)
 
 	Expect((&controller.PlacementReconciler{
 		Client: mgr.GetClient(),
@@ -241,14 +240,6 @@ var _ = BeforeSuite(func() {
 		Scheme:       mgr.GetScheme(),
 		Dynamo:       dynamoCli,
 		StatusEvents: nodePoolStatusEvents,
-		EventRouter:  eventRouter,
-	}).SetupWithManager(mgr)).To(Succeed())
-
-	Expect((&controller.ManifestReconciler{
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
-		Dynamo:       dynamoCli,
-		StatusEvents: manifestStatusEvents,
 		EventRouter:  eventRouter,
 	}).SetupWithManager(mgr)).To(Succeed())
 

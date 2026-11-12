@@ -464,38 +464,6 @@ func (c *Client) DeleteDNSReservationObject(ctx context.Context, reservation *se
 	return c.client.Delete(ctx, reservation)
 }
 
-// --- Manifest operations ---
-
-// CreateManifest creates a Manifest resource in the given namespace.
-func (c *Client) CreateManifest(ctx context.Context, namespace string, hfm *seaplanev1alpha1.Manifest) error {
-	hfm.Namespace = namespace
-	return c.client.Create(ctx, hfm)
-}
-
-// GetManifest retrieves a Manifest by namespace and name.
-func (c *Client) GetManifest(ctx context.Context, namespace, name string) (*seaplanev1alpha1.Manifest, error) {
-	var m seaplanev1alpha1.Manifest
-	err := c.client.Get(ctx, k8stypes.NamespacedName{
-		Namespace: namespace,
-		Name:      name,
-	}, &m)
-	if err != nil {
-		return nil, err
-	}
-	return &m, nil
-}
-
-// DeleteManifest deletes a Manifest by namespace and name.
-func (c *Client) DeleteManifest(ctx context.Context, namespace, name string) error {
-	m := &seaplanev1alpha1.Manifest{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-		},
-	}
-	return c.client.Delete(ctx, m)
-}
-
 // --- ManagementCluster operations ---
 
 // CreateManagementCluster creates a ManagementCluster resource with global scope.

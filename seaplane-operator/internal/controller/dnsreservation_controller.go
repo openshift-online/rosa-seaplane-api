@@ -57,11 +57,6 @@ type DNSReservationReconciler struct {
 	generatePrefix          func() (string, error)
 }
 
-// +kubebuilder:rbac:groups=seaplane.io,resources=dnsreservations,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=seaplane.io,resources=dnsreservations/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=seaplane.io,resources=dnsreservations/finalizers,verbs=update
-// +kubebuilder:rbac:groups=seaplane.io,resources=indices,verbs=get;list;watch;create;delete
-
 func (r *DNSReservationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var reservation seaplanev1alpha1.DNSReservation
 	if err := r.Get(ctx, req.NamespacedName, &reservation); err != nil {
