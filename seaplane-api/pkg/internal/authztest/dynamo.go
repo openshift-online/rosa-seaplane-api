@@ -61,8 +61,14 @@ func Dynamo(t *testing.T) *dynamodb.Client {
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
+		// Resolution cancels sibling queries after the first failure, so a client
+		// can abandon its request mid-body; only malformed JSON is a test error.
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return
+		}
 		var in dynamoRequest
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		if err := json.Unmarshal(body, &in); err != nil {
 			t.Error(err)
 			w.WriteHeader(400)
 			return
