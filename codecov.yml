@@ -23,6 +23,7 @@ ignore:
   - "**/fake_*.go"
   - "**/mock_*.go"
   - "**/*_mock.go"
+  - "**/internal/authztest/**"
   - "docs/**"
   - "hack/tools/**"
   - "test/**"
