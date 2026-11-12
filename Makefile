@@ -91,7 +91,8 @@ $(PATHBIND_GEN): $(wildcard clientset/cmd/pathbind-gen/*.go clientset/cmd/pathbi
 	cd clientset && go build -o $(PATHBIND_GEN) ./cmd/pathbind-gen
 
 $(GINKGO): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR); go build -tags=tools -o $(abspath $(TOOLS_BIN_DIR))/ginkgo github.com/onsi/ginkgo/v2/ginkgo
+	cd $(TOOLS_DIR); go build -tags=tools -o $(abspath $(TOOLS_BIN_DIR))/ginkgo.$$$$ github.com/onsi/ginkgo/v2/ginkgo && \
+		mv -f $(abspath $(TOOLS_BIN_DIR))/ginkgo.$$$$ $(GINKGO)
 
 # ── Help ─────────────────────────────────────────────────────────────────
 
@@ -249,12 +250,14 @@ test-e2e-sdk: $(GINKGO)
 	$(GINKGO) -vv --timeout=3h --junit-report=junit-sdk.xml \
 		--output-dir=$(TEST_OUTPUT_DIR) ./test/e2e-sdk
 
-test-e2e-rosa-cli:
+test-e2e-rosa-cli: $(GINKGO)
 	@ROSA_TMPDIR=$$(mktemp -d) && \
 	trap "rm -rf $$ROSA_TMPDIR" EXIT && \
 	echo "Temporary directory: $$ROSA_TMPDIR" && \
 	echo "Cloning rosa repo from $(ROSA_REPO_URL)@$(ROSA_REPO_BRANCH)..." && \
-	git clone --depth=1 --branch $(ROSA_REPO_BRANCH) $(ROSA_REPO_URL) $$ROSA_TMPDIR && \
+	git init -q $$ROSA_TMPDIR && \
+	git -C $$ROSA_TMPDIR fetch -q --depth 1 $(ROSA_REPO_URL) $(ROSA_REPO_BRANCH) && \
+	git -C $$ROSA_TMPDIR checkout -q FETCH_HEAD && \
 	echo "Building rosa CLI..." && \
 	cd $$ROSA_TMPDIR && $(MAKE) $(ROSA_BUILD_TARGET) && \
 	export PATH="$$PWD:$$PATH" && \
@@ -262,7 +265,7 @@ test-e2e-rosa-cli:
 	name=$${CLUSTER_NAME:-hf-e2e-$$(date +%s)} && \
 	export SEAPLANE_URL="$${SEAPLANE_URL}" && \
 	export CLUSTER_NAME="$$name" && \
-	export OPERATOR_ROLES_PREFIX="$${OPERATOR_ROLES_PREFIX:-$$name}" && \
+	export OPERATOR_ROLES_PREFIX="$${OPERATOR_ROLES_PREFIX}" && \
 	export AWS_DEFAULT_REGION="$${AWS_DEFAULT_REGION:-$${AWS_REGION}}" && \
 	export GOTOOLCHAIN=auto && \
 	export TEST_PROFILE="$${TEST_PROFILE}" && \
@@ -270,7 +273,7 @@ test-e2e-rosa-cli:
 	export WORKSPACE="$$ROSA_TMPDIR" && \
 	if [ -n "$(ROSA_SKIP)$(ROSA_LABEL_FILTER)" ]; then \
 		echo "Running with custom ginkgo filters..." && \
-		$(GINKGO) run -v --timeout 3h \
+		$(GINKGO) run -v --timeout 3h --fail-on-empty \
 			--junit-report=junit-rosa-cli.xml \
 			--output-dir=$(TEST_OUTPUT_DIR) \
 			$(if $(ROSA_SKIP),--skip="$(ROSA_SKIP)") \

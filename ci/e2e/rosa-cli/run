@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# E2E suite entry point: `rosa-cli`
+#
+# Standard contract for the rosa-seaplane parallel e2e runner:
+#   - cwd may be anywhere; the repository root is resolved via git
+#   - inputs come from the environment (e2e.env / E2E_SUITE_ENV), e.g.:
+#       BASE_URL, CUSTOMER_AWS_PROFILE, OCP_IMAGE,
+#       ROSA_REPO_URL / ROSA_REPO_BRANCH (pin registry supplies these
+#       when running under the new workflow; Makefile defaults apply
+#       otherwise)
+#   - exit 0 = pass, non-zero = fail; junit/logs go to $ARTIFACT_DIR
+#     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
+#   - must be isolated: no reliance on other suites, no ordering assumptions
+#   - resources created here (cluster, operator roles) are named after
+#     CLUSTER_NAME and cleaned up by the suite's own cleanup specs
+#
+# Requires: BASE_URL, CUSTOMER_AWS_PROFILE   Optional: ROSA_LABEL_FILTER, OCP_IMAGE
+set -euo pipefail
+
+# Resolve the repository root via git (robust to any cwd/layout).
+REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+[[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
+
+# Fail fast on missing required inputs.
+: "${BASE_URL:?BASE_URL is required}"
+export SEAPLANE_URL="${SEAPLANE_URL:-${BASE_URL}}"
+
+# The rosa-cli suite needs customer AWS credentials to create clusters.
+if [[ -z "${CUSTOMER_AWS_PROFILE:-}" ]]; then
+  echo "ERROR: CUSTOMER_AWS_PROFILE not set — rosa-cli needs customer credentials" >&2
+  exit 1
+fi
+export AWS_PROFILE="${CUSTOMER_AWS_PROFILE}"
+
+# Suite-level knobs: sane defaults, overridable via environment.
+# CLUSTER_NAME incorporates CLUSTER_PREFIX and the suite name so concurrent
+# suites in a shared AWS account cannot stamp on each other's resources.
+# The rosa sanity spec asserts cluster names are at most 18 characters, so
+# the generated default stays short: prefix + "hf-" + 4 hex chars (<= 18
+# for prefixes up to 11 chars, e.g. "eph-a1b2c3-").
+if [[ -z "${CLUSTER_NAME:-}" ]]; then
+  # Truncate the prefix FIRST so the random suffix always survives: budget
+  # 18 chars total, "hf-xxxx" suffix is 7, so the prefix gets at most 11.
+  _prefix="${CLUSTER_PREFIX:-}"
+  [[ ${#_prefix} -gt 11 ]] && _prefix="${_prefix:0:11}"
+  export CLUSTER_NAME="${_prefix}hf-$(printf '%04x' $((RANDOM % 65536)))"
+fi
+export TEST_PROFILE="${TEST_PROFILE:-rosa-hcp-basic}"
+# seaplane-sanity default mirrors ci/e2e-tests.sh nightly behavior. rosa cli
+# e2e is moving to test-profile-driven scoping (4 profiles planned, with
+# hyperfleet-sanity as a possible 5th); until then the label filter is the knob.
+export ROSA_LABEL_FILTER="${ROSA_LABEL_FILTER:-seaplane-sanity}"
+export OPERATOR_ROLES_PREFIX="${OPERATOR_ROLES_PREFIX:-${CLUSTER_NAME}}"
+
+# JUnit reports must land outside the temporary rosa clone the Makefile
+# builds and deletes: resolve the output directory to an ABSOLUTE path in
+# all cases — the default when unset, and caller-provided relative paths
+# too (an explicit relative ARTIFACT_DIR/TEST_OUTPUT_DIR would otherwise
+# resolve inside the deleted clone).
+if [[ -z "${TEST_OUTPUT_DIR:-}" && -z "${ARTIFACT_DIR:-}" ]]; then
+  export TEST_OUTPUT_DIR="$(mktemp -d)"
+  echo "TEST_OUTPUT_DIR defaulting to ${TEST_OUTPUT_DIR} (outside the temp clone)"
+else
+  for _dir_var in ARTIFACT_DIR TEST_OUTPUT_DIR; do
+    if [[ -n "${!_dir_var:-}" ]]; then
+      _dir="${!_dir_var}"
+      if [[ "${_dir}" != /* ]]; then
+        mkdir -p "${_dir}"
+        _dir="$(cd "${_dir}" && pwd)"
+        export "${_dir_var}=${_dir}"
+        echo "${_dir_var} resolved to absolute ${_dir} (outside the temp clone)"
+      fi
+    fi
+  done
+fi
+
+# TODO(ROSAENG-75289): wire E2E_SUITE_TIMEOUT into ginkgo --timeout so a
+# suite timeout produces a clean junit report entry instead of a SIGTERM.
+
+# Limit E2E_SKIP_CLEANUP to skipping cleanup-LABELED specs. Note the
+# limitation: ginkgo label filters only control spec selection — the
+# sanity test's DeferCleanup callbacks still run and delete resources
+# regardless. Making the rosa test honor E2E_SKIP_CLEANUP (e.g. checking
+# an env var in the cleanup callbacks) is an upstream rosa follow-up;
+# until then this knob is partial, not a full skip-cleanup guarantee.
+if [[ -n "${E2E_SKIP_CLEANUP:-}" ]]; then
+  echo "E2E_SKIP_CLEANUP is set — cleanup-labeled specs will be skipped;" 
+  echo "NOTE: DeferCleanup callbacks still run (upstream rosa limitation)"
+  export ROSA_LABEL_FILTER="(${ROSA_LABEL_FILTER}) && !cleanup"
+fi
+
+exec make test-e2e-rosa-cli

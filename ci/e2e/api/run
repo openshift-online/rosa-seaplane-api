@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# E2E suite entry point: `api`
+#
+# Standard contract for the rosa-seaplane parallel e2e runner:
+#   - cwd may be anywhere; the repository root is resolved via git
+#   - inputs come from the environment (e2e.env / E2E_SUITE_ENV), e.g.:
+#       BASE_URL, E2E_ACCOUNT_ID
+#       E2E_LABEL_FILTER (optional ginkgo label filter)
+#   - exit 0 = pass, non-zero = fail; junit/logs go to $ARTIFACT_DIR
+#     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
+#   - must be isolated: no reliance on other suites, no ordering assumptions
+#
+# Requires: BASE_URL   Optional: E2E_LABEL_FILTER (api ginkgo filter)
+set -euo pipefail
+
+# Resolve the repository root via git (robust to any cwd/layout).
+REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+[[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
+
+# Fail fast on missing required inputs.
+: "${BASE_URL:?BASE_URL is required}"
+exec make test-e2e-api
