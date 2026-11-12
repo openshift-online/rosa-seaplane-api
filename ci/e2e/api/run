@@ -10,7 +10,7 @@
 #     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
 #   - must be isolated: no reliance on other suites, no ordering assumptions
 #
-# Requires: BASE_URL   Optional: E2E_LABEL_FILTER
+# Requires: BASE_URL   Optional: E2E_LABEL_FILTER (api ginkgo filter)
 set -euo pipefail
 
 # Resolve the repository root via git (robust to any cwd/layout).

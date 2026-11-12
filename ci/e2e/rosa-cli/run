@@ -14,7 +14,7 @@
 #   - resources created here (cluster, operator roles) are named after
 #     CLUSTER_NAME and cleaned up by the suite's own cleanup specs
 #
-# Requires: BASE_URL, CUSTOMER_AWS_PROFILE   Optional: E2E_LABEL_FILTER, OCP_IMAGE
+# Requires: BASE_URL, CUSTOMER_AWS_PROFILE   Optional: ROSA_LABEL_FILTER, OCP_IMAGE
 set -euo pipefail
 
 # Resolve the repository root via git (robust to any cwd/layout).
