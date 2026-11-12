@@ -55,8 +55,9 @@ remain listable and deletable for repair.
 Management requires stored grants, so pre-production CI writes each account's
 first grants directly (rosa-seaplane `ci/e2e-tests.sh`). `TestCISeed` pins this
 format. Each grant is one policy and one global attachment for an IAM role,
-sharing a fixed ID so reruns fail the condition and change nothing. Every
-attribute is a string; each `Put` uses `attribute_not_exists(pk)`:
+sharing a fixed ID. The policy and the attachment's two rows are separate
+conditional writes, so a rerun skips existing records and recreates deleted
+ones. Every attribute is a string; each `Put` uses `attribute_not_exists(pk)`:
 
 | Table    | `pk`                                    | `sk`              | `revision` | `record`                                                                                      |
 | -------- | --------------------------------------- | ----------------- | ---------- | --------------------------------------------------------------------------------------------- |
