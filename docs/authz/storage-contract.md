@@ -58,11 +58,11 @@ format. Each grant is one policy and one global attachment for an IAM role,
 sharing a fixed ID so reruns fail the condition and change nothing. Every
 attribute is a string; each `Put` uses `attribute_not_exists(pk)`:
 
-| Table    | `pk`                                    | `sk`              | `revision` | `record`                                                                               |
-| -------- | --------------------------------------- | ----------------- | ---------- | -------------------------------------------------------------------------------------- |
-| policies | `ACCOUNT#<acct>`                        | `POLICY#<id>`     | `R1`       | `{"ID","OwnerAccountID":"<acct>","Content":"<cedar>","Revision":"R1","Kind":"custom"}` |
-| global   | `ACCOUNT#<acct>`                        | `ATTACHMENT#<id>` | `R2`       | `A`                                                                                    |
-| global   | `ACCOUNT#<acct>#ROLE#aws/<acct>/<role>` | `ATTACHMENT#<id>` | `R2`       | `A`                                                                                    |
+| Table    | `pk`                                    | `sk`              | `revision` | `record`                                                                                      |
+| -------- | --------------------------------------- | ----------------- | ---------- | --------------------------------------------------------------------------------------------- |
+| policies | `ACCOUNT#<acct>`                        | `POLICY#<id>`     | `R1`       | `{"ID":"<id>","OwnerAccountID":"<acct>","Content":"<cedar>","Revision":"R1","Kind":"custom"}` |
+| global   | `ACCOUNT#<acct>`                        | `ATTACHMENT#<id>` | `R2`       | `A`                                                                                           |
+| global   | `ACCOUNT#<acct>#ROLE#aws/<acct>/<role>` | `ATTACHMENT#<id>` | `R2`       | `A`                                                                                           |
 
 `R1` and `R2` are random UUIDs. `A` is
 `{"Policy":{"ID":"<id>","Kind":"custom"},"PrincipalARN":"arn:aws:iam::<acct>:role/<role>","Scope":"global","ID":"<id>","OwnerAccountID":"<acct>","Region":"","Revision":"R2"}`.

@@ -160,10 +160,10 @@ func New(cfg *config.Config, dbClient *seaplanedb.Client, authorization *authz.S
 	nodePoolRouter.HandleFunc("/{id}", nodePoolHandler.Delete).Methods(http.MethodDelete)
 
 	// Read-only rendered HyperShift resources.
-	renderedHostedClusterRouter := apiRouter.PathPrefix("/api/v0/renderedhostedclusters").Subrouter()
+	renderedHostedClusterRouter := resourceRouter.PathPrefix("/api/v0/renderedhostedclusters").Subrouter()
 	renderedHostedClusterRouter.HandleFunc("", renderedHostedClusterHandler.List).Methods(http.MethodGet)
 	renderedHostedClusterRouter.HandleFunc("/{id}", renderedHostedClusterHandler.Get).Methods(http.MethodGet)
-	renderedNodePoolRouter := apiRouter.PathPrefix("/api/v0/renderednodepools").Subrouter()
+	renderedNodePoolRouter := resourceRouter.PathPrefix("/api/v0/renderednodepools").Subrouter()
 	renderedNodePoolRouter.HandleFunc("", renderedNodePoolHandler.List).Methods(http.MethodGet)
 	renderedNodePoolRouter.HandleFunc("/{id}", renderedNodePoolHandler.Get).Methods(http.MethodGet)
 
