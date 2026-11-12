@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,9 +16,9 @@ import (
 
 // TestManagementLocalEndpoint proves startup uses the existing SDK configuration and its DynamoDB endpoint override.
 func TestManagementLocalEndpoint(t *testing.T) {
-	calls := 0
+	var calls atomic.Int32
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
+		calls.Add(1)
 		var input struct{ TableName string }
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			t.Error(err)
@@ -45,7 +46,7 @@ func TestManagementLocalEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = management.ListPolicies(t.Context(), authz.ManagementCaller{AccountID: "123456789012", CallerARN: "arn:aws:sts::123456789012:assumed-role/admin/session", Request: authz.RequestContext{RequestTime: time.Now()}})
-	if !errors.Is(err, authz.ErrManagementDenied) || calls == 0 {
-		t.Fatalf("calls=%d error=%v", calls, err)
+	if !errors.Is(err, authz.ErrManagementDenied) || calls.Load() == 0 {
+		t.Fatalf("calls=%d error=%v", calls.Load(), err)
 	}
 }

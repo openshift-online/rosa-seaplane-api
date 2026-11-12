@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"golang.org/x/sync/errgroup"
 )
 
 // ResolvedAttachment pairs an attachment with the policy it references.
@@ -35,35 +36,46 @@ func (s *Store) resolveScopes(ctx context.Context, id Identity, scopes []Attachm
 	if caller.kind == "assumed-role" {
 		keys = append(keys, roleKey(caller))
 	}
+	// Query every scope and principal key at once; the first failure cancels the rest.
+	// Results keep their scope/key order, so validation below stays deterministic.
+	parts := make([][]StoredAttachment, len(scopes)*len(keys))
+	group, groupCtx := errgroup.WithContext(ctx)
+	for i, scope := range scopes {
+		for j, pk := range keys {
+			group.Go(func() error {
+				part, err := s.readBindings(groupCtx, scope, pk)
+				parts[i*len(keys)+j] = part
+				return err
+			})
+		}
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
 	bindings := []StoredAttachment{}
 	aliases := map[string]string{}
 	bindingIDs := map[string]bool{}
-	for _, scope := range scopes {
-		for _, pk := range keys {
-			part, err := s.readBindings(ctx, scope, pk)
+	for _, part := range parts {
+		for _, binding := range part {
+			principal, err := parsePrincipal(binding.PrincipalARN)
 			if err != nil {
 				return nil, err
 			}
-			for _, binding := range part {
-				principal, err := parsePrincipal(binding.PrincipalARN)
-				if err != nil {
+			if !matchesPrincipal(principal, caller) {
+				return nil, fmt.Errorf("principal lookup mismatch")
+			}
+			if principal.kind == "role" {
+				if err := addRoleAlias(aliases, principal.roleAlias(), principal.original); err != nil {
 					return nil, err
 				}
-				if !matchesPrincipal(principal, caller) {
-					return nil, fmt.Errorf("principal lookup mismatch")
-				}
-				if principal.kind == "role" {
-					if err := addRoleAlias(aliases, principal.roleAlias(), principal.original); err != nil {
-						return nil, err
-					}
-				}
-				diagnosticID := bindingDiagnosticID(binding)
-				if bindingIDs[diagnosticID] {
-					return nil, fmt.Errorf("duplicate attachment identity")
-				}
-				bindingIDs[diagnosticID] = true
-				bindings = append(bindings, binding)
 			}
+			diagnosticID := bindingDiagnosticID(binding)
+			if bindingIDs[diagnosticID] {
+				return nil, fmt.Errorf("duplicate attachment identity")
+			}
+			bindingIDs[diagnosticID] = true
+			bindings = append(bindings, binding)
 		}
 	}
 	policies, err := s.loadPolicies(ctx, bindings)
