@@ -255,7 +255,9 @@ test-e2e-rosa-cli: $(GINKGO)
 	trap "rm -rf $$ROSA_TMPDIR" EXIT && \
 	echo "Temporary directory: $$ROSA_TMPDIR" && \
 	echo "Cloning rosa repo from $(ROSA_REPO_URL)@$(ROSA_REPO_BRANCH)..." && \
-	git clone --depth=1 --branch $(ROSA_REPO_BRANCH) $(ROSA_REPO_URL) $$ROSA_TMPDIR && \
+	git init -q $$ROSA_TMPDIR && \
+	git -C $$ROSA_TMPDIR fetch -q --depth 1 $(ROSA_REPO_URL) $(ROSA_REPO_BRANCH) && \
+	git -C $$ROSA_TMPDIR checkout -q FETCH_HEAD && \
 	echo "Building rosa CLI..." && \
 	cd $$ROSA_TMPDIR && $(MAKE) $(ROSA_BUILD_TARGET) && \
 	export PATH="$$PWD:$$PATH" && \
