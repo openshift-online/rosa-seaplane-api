@@ -54,21 +54,39 @@ export ROSA_LABEL_FILTER="${ROSA_LABEL_FILTER:-seaplane-sanity}"
 export OPERATOR_ROLES_PREFIX="${OPERATOR_ROLES_PREFIX:-${CLUSTER_NAME}}"
 
 # JUnit reports must land outside the temporary rosa clone the Makefile
-# builds and deletes: resolve the default output dir to an absolute path
-# while leaving explicit ARTIFACT_DIR / TEST_OUTPUT_DIR untouched.
+# builds and deletes: resolve the output directory to an ABSOLUTE path in
+# all cases — the default when unset, and caller-provided relative paths
+# too (an explicit relative ARTIFACT_DIR/TEST_OUTPUT_DIR would otherwise
+# resolve inside the deleted clone).
 if [[ -z "${TEST_OUTPUT_DIR:-}" && -z "${ARTIFACT_DIR:-}" ]]; then
   export TEST_OUTPUT_DIR="$(mktemp -d)"
   echo "TEST_OUTPUT_DIR defaulting to ${TEST_OUTPUT_DIR} (outside the temp clone)"
+else
+  for _dir_var in ARTIFACT_DIR TEST_OUTPUT_DIR; do
+    if [[ -n "${!_dir_var:-}" ]]; then
+      _dir="${!_dir_var}"
+      if [[ "${_dir}" != /* ]]; then
+        mkdir -p "${_dir}"
+        _dir="$(cd "${_dir}" && pwd)"
+        export "${_dir_var}=${_dir}"
+        echo "${_dir_var} resolved to absolute ${_dir} (outside the temp clone)"
+      fi
+    fi
+  done
 fi
 
 # TODO(ROSAENG-75289): wire E2E_SUITE_TIMEOUT into ginkgo --timeout so a
 # suite timeout produces a clean junit report entry instead of a SIGTERM.
 
-# Skip cleanup specs only when explicitly asked (e.g. debugging a failure).
-# Ginkgo "," is OR: combine with && so specs must match the filter AND not
-# be labeled cleanup.
+# Limit E2E_SKIP_CLEANUP to skipping cleanup-LABELED specs. Note the
+# limitation: ginkgo label filters only control spec selection — the
+# sanity test's DeferCleanup callbacks still run and delete resources
+# regardless. Making the rosa test honor E2E_SKIP_CLEANUP (e.g. checking
+# an env var in the cleanup callbacks) is an upstream rosa follow-up;
+# until then this knob is partial, not a full skip-cleanup guarantee.
 if [[ -n "${E2E_SKIP_CLEANUP:-}" ]]; then
-  echo "E2E_SKIP_CLEANUP is set — cleanup specs will be skipped"
+  echo "E2E_SKIP_CLEANUP is set — cleanup-labeled specs will be skipped;" 
+  echo "NOTE: DeferCleanup callbacks still run (upstream rosa limitation)"
   export ROSA_LABEL_FILTER="(${ROSA_LABEL_FILTER}) && !cleanup"
 fi
 
