@@ -8,6 +8,15 @@ image:
 awsRegion: ""
 baseDomain: ""
 
+# Cincinnati graph and GitOps-managed channel declarations for this region.
+channel:
+  cincinnatiURL: https://api.openshift.com/api/upgrades_info/v1/graph
+  arch: multi
+  refreshInterval: 10m
+  # Each entry has name and spec (zOffset, dayOffset, optional minVersion/featureGates).
+  # Empty means no Channels are published; configure the region's supported channels here.
+  channels: []
+
 # Optional regional Alertmanager base URL for lifecycle silence reconciliation.
 # When unset, the silence reconciler is not started.
 alertmanager:

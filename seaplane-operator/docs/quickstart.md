@@ -58,10 +58,11 @@ The operator uses GSI two-speed polling on the status tables to detect updates f
 ## 4. Install the Helm Chart
 
 ```bash
-helm install seaplane-operator charts/seaplane-operator \
+helm install seaplane-operator seaplane-operator/charts \
   --namespace seaplane-operator --create-namespace \
   --set awsRegion=us-east-1 \
-  --set baseDomain=example.com
+  --set baseDomain=example.com \
+  --values channels-us-east-1.yaml
 ```
 
 ### Required Values
@@ -71,14 +72,39 @@ helm install seaplane-operator charts/seaplane-operator \
 | `awsRegion`  | AWS region for DynamoDB      |
 | `baseDomain` | DNS base domain for clusters |
 
+The chart creates a `*-channels` ConfigMap and projects its `channels.yaml` key into
+the manager Pod. Supply the region's supported channels through Helm values:
+
+```yaml
+# channels-us-east-1.yaml
+channel:
+  channels:
+    - name: stable-4.20
+      spec:
+        zOffset: 1
+        dayOffset: 2
+        featureGates: []
+```
+
+Each entry names one Cincinnati channel and requires non-negative `zOffset` and
+`dayOffset`. Optional `minVersion` and `featureGates` are copied to the Channel
+spec. The controller creates or updates these PostgreSQL-backed Channels in the
+`channels` namespace. Channels created or adopted from this ConfigMap are deleted
+when removed from the list; pre-existing unconfigured Channels are left untouched.
+An empty list (the chart default) publishes no new Channels. Invalid ConfigMap
+updates leave the previous rows intact and are retried. The projected file is
+reread every `channel.refreshInterval` (10 minutes by default). Cincinnati populates
+`status.releases`; default-Z selection is not implemented yet. The operator does
+not need Kubernetes RBAC to read this mounted ConfigMap.
+
 ### Optional Values
 
 | Value                        | Default                                        | Description                        |
 | ---------------------------- | ---------------------------------------------- | ---------------------------------- |
 | `image.repository`           | `quay.io/cbusse_openshift/seaplane-operator` | Container image                    |
-| `image.tag`                  | `latest`                                       | Image tag                          |
+| `image.tag`                  | chart `appVersion`                            | Image tag                          |
 | `serviceAccount.annotations` | `{}`                                           | SA annotations (set IAM role ARN)  |
-| `replicaCount`               | `1`                                            | Number of replicas (= shard count) |
+| `replicaCount`               | `2`                                           | Number of replicas (= shard count) |
 
 ## 5. Create a ManagementCluster
 
