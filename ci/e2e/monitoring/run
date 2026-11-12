@@ -4,10 +4,12 @@
 # Standard contract for the rosa-seaplane parallel e2e runner:
 #   - cwd may be anywhere; the repository root is resolved via git
 #   - inputs come from the environment (e2e.env / E2E_SUITE_ENV), e.g.:
-#       BASE_URL / E2E_BASE_URL, E2E_ACCOUNT_ID, RHOBS_API_URL / E2E_RHOBS_API_URL
+#       BASE_URL, RHOBS_API_URL
 #   - exit 0 = pass, non-zero = fail; junit/logs go to $ARTIFACT_DIR
 #     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
 #   - must be isolated: no reliance on other suites, no ordering assumptions
+#
+# Requires: BASE_URL, RHOBS_API_URL
 set -euo pipefail
 
 # Resolve the repository root via git (robust to any cwd/layout).
@@ -15,17 +17,8 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 cd "${REPO_ROOT}"
 [[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
 
-# The Makefile target reads BASE_URL / RHOBS_API_URL; map the documented
-# E2E_* inputs onto them when the caller only set the E2E_* forms.
-export BASE_URL="${BASE_URL:-${E2E_BASE_URL:-}}"
-export RHOBS_API_URL="${RHOBS_API_URL:-${E2E_RHOBS_API_URL:-}}"
-
-# Fail fast on a missing monitoring URL: the suite skips (and Ginkgo
-# reports success with no junit) when it is empty, which would silently
-# turn a broken environment into a green run.
-if [[ -z "${RHOBS_API_URL}" ]]; then
-  echo "ERROR: neither RHOBS_API_URL nor E2E_RHOBS_API_URL is set — monitoring suite cannot run" >&2
-  exit 1
-fi
+# Fail fast on missing required inputs.
+: "${BASE_URL:?BASE_URL is required}"
+: "${RHOBS_API_URL:?RHOBS_API_URL is required}"
 
 exec make test-e2e-platform-monitoring

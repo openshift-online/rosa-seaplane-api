@@ -91,8 +91,8 @@ $(PATHBIND_GEN): $(wildcard clientset/cmd/pathbind-gen/*.go clientset/cmd/pathbi
 	cd clientset && go build -o $(PATHBIND_GEN) ./cmd/pathbind-gen
 
 $(GINKGO): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR); go build -tags=tools -o $(abspath $(TOOLS_BIN_DIR))/ginkgo.tmp github.com/onsi/ginkgo/v2/ginkgo
-	mv $(abspath $(TOOLS_BIN_DIR))/ginkgo.tmp $(GINKGO)
+	cd $(TOOLS_DIR); go build -tags=tools -o $(abspath $(TOOLS_BIN_DIR))/ginkgo.$$$$ github.com/onsi/ginkgo/v2/ginkgo && \
+		mv -f $(abspath $(TOOLS_BIN_DIR))/ginkgo.$$$$ $(GINKGO)
 
 # ── Help ─────────────────────────────────────────────────────────────────
 
@@ -263,7 +263,7 @@ test-e2e-rosa-cli: $(GINKGO)
 	name=$${CLUSTER_NAME:-hf-e2e-$$(date +%s)} && \
 	export SEAPLANE_URL="$${SEAPLANE_URL}" && \
 	export CLUSTER_NAME="$$name" && \
-	export OPERATOR_ROLES_PREFIX="$${OPERATOR_ROLES_PREFIX:-$$name}" && \
+	export OPERATOR_ROLES_PREFIX="$${OPERATOR_ROLES_PREFIX}" && \
 	export AWS_DEFAULT_REGION="$${AWS_DEFAULT_REGION:-$${AWS_REGION}}" && \
 	export GOTOOLCHAIN=auto && \
 	export TEST_PROFILE="$${TEST_PROFILE}" && \

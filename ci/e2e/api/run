@@ -4,11 +4,13 @@
 # Standard contract for the rosa-seaplane parallel e2e runner:
 #   - cwd may be anywhere; the repository root is resolved via git
 #   - inputs come from the environment (e2e.env / E2E_SUITE_ENV), e.g.:
-#       BASE_URL / E2E_BASE_URL, E2E_ACCOUNT_ID, RHOBS_API_URL / E2E_RHOBS_API_URL
+#       BASE_URL, E2E_ACCOUNT_ID
 #       E2E_LABEL_FILTER (optional ginkgo label filter)
 #   - exit 0 = pass, non-zero = fail; junit/logs go to $ARTIFACT_DIR
 #     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
 #   - must be isolated: no reliance on other suites, no ordering assumptions
+#
+# Requires: BASE_URL   Optional: E2E_LABEL_FILTER
 set -euo pipefail
 
 # Resolve the repository root via git (robust to any cwd/layout).
@@ -16,11 +18,6 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 cd "${REPO_ROOT}"
 [[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
 
-# The Makefile targets read BASE_URL / RHOBS_API_URL; map the documented
-# E2E_* inputs onto them when the caller only set the E2E_* forms.
-export BASE_URL="${BASE_URL:-${E2E_BASE_URL:-}}"
-export RHOBS_API_URL="${RHOBS_API_URL:-${E2E_RHOBS_API_URL:-}}"
-
-# Note: E2E_LABEL_FILTER propagates via Make's automatic env-var import;
-# there is no `?=` default for it in the Makefile today.
+# Fail fast on missing required inputs.
+: "${BASE_URL:?BASE_URL is required}"
 exec make test-e2e-api

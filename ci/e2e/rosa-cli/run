@@ -4,15 +4,17 @@
 # Standard contract for the rosa-seaplane parallel e2e runner:
 #   - cwd may be anywhere; the repository root is resolved via git
 #   - inputs come from the environment (e2e.env / E2E_SUITE_ENV), e.g.:
-#       BASE_URL / E2E_BASE_URL, E2E_CUSTOMER_ACCOUNT_ID, AWS_PROFILE /
-#       CUSTOMER_AWS_PROFILE, ROSA_REPO_URL / ROSA_REPO_BRANCH (pin registry
-#       supplies these when running under the new workflow; Makefile
-#       defaults apply otherwise)
+#       BASE_URL, CUSTOMER_AWS_PROFILE, OCP_IMAGE,
+#       ROSA_REPO_URL / ROSA_REPO_BRANCH (pin registry supplies these
+#       when running under the new workflow; Makefile defaults apply
+#       otherwise)
 #   - exit 0 = pass, non-zero = fail; junit/logs go to $ARTIFACT_DIR
 #     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
 #   - must be isolated: no reliance on other suites, no ordering assumptions
 #   - resources created here (cluster, operator roles) are named after
 #     CLUSTER_NAME and cleaned up by the suite's own cleanup specs
+#
+# Requires: BASE_URL, CUSTOMER_AWS_PROFILE   Optional: E2E_LABEL_FILTER, OCP_IMAGE
 set -euo pipefail
 
 # Resolve the repository root via git (robust to any cwd/layout).
@@ -20,15 +22,16 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 cd "${REPO_ROOT}"
 [[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
 
-# The Makefile target reads BASE_URL; map the documented E2E_* input.
-# The rosa sanity suite reads SEAPLANE_URL — export it too, and fail fast
-# when no URL is available so the suite cannot silently skip.
-export BASE_URL="${BASE_URL:-${E2E_BASE_URL:-}}"
+# Fail fast on missing required inputs.
+: "${BASE_URL:?BASE_URL is required}"
 export SEAPLANE_URL="${SEAPLANE_URL:-${BASE_URL}}"
-if [[ -z "${SEAPLANE_URL}" ]]; then
-  echo "ERROR: neither BASE_URL nor E2E_BASE_URL is set — rosa-cli suite cannot run" >&2
+
+# The rosa-cli suite needs customer AWS credentials to create clusters.
+if [[ -z "${CUSTOMER_AWS_PROFILE:-}" ]]; then
+  echo "ERROR: CUSTOMER_AWS_PROFILE not set — rosa-cli needs customer credentials" >&2
   exit 1
 fi
+export AWS_PROFILE="${CUSTOMER_AWS_PROFILE}"
 
 # Suite-level knobs: sane defaults, overridable via environment.
 # CLUSTER_NAME incorporates CLUSTER_PREFIX and the suite name so concurrent
