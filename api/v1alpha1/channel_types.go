@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// ChannelNamespace holds region-local Channel objects supplied by GitOps.
+// ChannelNamespace holds region-local Channels configured by the operator's ConfigMap.
 const ChannelNamespace = "channels"
 
 // ChannelSpec defines the GitOps-managed configuration of an upgrade channel.

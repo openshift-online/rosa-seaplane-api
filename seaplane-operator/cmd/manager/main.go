@@ -62,6 +62,7 @@ func main() {
 	var cincinnatiURL string
 	var cincinnatiArch string
 	var channelRefreshInterval time.Duration
+	var channelConfigPath string
 	var maxConcurrentReconciles int
 	var watcherPollInterval time.Duration
 	var watcherRelistInterval time.Duration
@@ -76,6 +77,8 @@ func main() {
 	flag.StringVar(&cincinnatiArch, "cincinnati-arch", "multi", "Cincinnati release architecture.")
 	flag.DurationVar(&channelRefreshInterval, "channel-refresh-interval", 10*time.Minute,
 		"How often to refresh Channel release snapshots.")
+	flag.StringVar(&channelConfigPath, "channel-config", "/etc/seaplane/channels/channels.yaml",
+		"Path to the channels.yaml key of the operator Channel ConfigMap.")
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 10,
 		"Maximum number of concurrent reconciles per controller.")
 	flag.DurationVar(&watcherPollInterval, "dynamo-poll-interval", 0,
@@ -179,6 +182,14 @@ func main() {
 	cincinnatiClient, err := cincinnati.NewClient(cincinnatiURL, cincinnatiArch, &http.Client{Timeout: 15 * time.Second})
 	if err != nil {
 		setupLog.Error(err, "Failed to configure Cincinnati client")
+		os.Exit(1)
+	}
+	if err := mgr.Add(&controller.ChannelConfigSync{
+		Client:          mgr.GetClient(),
+		ConfigPath:      channelConfigPath,
+		RefreshInterval: channelRefreshInterval,
+	}); err != nil {
+		setupLog.Error(err, "Failed to configure Channel synchronization")
 		os.Exit(1)
 	}
 	if err := (&controller.ChannelReconciler{

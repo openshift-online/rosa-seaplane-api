@@ -22,7 +22,7 @@ const (
 	channelFailureRetry    = time.Minute
 )
 
-// ChannelReconciler refreshes the Cincinnati release snapshot of existing Channels.
+// ChannelReconciler refreshes the Cincinnati release snapshot of configured Channels.
 type ChannelReconciler struct {
 	client.Client
 	Feed interface {
@@ -31,9 +31,6 @@ type ChannelReconciler struct {
 	RefreshInterval         time.Duration
 	MaxConcurrentReconciles int
 }
-
-// +kubebuilder:rbac:groups=seaplane.io,resources=channels,verbs=get;list;watch
-// +kubebuilder:rbac:groups=seaplane.io,resources=channels/status,verbs=get;update
 
 func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	if req.Namespace != v1alpha1.ChannelNamespace {
@@ -105,7 +102,7 @@ func (r *ChannelReconciler) updateChannelStatus(ctx context.Context, channel *v1
 	})
 }
 
-// SetupWithManager watches only Channel objects; Reconcile limits status writes to channels.
+// SetupWithManager watches Channel spec changes; periodic requeues refresh snapshots.
 func (r *ChannelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).

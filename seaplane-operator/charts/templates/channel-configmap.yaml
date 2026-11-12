@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "seaplane-operator.fullname" . }}-channels
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "seaplane-operator.labels" . | nindent 4 }}
+data:
+  channels.yaml: |
+    channels:
+{{ toYaml .Values.channel.channels | indent 6 }}

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add region-local Channel resources and Cincinnati release snapshots, defaulting to the multi-architecture graph. Default Z selection and cluster targeting are not yet implemented.
+- Add region-local Channel resources generated from a chart-managed ConfigMap; synchronize their specs in PostgreSQL and snapshot Cincinnati releases from the multi-architecture graph. Default Z selection and cluster targeting are not yet implemented.
 - Correct Channel manager argument quoting and watch filtering; avoid exposing credentials in Cincinnati URL validation errors.
 
 ## 0.1.28 Nov 03 2026

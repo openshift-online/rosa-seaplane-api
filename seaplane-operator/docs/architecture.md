@@ -84,17 +84,19 @@ ManagementCluster CRs in PostgreSQL serve as the registry of available managemen
 The operator runs as a StatefulSet, deployed via a Helm chart through ArgoCD. It connects to PostgreSQL for CR storage and to DynamoDB for desire management. The StatefulSet provides stable pod ordinals used for [namespace-hash sharding](sharding.md).
 
 ```
-charts/seaplane-operator/
+seaplane-operator/charts/
 ├── Chart.yaml
 ├── values.yaml
-├── crds/                    # Auto-synced from config/crd/bases/ by make manifests
 └── templates/
     ├── statefulset.yaml
+    ├── channel-configmap.yaml
     ├── headless-service.yaml
-    ├── serviceaccount.yaml
-    ├── clusterrole.yaml
-    └── clusterrolebinding.yaml
+    └── serviceaccount.yaml
 ```
+
+The chart mounts the Channel ConfigMap into every manager Pod. Each replica
+periodically reconciles that region's declared Channel specs into PostgreSQL,
+using optimistic writes to converge without a Kubernetes API client.
 
 Required configuration:
 

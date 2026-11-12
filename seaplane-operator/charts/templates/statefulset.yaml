@@ -38,6 +38,7 @@ spec:
             - {{ printf "--cincinnati-url=%s" .Values.channel.cincinnatiURL | quote }}
             - {{ printf "--cincinnati-arch=%s" .Values.channel.arch | quote }}
             - {{ printf "--channel-refresh-interval=%s" .Values.channel.refreshInterval | quote }}
+            - --channel-config=/etc/seaplane/channels/channels.yaml
             - --health-probe-bind-address=:8081
           env:
             - name: POSTGRES_DSN
@@ -69,6 +70,10 @@ spec:
             - name: ECR_MIRROR_BASE_SECRET_NAME
               value: {{ .Values.ecrMirror.baseSecretName | quote }}
             {{- end }}
+          volumeMounts:
+            - name: channel-config
+              mountPath: /etc/seaplane/channels
+              readOnly: true
           ports:
             - name: health
               containerPort: 8081
@@ -89,6 +94,10 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      volumes:
+        - name: channel-config
+          configMap:
+            name: {{ include "seaplane-operator.fullname" . }}-channels
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
