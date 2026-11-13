@@ -7,37 +7,32 @@ import (
 	"testing"
 
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/internal/authztest"
 )
 
-// TestManagementAccounts scopes bootstrap and delegated grants to the authenticated account.
+// TestManagementAccounts scopes admin and delegated grants to the authenticated account.
 func TestManagementAccounts(t *testing.T) {
-	_, _, admin, delegate, cfg := managementFixture(t)
-	cfg.Accounts["222222222222"] = authz.ManagementAccount{WriterRegion: "us-east-1", AdministratorARNs: []string{"arn:aws:iam::222222222222:role/other-admin"}}
-	m, err := authz.NewManagement(localClient(), cfg, "us-east-1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	m, _, admin, delegate, cfg := managementFixture(t)
 	policy := grantManagement(t, m, admin, delegate, "all", `permit(principal, action in Seaplane::Action::"PolicyAdmin", resource);`, authz.GlobalScope)
 	other := admin
 	other.AccountID = "222222222222"
-	other.CallerARN = "arn:aws:sts::222222222222:assumed-role/admin/session"
-	if _, err := m.ListPolicies(t.Context(), other); !errors.Is(err, authz.ErrManagementDenied) {
-		t.Fatalf("bootstrap role escaped account = %v", err)
-	}
 	other.CallerARN = "arn:aws:iam::222222222222:user/delegate"
 	if _, err := m.ListPolicies(t.Context(), other); !errors.Is(err, authz.ErrManagementDenied) {
 		t.Fatalf("delegation escaped account = %v", err)
 	}
-	other.CallerARN = "arn:aws:sts::222222222222:assumed-role/other-admin/session"
+
+	// Another account's seeded admin administers only its own account's records.
+	authztest.SeedAdmin(t, localClient(), cfg, other.AccountID)
+	other.CallerARN = "arn:aws:sts::222222222222:assumed-role/admin/session"
 	if _, err := m.GetPolicy(t.Context(), other, authz.PolicyRef{ID: policy.ID, Kind: policy.Kind}); !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("foreign policy = %v", err)
 	}
 	policies, err := m.ListPolicies(t.Context(), other)
-	if err != nil || len(policies) != 0 {
+	if err != nil || len(policies) != 1 || policies[0].ID != "seed-admin" {
 		t.Fatalf("foreign list = %+v, %v", policies, err)
 	}
 	attachments, err := m.ListAttachments(t.Context(), other, "")
-	if err != nil || len(attachments) != 0 {
+	if err != nil || len(attachments) != 1 || attachments[0].Policy.ID != "seed-admin" {
 		t.Fatalf("foreign attachments = %+v, %v", attachments, err)
 	}
 }

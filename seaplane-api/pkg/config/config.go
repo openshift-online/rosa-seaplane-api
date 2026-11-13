@@ -8,11 +8,6 @@ type Config struct {
 	Regional  RegionalConfig
 	Logging   LoggingConfig
 	RateLimit RateLimitConfig
-	Authz     AuthzConfig
-}
-
-type AuthzConfig struct {
-	ConfigFile string
 }
 
 type RateLimitConfig struct {

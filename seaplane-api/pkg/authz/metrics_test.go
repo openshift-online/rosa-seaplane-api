@@ -93,8 +93,7 @@ func TestMetricsAccounting(t *testing.T) {
 // evaluation failure turns the whole list into one error.
 func TestMetricsPerRequest(t *testing.T) {
 	metrics, registry := newTestMetrics(t)
-	bundle := bundleFixture()
-	a := fixtureAuthorizer(t, bundle)
+	a := resolvedFixture(t, region, readFixture())
 	attempt := metrics.Start(ListClusters)
 	p, err := a.Prepare(t.Context(), testIdentity(sessionARN), testRequestContext())
 	if err != nil {

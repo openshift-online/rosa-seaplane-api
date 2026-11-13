@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"golang.org/x/sync/errgroup"
 )
 
 // ResolvedAttachment pairs an attachment with the policy it references.
@@ -28,42 +29,53 @@ func (s *Store) resolveScopes(ctx context.Context, id Identity, scopes []Attachm
 	if err != nil {
 		return nil, err
 	}
-	if caller.account != s.config.AccountID || id.IsAllowlisted {
-		return nil, fmt.Errorf("store identity must match account without allowlist bypass")
+	if caller.account != s.config.AccountID {
+		return nil, fmt.Errorf("store identity must match account")
 	}
 	keys := []string{principalKey(caller)}
 	if caller.kind == "assumed-role" {
 		keys = append(keys, roleKey(caller))
 	}
+	// Query every scope and principal key at once; the first failure cancels the rest.
+	// Results keep their scope/key order, so validation below stays deterministic.
+	parts := make([][]StoredAttachment, len(scopes)*len(keys))
+	group, groupCtx := errgroup.WithContext(ctx)
+	for i, scope := range scopes {
+		for j, pk := range keys {
+			group.Go(func() error {
+				part, err := s.readBindings(groupCtx, scope, pk)
+				parts[i*len(keys)+j] = part
+				return err
+			})
+		}
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
 	bindings := []StoredAttachment{}
 	aliases := map[string]string{}
 	bindingIDs := map[string]bool{}
-	for _, scope := range scopes {
-		for _, pk := range keys {
-			part, err := s.readBindings(ctx, scope, pk)
+	for _, part := range parts {
+		for _, binding := range part {
+			principal, err := parsePrincipal(binding.PrincipalARN)
 			if err != nil {
 				return nil, err
 			}
-			for _, binding := range part {
-				principal, err := parsePrincipal(binding.PrincipalARN)
-				if err != nil {
+			if !matchesPrincipal(principal, caller) {
+				return nil, fmt.Errorf("principal lookup mismatch")
+			}
+			if principal.kind == "role" {
+				if err := addRoleAlias(aliases, principal.roleAlias(), principal.original); err != nil {
 					return nil, err
 				}
-				if !matchesPrincipal(principal, caller) {
-					return nil, fmt.Errorf("principal lookup mismatch")
-				}
-				if principal.kind == "role" {
-					if err := addRoleAlias(aliases, principal.roleAlias(), principal.original); err != nil {
-						return nil, err
-					}
-				}
-				diagnosticID := bindingDiagnosticID(binding)
-				if bindingIDs[diagnosticID] {
-					return nil, fmt.Errorf("duplicate attachment identity")
-				}
-				bindingIDs[diagnosticID] = true
-				bindings = append(bindings, binding)
 			}
+			diagnosticID := bindingDiagnosticID(binding)
+			if bindingIDs[diagnosticID] {
+				return nil, fmt.Errorf("duplicate attachment identity")
+			}
+			bindingIDs[diagnosticID] = true
+			bindings = append(bindings, binding)
 		}
 	}
 	policies, err := s.loadPolicies(ctx, bindings)
@@ -154,25 +166,11 @@ func (s *Store) Prepare(ctx context.Context, id Identity, req RequestContext) (*
 	return s.prepareScopes(ctx, id, req, []AttachmentScope{GlobalScope, RegionalScope})
 }
 
-// prepareScopes shares binding and Cedar preparation without a management allowlist bypass.
+// prepareScopes binds the stored grants for the requested scopes.
 func (s *Store) prepareScopes(ctx context.Context, id Identity, req RequestContext, scopes []AttachmentScope) (*Prepared, error) {
 	resolved, err := s.resolveScopes(ctx, id, scopes)
 	if err != nil {
 		return nil, managementResultResolution(err)
 	}
-	authorizer := &Authorizer{region: s.config.Region, model: s.model, validator: s.validator, evaluate: nativeEvaluate}
-	for _, record := range resolved {
-		binding, policy := record.Attachment, record.Policy
-		principal, err := parsePrincipal(binding.PrincipalARN)
-		if err != nil {
-			return nil, newFailure(StageBinding, err)
-		}
-		bound, err := s.bindPolicy(policy.Content, policy.ID, principal)
-		if err != nil {
-			return nil, newFailure(StageBinding, err)
-		}
-		diagnosticID := bindingDiagnosticID(binding)
-		authorizer.customer = append(authorizer.customer, policyAttachment{Provenance: Provenance{DiagnosticID: diagnosticID, PolicyID: policy.ID, AttachmentID: binding.ID, PolicyRevision: policy.Revision, AttachmentRevision: binding.Revision}, policy: bound, principal: principal, scope: string(binding.Scope), region: binding.Region})
-	}
-	return authorizer.Prepare(ctx, id, req)
+	return s.prepareResolved(ctx, id, req, resolved)
 }

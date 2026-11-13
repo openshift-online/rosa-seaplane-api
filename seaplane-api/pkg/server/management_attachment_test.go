@@ -33,7 +33,7 @@ func TestGlobalAttachmentHTTP(t *testing.T) {
 		if listed.Code != 200 || json.Unmarshal(listed.Body.Bytes(), &list) != nil || list.Kind != "AttachmentList" {
 			t.Fatalf("list: %d %s", listed.Code, listed.Body)
 		}
-		want := 1
+		want := 2 // the seeded admin grant and the new attachment
 		if query == "?scope=regional" {
 			want = 0
 		}

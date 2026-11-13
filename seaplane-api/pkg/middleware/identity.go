@@ -22,20 +22,7 @@ const (
 	ContextKeySourceIP contextKey = "source_ip"
 	// ContextKeyRequestID is the context key for request ID
 	ContextKeyRequestID contextKey = "request_id"
-	// ContextKeyAllowlisted marks an account admitted by the temporary allowlist
-	ContextKeyAllowlisted contextKey = "allowlisted"
 )
-
-// WithAllowlisted marks the caller's account as admitted by the temporary allowlist.
-func WithAllowlisted(ctx context.Context) context.Context {
-	return context.WithValue(ctx, ContextKeyAllowlisted, true)
-}
-
-// IsAllowlisted reports whether the caller's account was admitted by the allowlist.
-func IsAllowlisted(ctx context.Context) bool {
-	allowlisted, _ := ctx.Value(ContextKeyAllowlisted).(bool)
-	return allowlisted
-}
 
 // AWS identity headers from API Gateway
 const (

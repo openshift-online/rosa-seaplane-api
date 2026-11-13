@@ -5,15 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/internal/authztest"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -42,49 +41,12 @@ when { resource.hasTag("example.com/team") && resource.getTag("example.com/team"
 when { resource.hasTag("example.com/fault") && resource.getTag("example.com/fault") == "fault-detail-secret" && 9223372036854775807 + 1 == 0 };`
 )
 
-func clusterAuthorizer(t *testing.T, policies ...string) *authz.Authorizer {
+func clusterAuthorizer(t *testing.T, policies ...string) authz.Resolver {
 	t.Helper()
-	bundle := map[string]any{"formatVersion": 1, "registeredAccounts": []string{testAccountID}, "policies": []any{}, "attachments": []any{}}
-	for i, policy := range policies {
-		id := fmt.Sprintf("grant-%d", i)
-		bundle["policies"] = append(bundle["policies"].([]any), map[string]any{"id": id, "ownerAccountID": testAccountID, "content": policy})
-		bundle["attachments"] = append(bundle["attachments"].([]any), map[string]any{"id": id, "policyID": id, "principalARN": "arn:aws:iam::" + testAccountID + ":user/test", "scope": "global"})
-	}
-	content, err := json.Marshal(bundle)
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "authz.json")
-	if err := os.WriteFile(path, content, 0600); err != nil {
-		t.Fatal(err)
-	}
-	a, err := authz.LoadConfig(path, clusterAuthzRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return a
+	return authztest.Management(t, testAccountID, clusterAuthzRegion, policies...)
 }
 
-// Retries retain the same policy/context snapshot while checking fresh resource entities.
-func TestRetryPreparationFrozen(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPatch, "/", nil).WithContext(testContext(testAccountID))
-	r, finish := withAuthzOutcome(r)
-	defer finish()
-	a := clusterAuthorizer(t, lifecyclePermit)
-	first, err := prepareResourceAuthz(r, a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := prepareResourceAuthz(r, a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first != second {
-		t.Fatal("retry replaced the frozen authorization context")
-	}
-}
-
-func clusterAuthzFixture(t *testing.T, fc client.Client, a *authz.Authorizer) (*ClusterHandler, *prometheus.Registry, *bytes.Buffer) {
+func clusterAuthzFixture(t *testing.T, fc client.Client, a authz.Resolver) (*ClusterHandler, *prometheus.Registry, *bytes.Buffer) {
 	t.Helper()
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil)).With("region", clusterAuthzRegion)
@@ -486,7 +448,7 @@ func TestClusterAuthz_LateEvaluationError(t *testing.T) {
 			w := clusterAuthzRequest(h, operation, "?limit=1", "late")
 			assertClusterAuthzStatus(t, w, http.StatusInternalServerError, "AUTHZ-FAILED-001: Authorization failed")
 			assertClusterAuthzMetrics(t, registry, operation, authz.OutcomeError, authz.StageEvaluation)
-			if !bytes.Contains(logs.Bytes(), []byte("attachment/grant-1")) || !bytes.Contains(logs.Bytes(), []byte(`"BundleHash":`)) || !bytes.Contains(logs.Bytes(), []byte("cedar evaluation diagnostics")) || !bytes.Contains(logs.Bytes(), []byte(`"diagnostics":[{`)) {
+			if !bytes.Contains(logs.Bytes(), []byte("global//")) || !bytes.Contains(logs.Bytes(), []byte(`"PolicyRevision":`)) || !bytes.Contains(logs.Bytes(), []byte("cedar evaluation diagnostics")) || !bytes.Contains(logs.Bytes(), []byte(`"diagnostics":[{`)) {
 				t.Fatalf("evaluation failure lost detailed diagnostics/provenance: %s", logs.String())
 			}
 			// A list reports its request operation but names the item check that failed.

@@ -7,29 +7,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
-	"github.com/spf13/cobra"
 )
 
-// loadManagement validates an optional management configuration before database connections or listeners.
+// loadAuthorization builds the authorization service before database connections or listeners.
 // The existing AWS configuration preserves credentials and SDK endpoint overrides, including local DynamoDB.
-func loadManagement(cmd *cobra.Command, cfg aws.Config) (*authz.Management, error) {
-	path, err := cmd.Flags().GetString("authz-management-config-file")
+func loadAuthorization(cfg aws.Config) (*authz.Service, error) {
+	serviceConfig := authz.ServiceConfig{
+		PolicyTable:   os.Getenv("AUTHZ_POLICY_TABLE"),
+		GlobalTable:   os.Getenv("AUTHZ_GLOBAL_TABLE"),
+		RegionalTable: os.Getenv("AUTHZ_REGIONAL_TABLE"),
+	}
+	authorization, err := authz.NewService(dynamodb.NewFromConfig(cfg), serviceConfig, cfg.Region)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize authorization service (AUTHZ_*_TABLE): %w", err)
 	}
-	if !cmd.Flags().Changed("authz-management-config-file") {
-		path = os.Getenv("AUTHZ_MANAGEMENT_CONFIG_FILE")
-	}
-	if path == "" {
-		return nil, nil
-	}
-	managementConfig, err := authz.LoadManagementConfig(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load authorization management config: %w", err)
-	}
-	management, err := authz.NewManagement(dynamodb.NewFromConfig(cfg), managementConfig, cfg.Region)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize authorization management: %w", err)
-	}
-	return management, nil
+	return authorization, nil
 }

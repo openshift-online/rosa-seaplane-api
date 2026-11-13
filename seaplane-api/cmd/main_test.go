@@ -2,7 +2,6 @@ package main
 
 import (
 	"log/slog"
-	"strings"
 	"testing"
 )
 
@@ -64,17 +63,6 @@ func TestCreateLogger(t *testing.T) {
 	}
 }
 
-func TestServeRejectsMissingAuthz(t *testing.T) {
-	t.Setenv("AWS_REGION", "us-east-1")
-	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
-	t.Setenv("POSTGRES_DSN", "")
-	t.Setenv("AUTHZ_CONFIG_FILE", "")
-	err := runServe(serveCmd, nil)
-	if err == nil || !strings.Contains(err.Error(), "AUTHZ_CONFIG_FILE") {
-		t.Fatalf("want authorization config failure before database setup, got %v", err)
-	}
-}
-
 func TestRootCmd(t *testing.T) {
 	if rootCmd == nil {
 		t.Fatal("expected non-nil rootCmd")
@@ -90,13 +78,6 @@ func TestRootCmd(t *testing.T) {
 
 	if rootCmd.Long == "" {
 		t.Error("expected non-empty Long description")
-	}
-}
-
-func TestServeRejectsResolverFlag(t *testing.T) {
-	err := serveCmd.ParseFlags([]string{"--authz-resolver=config"})
-	if err == nil || !strings.Contains(err.Error(), "unknown flag: --authz-resolver") {
-		t.Fatalf("removed resolver flag was accepted: %v", err)
 	}
 }
 
@@ -122,11 +103,9 @@ func TestServeCmd(t *testing.T) {
 	expectedFlags := []string{
 		"log-level",
 		"log-format",
-		"allowed-accounts",
 		"api-port",
 		"health-port",
 		"metrics-port",
-		"authz-config-file",
 	}
 
 	for _, flagName := range expectedFlags {

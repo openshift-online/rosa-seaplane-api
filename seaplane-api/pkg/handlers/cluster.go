@@ -41,11 +41,11 @@ type ClusterHandler struct {
 	defaultClusterExpiration time.Duration
 	validator                *validation.FieldValidator
 	logger                   *slog.Logger
-	authorizer               *authz.Authorizer
+	authorizer               authz.Resolver
 }
 
 // NewClusterHandler creates a new cluster handler
-func NewClusterHandler(db *seaplanedb.Client, oidcIssuerBaseURL string, defaultClusterExpiration time.Duration, authorizer *authz.Authorizer, logger *slog.Logger) *ClusterHandler {
+func NewClusterHandler(db *seaplanedb.Client, oidcIssuerBaseURL string, defaultClusterExpiration time.Duration, authorizer authz.Resolver, logger *slog.Logger) *ClusterHandler {
 	if authorizer == nil {
 		panic("cluster authorizer is required")
 	}

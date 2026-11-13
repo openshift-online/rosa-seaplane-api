@@ -16,17 +16,17 @@ func TestStoredAttachments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deny, err := east.CreatePolicy(ctx, "deny", `forbid(principal, action, resource);`)
-	if err != nil {
-		t.Fatal(err)
-	}
 	spec := authz.AttachmentSpec{PrincipalARN: "arn:aws:iam::111111111111:user/alice", Policy: authz.PolicyRef{ID: read.ID, Kind: read.Kind}, Scope: authz.GlobalScope}
 	global, err := east.CreateAttachment(ctx, spec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := west.CreateAttachment(ctx, spec); !errors.Is(err, authz.ErrWrongWriter) {
-		t.Fatalf("west global = %v", err)
+	westGlobal, err := west.CreateAttachment(ctx, spec)
+	if err != nil {
+		t.Fatalf("global attachment create = %v", err)
+	}
+	if err := west.DeleteAttachment(ctx, authz.GlobalScope, westGlobal.ID, westGlobal.Revision); err != nil {
+		t.Fatalf("global attachment delete = %v", err)
 	}
 	spec.Scope = authz.RegionalScope
 	eastOnly, err := east.CreateAttachment(ctx, spec)
@@ -53,17 +53,10 @@ func TestStoredAttachments(t *testing.T) {
 			t.Fatalf("wrong scope union: %+v", bindings)
 		}
 	}
-	updated, err := east.UpdateAttachment(ctx, authz.GlobalScope, global.ID, global.Revision, authz.PolicyRef{ID: deny.ID, Kind: deny.Kind})
-	if err != nil || updated.Revision == global.Revision || updated.PrincipalARN != global.PrincipalARN {
-		t.Fatalf("update = %+v, %v", updated, err)
-	}
-	if _, err := east.UpdateAttachment(ctx, authz.GlobalScope, global.ID, global.Revision, spec.Policy); !errors.Is(err, authz.ErrConflict) {
-		t.Fatalf("stale update = %v", err)
-	}
-	if err := east.DeleteAttachment(ctx, authz.GlobalScope, global.ID, global.Revision); !errors.Is(err, authz.ErrConflict) {
+	if err := east.DeleteAttachment(ctx, authz.GlobalScope, global.ID, "00000000-0000-4000-8000-000000000000"); !errors.Is(err, authz.ErrConflict) {
 		t.Fatalf("stale delete = %v", err)
 	}
-	if err := east.DeleteAttachment(ctx, authz.GlobalScope, global.ID, updated.Revision); err != nil {
+	if err := east.DeleteAttachment(ctx, authz.GlobalScope, global.ID, global.Revision); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := east.GetAttachment(ctx, authz.GlobalScope, global.ID); !errors.Is(err, authz.ErrNotFound) {
@@ -74,7 +67,7 @@ func TestStoredAttachments(t *testing.T) {
 		t.Fatal("foreign principal accepted")
 	}
 	policies, err := east.ListPolicies(ctx)
-	if err != nil || len(policies) != 2 {
+	if err != nil || len(policies) != 1 {
 		t.Fatalf("policies = %+v, %v", policies, err)
 	}
 }

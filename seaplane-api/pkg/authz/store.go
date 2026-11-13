@@ -19,8 +19,6 @@ var (
 	ErrConflict = errors.New("authorization record revision conflict")
 	// ErrNotFound indicates that a requested authorization record does not exist.
 	ErrNotFound = errors.New("authorization record not found")
-	// ErrWrongWriter indicates that a global mutation was attempted outside the account's assigned writer region.
-	ErrWrongWriter = errors.New("global mutation requires assigned writer")
 )
 
 const (
@@ -57,10 +55,10 @@ type StoredPolicy struct {
 	Kind                                  PolicyKind
 }
 
-// StoreConfig identifies an account's authorization tables, local region, and assigned writer region.
+// StoreConfig identifies an account's authorization tables and service region.
 // It contains trusted configuration, not request input.
 type StoreConfig struct {
-	AccountID, Region, WriterRegion         string // Owner account, local AWS region, and assigned global writer region.
+	AccountID, Region                       string // Owner account and local AWS region.
 	PolicyTable, GlobalTable, RegionalTable string // Policy, global attachment, and regional attachment table names.
 }
 
@@ -71,33 +69,6 @@ type Store struct {
 	config    StoreConfig
 	model     *resolved.Schema
 	validator *validate.Validator
-}
-
-// NewStore returns an account-scoped authorization store after validating its configuration and loading the Cedar schema.
-func NewStore(client *dynamodb.Client, config StoreConfig) (*Store, error) {
-	if client == nil || !accountPattern.MatchString(config.AccountID) || !regionPattern.MatchString(config.Region) || !regionPattern.MatchString(config.WriterRegion) {
-		return nil, fmt.Errorf("invalid authorization store configuration")
-	}
-	tables := map[string]bool{}
-	for _, table := range []string{config.PolicyTable, config.GlobalTable, config.RegionalTable} {
-		if table == "" || tables[table] {
-			return nil, fmt.Errorf("authorization stores require three distinct tables")
-		}
-		tables[table] = true
-	}
-	model, validator, err := loadSchema()
-	if err != nil {
-		return nil, err
-	}
-	return &Store{client: client, config: config, model: model, validator: validator}, nil
-}
-
-// requireWriter returns ErrWrongWriter if the store's region is not the account's assigned writer region.
-func (s *Store) requireWriter() error {
-	if s.config.Region != s.config.WriterRegion {
-		return ErrWrongWriter
-	}
-	return nil
 }
 
 // isStoreID reports whether id matches the store's ID format and length limit.

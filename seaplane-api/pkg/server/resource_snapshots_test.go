@@ -1,17 +1,17 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/internal/authztest"
 
 	"github.com/google/uuid"
 	v1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
@@ -19,6 +19,7 @@ import (
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/middleware"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,27 +33,17 @@ const resourceTestClusterID = "550e8400-e29b-41d4-a716-446655440000"
 
 func resourceServer(t *testing.T, customer []string, hooks interceptor.Funcs, objects ...client.Object) (*Server, client.Client) {
 	t.Helper()
-	policies, attachments := []any{}, []any{}
-	for i, content := range customer {
-		id := fmt.Sprintf("customer-%d", i)
-		policies = append(policies, map[string]any{"id": id, "ownerAccountID": resourceTestAccount, "content": content})
-		attachments = append(attachments, map[string]any{"id": id, "policyID": id, "principalARN": "arn:aws:iam::" + resourceTestAccount + ":user/test", "scope": "global"})
-	}
-	bundle := map[string]any{"formatVersion": 1, "registeredAccounts": []string{resourceTestAccount}, "policies": policies, "attachments": attachments}
-	content, err := json.Marshal(bundle)
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "authz.json")
-	if err := os.WriteFile(path, content, 0600); err != nil {
-		t.Fatal(err)
-	}
-	authorizer, err := authz.LoadConfig(path, "us-east-1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	srv, fc, _ := resourceServerWithManagement(t, customer, hooks, objects...)
+	return srv, fc
+}
+
+func resourceServerWithManagement(t *testing.T, customer []string, hooks interceptor.Funcs, objects ...client.Object) (*Server, client.Client, *authz.Service) {
+	t.Helper()
 	scheme := runtime.NewScheme()
 	if err := v1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
 	// seaplane-db assigns the UID at create time; controller-runtime's fake does not.
@@ -64,6 +55,7 @@ func resourceServer(t *testing.T, customer []string, hooks interceptor.Funcs, ob
 		}
 		return c.Create(ctx, obj, opts...)
 	}
+	objects = append(objects, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "accounts", Name: resourceTestAccount}})
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).
 		WithIndex(&v1.OidcConfig{}, "metadata.uid", func(obj client.Object) []string {
 			return []string{string(obj.GetUID())}
@@ -71,33 +63,17 @@ func resourceServer(t *testing.T, customer []string, hooks interceptor.Funcs, ob
 		WithIndex(&v1.DNSReservation{}, "metadata.uid", func(obj client.Object) []string {
 			return []string{string(obj.GetUID())}
 		}).WithInterceptorFuncs(hooks).Build()
-	var logs bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&logs, nil))
-	// Existing route cases verify the real server binds the hash, including default denials.
-	t.Cleanup(func() {
-		decoder := json.NewDecoder(&logs)
-		for decoder.More() {
-			var entry struct {
-				Message    string `json:"msg"`
-				BundleHash string `json:"bundle_hash"`
-			}
-			if err := decoder.Decode(&entry); err != nil {
-				t.Error(err)
-				return
-			}
-			if (entry.Message == "request authorization denied" || entry.Message == "request authorization failed") && entry.BundleHash != authorizer.BundleHash() {
-				t.Errorf("authorization log bundle_hash=%q, want %q", entry.BundleHash, authorizer.BundleHash())
-			}
-		}
-	})
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	cfg := config.NewConfig()
 	cfg.Regional.AWSRegion = "us-east-1"
 	cfg.Server.MaxRequestBodyBytes = 1 << 20 // 1 MiB — match the upstream hardcoded limit
-	srv, err := New(cfg, seaplanedb.NewClientFrom(fc, logger), authorizer, nil, logger)
+	management := authztest.Management(t, resourceTestAccount, "us-east-1", customer...)
+	db := seaplanedb.NewClientFrom(fc, logger)
+	srv, err := New(cfg, db, management, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return srv, fc
+	return srv, fc, management
 }
 func resourceRequest(srv *Server, method, path, body string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "/api/v0/"+path, strings.NewReader(body))

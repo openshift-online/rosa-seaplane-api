@@ -89,7 +89,7 @@ func localStores(t *testing.T) (*authz.Store, *authz.Store, *dynamodb.Client, au
 	t.Helper()
 	client := localClient()
 	prefix := "authz-test-" + uuid.NewString()
-	cfg := authz.StoreConfig{AccountID: account, Region: "us-east-1", WriterRegion: "us-east-1", PolicyTable: prefix + "-policies", GlobalTable: prefix + "-global", RegionalTable: prefix + "-east"}
+	cfg := authz.StoreConfig{AccountID: account, Region: "us-east-1", PolicyTable: prefix + "-policies", GlobalTable: prefix + "-global", RegionalTable: prefix + "-east"}
 	for _, name := range []string{cfg.PolicyTable, cfg.GlobalTable, cfg.RegionalTable, prefix + "-west"} {
 		_, err := client.CreateTable(t.Context(), &dynamodb.CreateTableInput{TableName: &name, BillingMode: types.BillingModePayPerRequest, AttributeDefinitions: []types.AttributeDefinition{{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS}, {AttributeName: aws.String("sk"), AttributeType: types.ScalarAttributeTypeS}}, KeySchema: []types.KeySchemaElement{{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash}, {AttributeName: aws.String("sk"), KeyType: types.KeyTypeRange}}})
 		if err != nil {
@@ -101,13 +101,13 @@ func localStores(t *testing.T) (*authz.Store, *authz.Store, *dynamodb.Client, au
 			}
 		})
 	}
-	east, err := authz.NewStore(client, cfg)
+	east, err := authz.NewTestStore(client, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	westCfg := cfg
 	westCfg.Region, westCfg.RegionalTable = "us-west-2", prefix+"-west"
-	west, err := authz.NewStore(client, westCfg)
+	west, err := authz.NewTestStore(client, westCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,11 +138,11 @@ func TestStoredPolicyCRUD(t *testing.T) {
 	if err := east.DeletePolicy(ctx, "read", created.Revision); !errors.Is(err, authz.ErrConflict) {
 		t.Fatalf("stale delete = %v", err)
 	}
-	if _, err := west.CreatePolicy(ctx, "west", created.Content); !errors.Is(err, authz.ErrWrongWriter) {
-		t.Fatalf("wrong writer = %v", err)
+	if _, err := west.CreatePolicy(ctx, "west", created.Content); err != nil {
+		t.Fatalf("regional policy create = %v", err)
 	}
 	cfg.AccountID = "222222222222"
-	other, err := authz.NewStore(client, cfg)
+	other, err := authz.NewTestStore(client, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,7 +18,7 @@ import (
 
 // ManagementHandler adapts the management service to the public HTTP contract.
 type ManagementHandler struct {
-	management *authz.Management
+	management *authz.Service
 	logger     *slog.Logger
 }
 
@@ -49,7 +49,7 @@ type managementList[T any] struct {
 }
 
 // NewManagementHandler returns HTTP handlers backed by the account-scoped management service.
-func NewManagementHandler(management *authz.Management, logger *slog.Logger) *ManagementHandler {
+func NewManagementHandler(management *authz.Service, logger *slog.Logger) *ManagementHandler {
 	return &ManagementHandler{management: management, logger: logger}
 }
 
@@ -136,7 +136,6 @@ func (h *ManagementHandler) badRequest(w http.ResponseWriter, err error) {
 // writeError maps typed service failures without classifying backend error strings.
 func (h *ManagementHandler) writeError(w http.ResponseWriter, err error) {
 	status, message := 500, "Authorization management failed"
-	var writer *authz.WrongWriterError
 	_, isFailure := errors.AsType[*authz.Failure](err)
 	switch {
 	case isFailure:
@@ -148,18 +147,12 @@ func (h *ManagementHandler) writeError(w http.ResponseWriter, err error) {
 		status, message = 422, "Invalid authorization input"
 	case errors.Is(err, authz.ErrNotFound):
 		status, message = 404, "Authorization record not found"
-	case errors.Is(err, authz.ErrWrongWriter):
-		status, message = 409, "Global mutation requires the account writer region"
 	case errors.Is(err, authz.ErrConflict):
 		status, message = 409, "Authorization record revision conflict"
 	case errors.Is(err, authz.ErrUnavailable):
 		status, message = 503, "Authorization backend unavailable"
 	}
 	def := api.APIError{Code: "AUTHZ-MANAGEMENT-001", HTTPStatus: status, Message: message}
-	if errors.As(err, &writer) {
-		w.Header().Set("X-Authz-Writer-Region", writer.Region)
-		def = def.WithErrors([]map[string]string{{"field": "writerRegion", "detail": writer.Region}})
-	}
 	h.logger.Error("authorization management request failed", "status", status, "reason", message)
 	writeAPIError(w, def, h.logger)
 }

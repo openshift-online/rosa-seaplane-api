@@ -73,7 +73,7 @@ func applyLabelPatch(stored map[string]string, patch map[string]*string) map[str
 }
 
 // Each retry reapplies only submitted keys to a freshly loaded and authorized snapshot.
-func resourceLabels[T client.Object](w http.ResponseWriter, r *http.Request, authorizer *authz.Authorizer, logger *slog.Logger, load func(context.Context, string) (T, error), save func(context.Context, T) error, resource func(context.Context, T) (authz.Resource, error)) {
+func resourceLabels[T client.Object](w http.ResponseWriter, r *http.Request, authorizer authz.Resolver, logger *slog.Logger, load func(context.Context, string) (T, error), save func(context.Context, T) error, resource func(context.Context, T) (authz.Resource, error)) {
 	var patch map[string]*string
 	operation := authz.ListLabelsForResource
 	var additional []authz.Action

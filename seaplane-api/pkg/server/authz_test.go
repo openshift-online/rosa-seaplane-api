@@ -6,71 +6,23 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
-	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
-	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/internal/authztest"
+
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/middleware"
 	"github.com/prometheus/client_golang/prometheus"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
-
-const serverBundle = `formatVersion: 1
-registeredAccounts: ["123456789012"]
-policies:
-  - id: read
-    ownerAccountID: "123456789012"
-    content: 'permit(principal, action in Seaplane::Action::"ReadOnly", resource);'
-  - id: unregistered-read
-    ownerAccountID: "999999999999"
-    content: 'permit(principal, action in Seaplane::Action::"ReadOnly", resource);'
-attachments:
-  - id: user-read
-    policyID: read
-    principalARN: arn:aws:iam::123456789012:user/test
-    scope: global
-  - id: unregistered-user-read
-    policyID: unregistered-read
-    principalARN: arn:aws:iam::999999999999:user/test
-    scope: global
-`
-
-func configuredAuthorizer(t *testing.T, cfg *config.Config) *authz.Authorizer {
-	t.Helper()
-	cfg.Regional.AWSRegion = "us-east-1"
-	cfg.Authz.ConfigFile = filepath.Join(t.TempDir(), "authz.yaml")
-	if err := os.WriteFile(cfg.Authz.ConfigFile, []byte(serverBundle), 0600); err != nil {
-		t.Fatal(err)
-	}
-	authorizer, err := authz.LoadConfig(cfg.Authz.ConfigFile, cfg.Regional.AWSRegion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return authorizer
-}
 
 func newConfiguredServer(t *testing.T, cfg *config.Config, db *seaplanedb.Client, logger *slog.Logger) (*Server, error) {
 	t.Helper()
-	authorizer := configuredAuthorizer(t, cfg)
-	return New(cfg, db, authorizer, nil, logger)
-}
-
-func TestNewRequiresAuthorizer(t *testing.T) {
-	cfg := config.NewConfig()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := New(cfg, nil, nil, nil, logger)
-	if err == nil || srv != nil {
-		t.Fatalf("missing authorizer accepted: server=%v error=%v", srv, err)
-	}
+	cfg.Regional.AWSRegion = "us-east-1"
+	return New(cfg, db, authztest.Management(t, resourceTestAccount, "us-east-1"), logger)
 }
 
 func authzMetricSamples(t *testing.T) map[string]float64 {
@@ -121,14 +73,9 @@ func assertAuthzOutcome(t *testing.T, before, after map[string]float64, operatio
 func TestServerEnrollment(t *testing.T) {
 	t.Setenv("TARGET_GROUP_ARN", "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/test/id")
 	cfg := config.NewConfig()
-	authorizer := configuredAuthorizer(t, cfg)
-	scheme := runtime.NewScheme()
-	if err := seaplanev1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	management := authztest.Management(t, resourceTestAccount, "us-east-1", `permit(principal, action in Seaplane::Action::"ReadOnly", resource);`)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	db := seaplanedb.NewClientFrom(fake.NewClientBuilder().WithScheme(scheme).Build(), logger)
-	srv, err := New(cfg, db, authorizer, nil, logger)
+	srv, err := New(cfg, enrolledDB(t, logger, resourceTestAccount), management, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,8 +85,11 @@ func TestServerEnrollment(t *testing.T) {
 	}{
 		{"enrolled with grant", "/api/v0/clusters", "123456789012", "arn:aws:iam::123456789012:user/test", http.StatusOK, 1},
 		{"enrolled without grant", "/api/v0/clusters", "123456789012", "arn:aws:iam::123456789012:user/no-grants", http.StatusForbidden, 1},
-		{"unregistered with grant", "/api/v0/clusters", "999999999999", "arn:aws:iam::999999999999:user/test", http.StatusForbidden, 0},
+		{"unregistered", "/api/v0/clusters", "999999999999", "arn:aws:iam::999999999999:user/test", http.StatusForbidden, 0},
+		{"unregistered rendered hostedclusters", "/api/v0/renderedhostedclusters", "999999999999", "arn:aws:iam::999999999999:user/test", http.StatusForbidden, 0},
+		{"unregistered rendered nodepools", "/api/v0/renderednodepools", "999999999999", "arn:aws:iam::999999999999:user/test", http.StatusForbidden, 0},
 		{"missing identity", "/api/v0/clusters", "", "", http.StatusForbidden, 0},
+		{"missing identity rendered", "/api/v0/renderedhostedclusters", "", "", http.StatusForbidden, 0},
 		{"mismatch", "/api/v0/clusters", "123456789012", "arn:aws:iam::999999999999:user/test", http.StatusForbidden, 0},
 		{"malformed ARN", "/api/v0/clusters", "123456789012", "bad-arn", http.StatusForbidden, 0},
 		{"live", "/api/v0/live", "", "", http.StatusOK, 0},
@@ -189,9 +139,9 @@ func TestServerEnrollment(t *testing.T) {
 func TestServerRateLimitBeforeAdmission(t *testing.T) {
 	cfg := config.NewConfig()
 	cfg.RateLimit = config.RateLimitConfig{Enabled: true, InMemory: true, DefaultRate: 1, DefaultBurst: 1, DefaultWindow: 60}
-	authorizer := configuredAuthorizer(t, cfg)
+	management := authztest.Management(t, resourceTestAccount, "us-east-1", `permit(principal, action in Seaplane::Action::"ReadOnly", resource);`)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := New(cfg, nil, authorizer, nil, logger)
+	srv, err := New(cfg, nil, management, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,20 +161,12 @@ func TestServerRateLimitBeforeAdmission(t *testing.T) {
 	}
 }
 
-// Allowlisted accounts get full access to their own resources until revoked.
-func TestServerAccountAllowlist(t *testing.T) {
+// Enrollment administration must work before the RC account enrolls itself.
+func TestServerAccountEnrollment(t *testing.T) {
 	cfg := config.NewConfig()
 	cfg.Regional.AccountID = "123456789012"
-	scheme := runtime.NewScheme()
-	if err := seaplanev1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-	if err := corev1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	db := seaplanedb.NewClientFrom(fake.NewClientBuilder().WithScheme(scheme).Build(), logger)
-	srv, err := newConfiguredServer(t, cfg, db, logger)
+	srv, err := newConfiguredServer(t, cfg, enrolledDB(t, logger), logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,14 +179,43 @@ func TestServerAccountAllowlist(t *testing.T) {
 		return w.Code
 	}
 	const customer = "333333333333"
+	for _, identity := range []struct{ account, arn string }{
+		{"", ""},
+		{"123456789012", "bad-arn"},
+		{"123456789012", "arn:aws:iam::333333333333:user/test"},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v0/accounts", strings.NewReader(`{"accountId":"`+customer+`"}`))
+		req.Header.Set(middleware.HeaderAccountID, identity.account)
+		req.Header.Set(middleware.HeaderCallerARN, identity.arn)
+		w := httptest.NewRecorder()
+		srv.apiServer.Handler.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("invalid enrollment identity accepted: %d", w.Code)
+		}
+	}
+	if code := call(http.MethodGet, "/api/v0/clusters", "123456789012", ""); code != http.StatusForbidden {
+		t.Fatalf("unenrolled RC received resource rights: %d", code)
+	}
 	if code := call(http.MethodGet, "/api/v0/clusters", customer, ""); code != http.StatusForbidden {
 		t.Fatalf("unenrolled account: %d", code)
 	}
 	if code := call(http.MethodPost, "/api/v0/accounts", "123456789012", `{"accountId":"`+customer+`"}`); code != http.StatusNoContent {
 		t.Fatalf("enroll: %d", code)
 	}
-	if code := call(http.MethodGet, "/api/v0/clusters", customer, ""); code != http.StatusOK {
-		t.Fatalf("allowlisted account not granted: %d", code)
+	if code := call(http.MethodGet, "/api/v0/clusters", customer, ""); code != http.StatusForbidden {
+		t.Fatalf("enrollment granted resource rights: %d", code)
+	}
+	if code := call(http.MethodPost, "/api/v0/accounts", customer, `{"accountId":"444444444444"}`); code != http.StatusForbidden {
+		t.Fatalf("customer administered enrollment: %d", code)
+	}
+	if code := call(http.MethodPost, "/api/v0/accounts", "123456789012", `{"accountId":"123456789012"}`); code != http.StatusNoContent {
+		t.Fatalf("RC self enrollment: %d", code)
+	}
+	if code := call(http.MethodGet, "/api/v0/clusters", "123456789012", ""); code != http.StatusForbidden {
+		t.Fatalf("RC enrollment granted resource rights: %d", code)
+	}
+	if code := call(http.MethodDelete, "/api/v0/accounts/123456789012", customer, ""); code != http.StatusForbidden {
+		t.Fatalf("customer removed enrollment: %d", code)
 	}
 	if code := call(http.MethodDelete, "/api/v0/accounts/"+customer, "123456789012", ""); code != http.StatusNoContent {
 		t.Fatalf("revoke: %d", code)

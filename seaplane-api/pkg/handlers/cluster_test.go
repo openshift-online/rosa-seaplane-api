@@ -1922,4 +1922,3 @@ func TestClusterHandler_Create_NetworkCIDRValidation(t *testing.T) {
 		})
 	}
 }
-
