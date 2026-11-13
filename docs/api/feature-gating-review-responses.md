@@ -24,15 +24,16 @@ ignoring is possible but bad UX.
 
 **Assessment**: Valid and important. Silent ignoring is exactly the failure mode this whole
 design exists to prevent — the CPO in the hosted cluster drops unknown fields silently, so
-without platform-API rejection the customer's configuration would be *accepted and then
-discarded*, which is the worst outcome (no error, no effect).
+without platform-API rejection the customer's configuration would be _accepted and then
+discarded_, which is the worst outcome (no error, no effect).
 
 **Resolution (adopted)**:
+
 - Added OCPSTRAT-3600's ClusterAutoscaler fields as the worked customer-facing example in
   [§3.4](feature-gating-design.md#34-runtime-plumbing-validationcontext): a customer on
   OCP 4.19 setting a field that requires OCP 5.1 gets an HTTP 400 with an actionable
   message ("requires an OpenShift 5.1 or later cluster"), not a silent drop.
-- The discovery API (§3.10) gives customers a way to ask *before* attempting a write:
+- The discovery API (§3.10) gives customers a way to ask _before_ attempting a write:
   `GET /api/feature_gates?cluster_version=4.19` returns which capabilities are available
   and why others are not.
 
@@ -55,8 +56,8 @@ ClusterAutoscaler as the example.
 (Second comment on the same line links the internal Slack thread where this was discussed.)
 
 **Summary**: Since the gated capabilities are implemented in the Hypershift/OCP payload and
-the HostedCluster spec is version-agnostic, version constraints arguably belong *in
-Hypershift* (as markers on the passthrough fields) rather than duplicated in Hyperfleet.
+the HostedCluster spec is version-agnostic, version constraints arguably belong _in
+Hypershift_ (as markers on the passthrough fields) rather than duplicated in Hyperfleet.
 Duplicating creates two sources of truth and drift risk.
 
 **Assessment**: Valid concern — drift is the main risk of our approach. However, moving
@@ -64,7 +65,7 @@ gating entirely to Hypershift does not solve the customer problem on its own:
 
 1. **The CPO silently drops unknown fields.** Hypershift-side markers would at best
    annotate the API; without a validation layer, an old HCP still silently ignores a field
-   set by a newer client. Someone must *enforce*, and the only component that sees the
+   set by a newer client. Someone must _enforce_, and the only component that sees the
    customer's request, the account entitlements, and the cluster's OCP version together is
    the Hyperfleet platform API.
 2. **Entitlements are Hyperfleet's dimension.** Account feature-set / per-customer
@@ -74,9 +75,10 @@ gating entirely to Hypershift does not solve the customer problem on its own:
    adoption.
 
 **Resolution (adopted)**:
+
 - Added [§2.5](feature-gating-design.md#25-should-hypershift-own-version-gating) to the
   design documenting this trade-off explicitly.
-- Positioned Hypershift markers as the *preferred long-term input* to our registry: when
+- Positioned Hypershift markers as the _preferred long-term input_ to our registry: when
   Hypershift annotates passthrough fields with version constraints ("works with HCPs at
   OCP 5.1+"), we generate our enablement conditions from those markers instead of
   hand-curating them, eliminating the second source of truth. Until then the registry is
@@ -84,7 +86,7 @@ gating entirely to Hypershift does not solve the customer problem on its own:
   and by aligning with the Hypershift team on graduation changes.
 
 **Answer**: We keep enforcement in Hyperfleet (it is the only place with all three inputs:
-request, entitlement, OCP version), but we agree the *version data* should originate in
+request, entitlement, OCP version), but we agree the _version data_ should originate in
 Hypershift. The design now states that Hypershift version markers on HostedCluster
 passthrough fields are the target source for our registry, and we'll raise the marker
 addition with the Hypershift team (see the Slack thread referenced in the review).
@@ -103,6 +105,7 @@ backported into a specific patch release). Restricting to major.minor would forc
 gate a feature on an entire minor it doesn't belong to.
 
 **Resolution (adopted)**:
+
 - `VersionRange.Min`/`Max` now accept an optional patch component (`"4.19.4"`). A bound
   with a patch is compared at patch granularity; a bound without one (`"4.19"`) matches the
   whole minor, preserving the common case and OCP parity. See
@@ -121,7 +124,7 @@ only when a feature actually lands in a z-stream.
 > version. I think the "we need to change the configuration of a cluster as part of an
 > upgrade" is a separate concern.
 
-**Summary**: Reviewer endorses using the *running* version (`status.version`) at update
+**Summary**: Reviewer endorses using the _running_ version (`status.version`) at update
 time, treating "configure for the version being upgraded to" as a separate feature.
 
 **Assessment**: Valid — this resolves open question 2.
@@ -143,8 +146,8 @@ pre-configuration is a separate concern.
 **Summary**: The CRD-variants section (§3.8 / OCP's per-feature-set CRD variants) does not
 say which CRDs the variants would be generated for.
 
-**Assessment**: Valid clarification request — ambiguity between the *HostedCluster* CRD
-(upstream, Hypershift-owned) and *Hyperfleet's own* CRDs.
+**Assessment**: Valid clarification request — ambiguity between the _HostedCluster_ CRD
+(upstream, Hypershift-owned) and _Hyperfleet's own_ CRDs.
 
 **Resolution (adopted)**: §3.8 now states explicitly: the variants are for **Hyperfleet's
 own CRDs** — the `Cluster` and `NodePool` CRs (generated from `api/v1alpha1/`) that are
@@ -174,6 +177,7 @@ endpoint; the reviewer's Karpenter example strengthens the case and adds two req
 per-gate documentation/access-request links, and entitlement-awareness in the response.
 
 **Resolution (adopted)**:
+
 - Open question 9's first half is closed: gate data stays **deployment-versioned**; the
   discovery endpoint becomes part of this work rather than an optional Phase 4 item.
 - Added [§3.10](feature-gating-design.md#310-customer-facing-discovery-api) specifying the
@@ -185,7 +189,7 @@ per-gate documentation/access-request links, and entitlement-awareness in the re
 
 **Answer**: Agreed on deployment-versioned. The discovery API is in scope: `GET
 /api/feature_gates` (optionally `?cluster_version=`) returns each gate with
-enabled/disabled + reason for *the caller's account*, and the registry now carries
+enabled/disabled + reason for _the caller's account_, and the registry now carries
 per-gate `DocsURL` / `RequestAccessURL` so customers can self-serve the Karpenter-style
 "can I use this / how do I get it" question.
 
@@ -202,7 +206,7 @@ which lets an entitlement override enable a gate on an OCP version (or unknown v
 whose payload doesn't support it — breaking fail-closed.
 
 **Assessment**: Valid — a real correctness bug in the proposed composition. An override
-should widen *account* eligibility, never the *version* dimension.
+should widen _account_ eligibility, never the _version_ dimension.
 
 **Resolution (adopted)**: §3.5 step 3 rewritten: overrides are intersected with version
 support, not unioned. `IsGateEnabled` remains the sole version authority; an account
@@ -257,14 +261,14 @@ now stated explicitly in §3.2.
 
 ## Summary of design-doc changes driven by this review
 
-| # | Comment | Change |
-| --- | --- | --- |
-| 1 | Customer-facing example | OCPSTRAT-3600 autoscaler example in §3.4; discovery API §3.10 |
-| 2 | Hypershift ownership | New §2.5 discussing ownership, markers-as-input strategy |
-| 3 | Z-patch granularity | `VersionRange` supports optional patch bounds; OQ3 updated |
-| 4 | Conservative update version | OQ2 closed (running version wins) |
-| 5 | Which CRD | §3.8 clarified: Hyperfleet Cluster/NodePool CRDs |
-| 6 | Discovery API | New §3.10 with request/response; `DocsURL`/`RequestAccessURL` metadata; endpoint moved to Phase 2; OQ9 first half closed |
-| 7 | Override bypass | §3.5 rewritten: overrides intersect version support; OQ8 updated |
-| 8 | Unknown-version rule | §3.2: empty version matches only nil-version conditions |
-| 9 | Jira typo | ROSAENG-61570 ×3 |
+| #   | Comment                     | Change                                                                                                                   |
+| --- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Customer-facing example     | OCPSTRAT-3600 autoscaler example in §3.4; discovery API §3.10                                                            |
+| 2   | Hypershift ownership        | New §2.5 discussing ownership, markers-as-input strategy                                                                 |
+| 3   | Z-patch granularity         | `VersionRange` supports optional patch bounds; OQ3 updated                                                               |
+| 4   | Conservative update version | OQ2 closed (running version wins)                                                                                        |
+| 5   | Which CRD                   | §3.8 clarified: Hyperfleet Cluster/NodePool CRDs                                                                         |
+| 6   | Discovery API               | New §3.10 with request/response; `DocsURL`/`RequestAccessURL` metadata; endpoint moved to Phase 2; OQ9 first half closed |
+| 7   | Override bypass             | §3.5 rewritten: overrides intersect version support; OQ8 updated                                                         |
+| 8   | Unknown-version rule        | §3.2: empty version matches only nil-version conditions                                                                  |
+| 9   | Jira typo                   | ROSAENG-61570 ×3                                                                                                         |

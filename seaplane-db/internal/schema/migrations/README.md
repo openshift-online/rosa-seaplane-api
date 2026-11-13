@@ -12,11 +12,11 @@ The `kubernetes_resources` table has a composite primary key
 `(gvk, namespace, name)`. An `Index` resource reserves a unique name within a
 namespace that acts as the **uniqueness domain**:
 
-| Use case                   | Index namespace                         | Index name                                          |
-| -------------------------- | --------------------------------------- | --------------------------------------------------- |
-| DNS prefix per shard       | `dns-shard-<id>-reservations`           | `<prefix>`                                          |
-| OIDC issuer URL            | `oidc-issuer-reservations`              | `<sha256-hex(normalized-issuer-url)>`               |
-| Spot queue URL per account | `spot-termination-queue-reservations`   | `<sha256-hex(account-id + NUL + queue-url)>`        |
+| Use case                   | Index namespace                       | Index name                                   |
+| -------------------------- | ------------------------------------- | -------------------------------------------- |
+| DNS prefix per shard       | `dns-shard-<id>-reservations`         | `<prefix>`                                   |
+| OIDC issuer URL            | `oidc-issuer-reservations`            | `<sha256-hex(normalized-issuer-url)>`        |
+| Spot queue URL per account | `spot-termination-queue-reservations` | `<sha256-hex(account-id + NUL + queue-url)>` |
 
 A DNS prefix is already a valid Kubernetes object name, so it's used verbatim.
 An issuer URL is not (it contains a `://` scheme separator and often `/` path

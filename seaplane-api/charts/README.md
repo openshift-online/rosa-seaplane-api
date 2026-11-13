@@ -40,13 +40,13 @@ platformApi:
 ### Basic Installation
 
 ```bash
-helm install platform-api ./platform-api/charts
+helm install platform-api ./seaplane-api/charts
 ```
 
 ### Production Installation with Custom Values
 
 ```bash
-helm install platform-api ./platform-api/charts \
+helm install platform-api ./seaplane-api/charts \
   --set platformApi.targetGroup.arn="arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/platform-api/abc123def456"
 ```
 
@@ -81,14 +81,14 @@ platformApi:
 Install with custom values:
 
 ```bash
-helm install platform-api ./platform-api/charts \
+helm install platform-api ./seaplane-api/charts \
   -f custom-values.yaml
 ```
 
 ## Upgrading
 
 ```bash
-helm upgrade platform-api ./platform-api/charts \
+helm upgrade platform-api ./seaplane-api/charts \
   --set platformApi.targetGroup.arn="arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/platform-api/abc123def456"
 ```
 
@@ -126,21 +126,12 @@ kubectl delete namespace platform-api
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────┐
-│   Application Load Balancer (ALB)      │
-└────────────────┬────────────────────────┘
-                 │ :8000
-                 │
-┌────────────────▼────────────────────────┐
-│           Platform API :8000            │
-└────────────────┬────────────────────────┘
-                 │
-     ┌───────────┼───────────┐
-     │           │           │
-     ▼           ▼           ▼
-   :8000       :8081       :9090
-    API       Health      Metrics
+```mermaid
+flowchart TD
+    ALB["Application Load Balancer (ALB)"] -->|":8000"| API["Platform API :8000"]
+    API --> P1[":8000 API"]
+    API --> P2[":8081 Health"]
+    API --> P3[":9090 Metrics"]
 ```
 
 ## Health Checks
