@@ -506,6 +506,71 @@ func TestClient_Generation(t *testing.T) {
 	assert.Equal(t, map[string]string{"env": "test"}, got3.GetLabels())
 }
 
+func TestClient_DeleteBumpsGeneration(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		deleteBy func(stored *Widget) *Widget
+	}{
+		{
+			name:     "with resourceVersion",
+			deleteBy: func(stored *Widget) *Widget { return stored },
+		},
+		{
+			name: "with resourceVersion and local edits, which delete ignores",
+			deleteBy: func(stored *Widget) *Widget {
+				w := stored.DeepCopyObject().(*Widget)
+				w.DeletionTimestamp = nil
+				w.Generation = 7
+				return w
+			},
+		},
+		{
+			name: "without resourceVersion",
+			deleteBy: func(stored *Widget) *Widget {
+				return &Widget{ObjectMeta: metav1.ObjectMeta{Namespace: stored.Namespace, Name: stored.Name}}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mgr := newManager(t)
+			c := mgr.GetClient()
+			ctx := context.Background()
+			key := types.NamespacedName{Namespace: "default", Name: "delete-gen"}
+
+			w := &Widget{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:  "default",
+					Name:       "delete-gen",
+					Finalizers: []string{"test.example.com/cleanup"},
+				},
+				Spec: WidgetSpec{Color: "blue"},
+			}
+			require.NoError(t, c.Create(ctx, w))
+
+			stored := &Widget{}
+			require.NoError(t, c.Get(ctx, key, stored))
+			require.Equal(t, int64(1), stored.GetGeneration())
+
+			// Starting the delete bumps generation, like the Kubernetes apiserver.
+			require.NoError(t, c.Delete(ctx, tc.deleteBy(stored)))
+
+			deleting := &Widget{}
+			require.NoError(t, c.Get(ctx, key, deleting))
+			require.NotNil(t, deleting.GetDeletionTimestamp())
+			assert.Equal(t, int64(2), deleting.GetGeneration(), "generation should increment when delete starts")
+
+			// Deleting again neither bumps generation nor moves deletionTimestamp.
+			require.NoError(t, c.Delete(ctx, tc.deleteBy(deleting)))
+
+			again := &Widget{}
+			require.NoError(t, c.Get(ctx, key, again))
+			assert.Equal(t, int64(2), again.GetGeneration(), "repeated delete should not increment generation")
+			assert.True(t, deleting.GetDeletionTimestamp().Equal(again.GetDeletionTimestamp()),
+				"repeated delete should keep the original deletionTimestamp")
+		})
+	}
+}
+
 func TestClient_DeleteWithoutRV(t *testing.T) {
 	mgr := newManager(t)
 	c := mgr.GetClient()
