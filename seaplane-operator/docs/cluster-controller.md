@@ -57,20 +57,20 @@ The controller generates Kubernetes manifests for the management cluster: 6 base
 
 **Base resources (always generated):**
 
-| #   | Resource       | Name                      | Purpose                                                                |
-| --- | -------------- | ------------------------- | ---------------------------------------------------------------------- |
-| 1   | Namespace      | `cluster-<Cluster UID>`   | Cluster-scoped isolation boundary on the MC                            |
-| 2   | ConfigMap      | `cluster-config`          | Cluster name and metadata                                              |
-| 3   | ExternalSecret | `pull-secret`             | Pulls container registry credentials from AWS Parameter Store          |
-| 4   | Certificate    | `api-serving-cert`        | TLS cert for `*.{name}.{prefix}.{shard}.{baseDomain}` via cert-manager |
-| 5   | HostedCluster  | `{hostedClusterName}`     | HyperShift control plane definition                                    |
-| 6   | Secret         | `ssh-key`                 | SSH key placeholder                                                    |
+| #   | Resource       | Name                    | Purpose                                                                |
+| --- | -------------- | ----------------------- | ---------------------------------------------------------------------- |
+| 1   | Namespace      | `cluster-<Cluster UID>` | Cluster-scoped isolation boundary on the MC                            |
+| 2   | ConfigMap      | `cluster-config`        | Cluster name and metadata                                              |
+| 3   | ExternalSecret | `pull-secret`           | Pulls container registry credentials from AWS Parameter Store          |
+| 4   | Certificate    | `api-serving-cert`      | TLS cert for `*.{name}.{prefix}.{shard}.{baseDomain}` via cert-manager |
+| 5   | HostedCluster  | `{hostedClusterName}`   | HyperShift control plane definition                                    |
+| 6   | Secret         | `ssh-key`               | SSH key placeholder                                                    |
 
 **Conditional resources:**
 
-| Resource       | Name                      | Condition                                      |
-| -------------- | ------------------------- | ---------------------------------------------- |
-| ConfigMap      | `additional-trust-bundle` | When `spec.additionalTrustBundle` is set        |
+| Resource       | Name                      | Condition                                            |
+| -------------- | ------------------------- | ---------------------------------------------------- |
+| ConfigMap      | `additional-trust-bundle` | When `spec.additionalTrustBundle` is set             |
 | ExternalSecret | `oidc-signing-key`        | When the referenced OidcConfig is external/unmanaged |
 
 ### DNS reservation

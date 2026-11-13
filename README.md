@@ -2,15 +2,16 @@
 
 ROSA HCP regional cluster management — platform API, operator, and backing database library.
 
-| Directory              | Description                                             |
-| ---------------------- | ------------------------------------------------------- |
-| `api/`                 | CRD types and API definitions (v1alpha1)                |
-| `seaplane-api/`        | REST gateway (SigV4 callers, Cedar authz)               |
-| `seaplane-operator/` | Kubernetes operator (cluster lifecycle controller for Cluster, NodePool, DNSReservation, OidcConfig, Placement, ManagementCluster, and other CRDs) |
-| `seaplane-db/`       | PostgreSQL-backed controller-runtime library            |
-| `clientset/`           | Generated typed Kubernetes client for Seaplane CRDs   |
-| `hack/`                | Code generation tools and dev tooling                   |
-| `test/`                | E2E tests (API, CLI, monitoring)                        |
+| Directory              | Description                                                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/`                 | CRD types and API definitions (v1alpha1)                                                                                                           |
+| `seaplane-api/`        | REST gateway (SigV4 callers, Cedar authz)                                                                                                          |
+| `seaplane-api/charts/` | Deployment Helm chart for the platform API                                                                                                         |
+| `seaplane-operator/`   | Kubernetes operator (cluster lifecycle controller for Cluster, NodePool, DNSReservation, OidcConfig, Placement, ManagementCluster, and other CRDs) |
+| `seaplane-db/`         | PostgreSQL-backed controller-runtime library                                                                                                       |
+| `clientset/`           | Generated typed Kubernetes client for Seaplane CRDs                                                                                                |
+| `hack/`                | Code generation tools and dev tooling                                                                                                              |
+| `test/`                | E2E tests (API, CLI, monitoring)                                                                                                                   |
 
 ## Quick Start
 

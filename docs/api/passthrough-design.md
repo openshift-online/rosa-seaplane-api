@@ -16,7 +16,7 @@ The passthrough codegen pipeline generates Go struct types that mirror upstream 
 | File                                                | Role                                                                                                                                                                                                                                                              |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `api/v1alpha1/zz_generated.passthrough.go`          | The committed passthrough types. Human-curated markers live here. This is the source of truth for field policy. Despite the `zz_generated` prefix, this file is intentionally hand-edited to curate markers, then regenerated to pick up upstream struct changes. |
-| `api/v1alpha1/configuration.go`                     | Local mirror of `ClusterConfiguration` with granular markers on nested fields (machineConfig). Used by the scanner for nested field marker extraction.                                                                                                   |
+| `api/v1alpha1/configuration.go`                     | Local mirror of `ClusterConfiguration` with granular markers on nested fields (machineConfig). Used by the scanner for nested field marker extraction.                                                                                                            |
 | `hack/api-codegen/pkg/registry/field_metadata.json` | Generated field registry (JSON). Produced by `marker-scanner` from the passthrough file. Consumed by `passthrough-gen`, `conversion-gen`, and `openapi-gen`.                                                                                                      |
 | `hack/api-codegen/pkg/registry/field_metadata.go`   | Generated field registry (Go). Same data as the JSON, importable by Go code.                                                                                                                                                                                      |
 
@@ -84,12 +84,12 @@ If HyperShift removes a field from `HostedClusterSpec` or `NodePoolSpec`, `make 
 
 The registry captures the following marker categories from the passthrough file:
 
-| Marker                                                   | Registry field               | Purpose                                                                                                        |
-| -------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `+k8s:openapi-gen=false`                                 | `hidden: true`               | Suppresses automatic Kubernetes OpenAPI generation; mutable fields remain in Seaplane's custom public schema |
-| `+seaplane:write-mode=mutable\|immutable\|service-set` | `writeMode`                  | Controls customer mutability                                                                                   |
-| `+openshift:enable:FeatureGate=X`                        | `featureGate`                | Field gated behind a feature flag                                                                              |
-| `+seaplane:validation:FeatureGateAwareWriteMode:...`   | `featureGateAwareWriteModes` | Write-mode varies by active feature gates                                                                      |
+| Marker                                                 | Registry field               | Purpose                                                                                                      |
+| ------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `+k8s:openapi-gen=false`                               | `hidden: true`               | Suppresses automatic Kubernetes OpenAPI generation; mutable fields remain in Seaplane's custom public schema |
+| `+seaplane:write-mode=mutable\|immutable\|service-set` | `writeMode`                  | Controls customer mutability                                                                                 |
+| `+openshift:enable:FeatureGate=X`                      | `featureGate`                | Field gated behind a feature flag                                                                            |
+| `+seaplane:validation:FeatureGateAwareWriteMode:...`   | `featureGateAwareWriteModes` | Write-mode varies by active feature gates                                                                    |
 
 Upstream markers like `+optional` and `+required` are propagated directly from HyperShift source by `passthrough-gen` via `isForwardedMarker()` — they do not go through the registry.
 

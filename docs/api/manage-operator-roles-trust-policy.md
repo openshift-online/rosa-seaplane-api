@@ -21,14 +21,14 @@ recommends an approach, and analyzes migration impact for HCP clusters moving fr
 
 For each operator role, a client needs:
 
-| Field | Example |
-|---|---|
-| Role name / suffix | `<prefix>-ingress`, `<prefix>-cloud-controller-manager` |
-| Service account (trust subject) | `system:serviceaccount:openshift-ingress-operator:ingress-operator` |
-| Permission policy | `arn:aws:iam::aws:policy/service-role/ROSAIngressOperatorPolicy` (AWS-managed) or a customer-managed inline policy (V1) |
-| Trust policy template | Web-identity trust on the OIDC provider, conditioned on `sub` and `aud`; EC2 service trust for the worker role |
-| Tags | `red-hat-managed`, `hypershift-policies`, role prefix, managed-policies marker |
-| Version applicability | Which OpenShift/HCP versions require the role or policy revision |
+| Field                           | Example                                                                                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Role name / suffix              | `<prefix>-ingress`, `<prefix>-cloud-controller-manager`                                                                 |
+| Service account (trust subject) | `system:serviceaccount:openshift-ingress-operator:ingress-operator`                                                     |
+| Permission policy               | `arn:aws:iam::aws:policy/service-role/ROSAIngressOperatorPolicy` (AWS-managed) or a customer-managed inline policy (V1) |
+| Trust policy template           | Web-identity trust on the OIDC provider, conditioned on `sub` and `aud`; EC2 service trust for the worker role          |
+| Tags                            | `red-hat-managed`, `hypershift-policies`, role prefix, managed-policies marker                                          |
+| Version applicability           | Which OpenShift/HCP versions require the role or policy revision                                                        |
 
 ### How V1 (classic + HCP via OCM) handles it
 
@@ -112,12 +112,14 @@ synced by the operator, or static content embedded in the API deployment. Client
 it at runtime, exactly like V1's OCM endpoints.
 
 **Pros**
+
 - Direct parity with the proven V1 model; clients already know this pattern.
 - Works for non-Go consumers (REST).
 - Updates ship region-by-region from the API without client releases.
 - Cedar/authz already exists for SigV4-authenticated API callers.
 
 **Cons**
+
 - The Seaplane API is currently CRD/OpenAPI-generated from Kubernetes types; a
   free-form "policy document" endpoint does not map cleanly onto the CRD→OpenAPI
   codegen pipeline (would need a new Seaplane-native CRD or a hand-written route —
@@ -142,7 +144,7 @@ Create a small standalone Go module inside the `rosa-seaplane-api` monorepo (e.g
 2. **Trust policy builder functions**: parameterized templates
    (`BuildWebIdentityTrustPolicy(partition, accountID, issuerURL, serviceAccount)`,
    `BuildEC2TrustPolicy()`) — no client ever hand-writes JSON again.
-3. **Dynamic data overlay**: the definitions above are the *pinned floor*; a remote,
+3. **Dynamic data overlay**: the definitions above are the _pinned floor_; a remote,
    versioned document (S3 bucket / gist-like store, served over CDN with ETag
    caching) can carry newer revisions. The library exposes
    `FetchLatest(ctx, FetchOptions)` and `Resolve(local, remote)` so clients can
@@ -151,6 +153,7 @@ Create a small standalone Go module inside the `rosa-seaplane-api` monorepo (e.g
    check) guards the remote document.
 
 **Pros**
+
 - Matches the JIRA direction: "shared workflows within the SDK as a library-like
   module… dynamic data in S3/gist so the workflow can react to changes".
 - Zero new API surface; both existing clients already depend on this monorepo via
@@ -163,6 +166,7 @@ Create a small standalone Go module inside the `rosa-seaplane-api` monorepo (e.g
   strictly optional and forward-only.
 
 **Cons**
+
 - Go-only: a non-Go consumer (e.g. a Python tool or raw CFN) must go through the
   rosa CLI / TF, or we additionally publish generated artifacts (JSON/CFN) — see
   deliverable D4 below, which mitigates this.
@@ -244,13 +248,13 @@ Notes:
 
 Key differences that matter for migration:
 
-| Aspect | V1 HCP (OCM) | V2 (Seaplane) |
-|---|---|---|
-| Role naming | `<prefix>-<namespace>-<name>` (e.g. `<prefix>-kube-system-capa-controller-manager`) | `<prefix>-<suffix>` (e.g. `<prefix>-node-pool-management`) |
-| Permissions | Customer-managed inline policies served by OCM, versioned per OpenShift minor | AWS-managed service-role policies (`ROSA*Policy`) |
-| Trust policy | Same web-identity shape; issuer is the cluster's / unmanaged OIDC config | Same shape; issuer from Platform API `OIDCConfig` |
-| Discovery tags | `red-hat-managed`, operator namespace tags | `red-hat-managed`, `hypershift-policies`, `managed_policies` marker |
-| Update path | `rosa upgrade ...` via OCM policy versions | Proposed `definition_version` reconciliation (above) |
+| Aspect         | V1 HCP (OCM)                                                                        | V2 (Seaplane)                                                       |
+| -------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Role naming    | `<prefix>-<namespace>-<name>` (e.g. `<prefix>-kube-system-capa-controller-manager`) | `<prefix>-<suffix>` (e.g. `<prefix>-node-pool-management`)          |
+| Permissions    | Customer-managed inline policies served by OCM, versioned per OpenShift minor       | AWS-managed service-role policies (`ROSA*Policy`)                   |
+| Trust policy   | Same web-identity shape; issuer is the cluster's / unmanaged OIDC config            | Same shape; issuer from Platform API `OIDCConfig`                   |
+| Discovery tags | `red-hat-managed`, operator namespace tags                                          | `red-hat-managed`, `hypershift-policies`, `managed_policies` marker |
+| Update path    | `rosa upgrade ...` via OCM policy versions                                          | Proposed `definition_version` reconciliation (above)                |
 
 Implications and risks:
 
@@ -258,14 +262,14 @@ Implications and risks:
    verbatim by V2's `ComputeRolesRef` naming. If in-place migration (same customer
    account, same cluster moved to V2 management) reuses the existing role set, either:
    (a) V2 must accept the V1 naming (rolesRef is supplied by the client, so the
-   Platform API does not care — the *clients* must map old names), or (b) migration
+   Platform API does not care — the _clients_ must map old names), or (b) migration
    creates a new V2 prefix and the old V1 roles are retired after cutover. The library
    should therefore expose a `FromV1RoleSet` adapter that recognizes V1-named roles
    (they already carry `red-hat-managed` + namespace tags) and builds a valid
    `rolesRef` without creating duplicate roles.
 2. **Policy type change (customer-managed → AWS-managed).** Migrating a cluster whose
    roles still have inline OCM-served policies to a V2 client flow that attaches
-   AWS-managed policies is safe *additively* (attach new policy) but destructive if we
+   AWS-managed policies is safe _additively_ (attach new policy) but destructive if we
    also detach old ones during the same reconciliation. The upgrade flow must attach
    first, verify, then detach, and must never detach a policy still referenced by a
    running V1-managed cluster sharing the prefix.
@@ -283,21 +287,21 @@ Implications and risks:
    roles) must not call OCM. The library approach keeps everything offline-capable —
    an advantage over Option A here.
 6. **Shared prefixes.** Customers may have V1 and V2 clusters sharing an operator-role
-   prefix. Any reconciliation must scope changes by role name pattern *and* the
+   prefix. Any reconciliation must scope changes by role name pattern _and_ the
    `hypershift-policies`/`managed_policies` tags, and refuse to touch roles that don't
    match either naming scheme.
 
 ## Implementation plan
 
-| # | Deliverable | Repo |
-|---|---|---|
-| D1 | `iam/` module: types, embedded definitions, trust-policy builders, tests | rosa-seaplane-api |
-| D2 | rosa CLI: replace `getHCPOperatorRoles()` + `pkg/seaplane/roles.go` internals with `iam/`; keep behavior identical | rosa |
-| D3 | TF provider: new `rhcs_seaplane_operator_roles` resource + datasource built on `iam/` | terraform-provider-rhcs |
-| D4 | CI generation of CFN template + JSON definition export from `iam/definitions.go` | rosa-seaplane-api |
-| D5 | Remote overlay: schema, S3 publishing pipeline, signing/version checks, client `FetchLatest` | rosa-seaplane-api + infra |
-| D6 | `rosa upgrade operator-roles` (seaplane mode) reconciliation using definition versions | rosa |
-| D7 | V1→V2 migration adapter (`FromV1RoleSet`) + e2e coverage of shared-prefix scenarios | rosa-seaplane-api / rosa |
+| #   | Deliverable                                                                                                        | Repo                      |
+| --- | ------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| D1  | `iam/` module: types, embedded definitions, trust-policy builders, tests                                           | rosa-seaplane-api         |
+| D2  | rosa CLI: replace `getHCPOperatorRoles()` + `pkg/seaplane/roles.go` internals with `iam/`; keep behavior identical | rosa                      |
+| D3  | TF provider: new `rhcs_seaplane_operator_roles` resource + datasource built on `iam/`                              | terraform-provider-rhcs   |
+| D4  | CI generation of CFN template + JSON definition export from `iam/definitions.go`                                   | rosa-seaplane-api         |
+| D5  | Remote overlay: schema, S3 publishing pipeline, signing/version checks, client `FetchLatest`                       | rosa-seaplane-api + infra |
+| D6  | `rosa upgrade operator-roles` (seaplane mode) reconciliation using definition versions                             | rosa                      |
+| D7  | V1→V2 migration adapter (`FromV1RoleSet`) + e2e coverage of shared-prefix scenarios                                | rosa-seaplane-api / rosa  |
 
 Suggested order: D1 → D2 (unblocks everything, removes duplication) → D3 → D4 →
 D5/D6 → D7. D1+D2 is a pure refactor with no behavioral change and can ship first.

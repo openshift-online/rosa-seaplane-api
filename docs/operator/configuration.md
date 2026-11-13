@@ -6,30 +6,30 @@ variables are set in the Deployment env section.
 
 ## CLI flags
 
-| Flag | Required | Default | Description |
-| ---- | -------- | ------- | ----------- |
-| `--aws-region` | Yes | — | AWS region for DynamoDB and EKS |
-| `--base-domain` | Yes | — | DNS base domain suffix for HostedClusters |
-| `--max-concurrent-reconciles` | No | `10` | Concurrent reconciles per controller |
-| `--dynamo-poll-interval` | No | `15s` | DynamoDB GSI fast-poller interval |
-| `--dynamo-relist-interval` | No | `5m` | DynamoDB full consistent relist interval |
-| `--dynamo-max-lookback` | No | `--dynamo-relist-interval` | Maximum lookback for the GSI poller |
+| Flag                          | Required | Default                    | Description                               |
+| ----------------------------- | -------- | -------------------------- | ----------------------------------------- |
+| `--aws-region`                | Yes      | —                          | AWS region for DynamoDB and EKS           |
+| `--base-domain`               | Yes      | —                          | DNS base domain suffix for HostedClusters |
+| `--max-concurrent-reconciles` | No       | `10`                       | Concurrent reconciles per controller      |
+| `--dynamo-poll-interval`      | No       | `15s`                      | DynamoDB GSI fast-poller interval         |
+| `--dynamo-relist-interval`    | No       | `5m`                       | DynamoDB full consistent relist interval  |
+| `--dynamo-max-lookback`       | No       | `--dynamo-relist-interval` | Maximum lookback for the GSI poller       |
 
 ## Environment variables
 
 ### Required
 
-| Variable | Description |
-| -------- | ----------- |
+| Variable       | Description                                  |
+| -------------- | -------------------------------------------- |
 | `POSTGRES_DSN` | PostgreSQL connection string for seaplane-db |
 
 ### Optional
 
-| Variable | Default | Description |
-| -------- | ------- | ----------- |
-| `CONTROL_PLANE_OPERATOR_IMAGE` | — | Development override: when set, every HostedCluster is pinned to this CPO image via the `hypershift.openshift.io/control-plane-operator-image` annotation. Empty disables the override. |
-| `ALERTMANAGER_URL` | — | Alertmanager v2 API base URL (e.g. `https://alertmanager.example.com`). When set, the cluster silence reconciler is registered. When unset, lifecycle silencing is disabled. |
-| `REPLICA_COUNT` | `1` | Number of operator replicas for sharded reconciliation. Each pod uses its StatefulSet ordinal to claim a shard. |
+| Variable                       | Default | Description                                                                                                                                                                             |
+| ------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONTROL_PLANE_OPERATOR_IMAGE` | —       | Development override: when set, every HostedCluster is pinned to this CPO image via the `hypershift.openshift.io/control-plane-operator-image` annotation. Empty disables the override. |
+| `ALERTMANAGER_URL`             | —       | Alertmanager v2 API base URL (e.g. `https://alertmanager.example.com`). When set, the cluster silence reconciler is registered. When unset, lifecycle silencing is disabled.            |
+| `REPLICA_COUNT`                | `1`     | Number of operator replicas for sharded reconciliation. Each pod uses its StatefulSet ordinal to claim a shard.                                                                         |
 
 ### ECR image mirror
 
@@ -44,13 +44,13 @@ exit with an error at startup. Setting `ECR_MIRROR_BASE_SECRET_NAME` to
 `"pull-secret"` is also rejected; use a different name such as
 `base-pull-secret`.
 
-| Variable | Description |
-| -------- | ----------- |
-| `ECR_MIRROR_REGISTRY_ACCOUNT` | AWS account ID of the ECR registry |
-| `ECR_MIRROR_REGISTRY_REGION` | AWS region of the ECR registry |
-| `ECR_MIRROR_REPOSITORY` | ECR repository name |
-| `ECR_MIRROR_SOURCES` | Comma-separated list of source registry paths to redirect to the ECR mirror |
-| `ECR_MIRROR_BASE_SECRET_NAME` | Target Secret name for the ESO ExternalSecret. See note below. |
+| Variable                      | Description                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `ECR_MIRROR_REGISTRY_ACCOUNT` | AWS account ID of the ECR registry                                          |
+| `ECR_MIRROR_REGISTRY_REGION`  | AWS region of the ECR registry                                              |
+| `ECR_MIRROR_REPOSITORY`       | ECR repository name                                                         |
+| `ECR_MIRROR_SOURCES`          | Comma-separated list of source registry paths to redirect to the ECR mirror |
+| `ECR_MIRROR_BASE_SECRET_NAME` | Target Secret name for the ESO ExternalSecret. See note below.              |
 
 > **ESO coordination:** `ECR_MIRROR_BASE_SECRET_NAME` must be set to a name
 > other than `pull-secret` (e.g. `base-pull-secret`). The operator redirects
