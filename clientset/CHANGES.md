@@ -1,5 +1,10 @@
 # Changes
 
+## 0.1.27 Nov 10 2026
+
+- added more testing of ECR env variables, fixed write-mode of ImageContainerSources
+
+
 ## 0.1.26 Nov 02 2026
 
 - Remove incorrect kubelet association from ClusterConfiguration
