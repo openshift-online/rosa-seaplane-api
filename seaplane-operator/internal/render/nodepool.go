@@ -116,7 +116,10 @@ func NodePoolResource(nodePool *seaplanev1alpha1.NodePool, cluster *seaplanev1al
 		// instance-type catalog (ROSAENG-65248).
 		npSpec.Arch = instanceTypeArchitecture(npSpec.Platform.AWS.InstanceType)
 
-		npSpec.Platform.AWS.ResourceTags = appendSystemTags("", mergeNodePoolTags(cluster.Spec.Tags, nodePool.Spec.Tags))
+		npSpec.Platform.AWS.ResourceTags = appendSystemTags("", mergeNodePoolTags(cluster.Spec.Tags, nodePool.Spec.Tags),
+			func(key, value string) hypershiftv1beta1.AWSNodePoolResourceTag {
+				return hypershiftv1beta1.AWSNodePoolResourceTag{Key: key, Value: value}
+			})
 	}
 
 	return Resource{
