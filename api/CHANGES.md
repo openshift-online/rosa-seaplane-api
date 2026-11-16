@@ -1,5 +1,11 @@
 # Changes
 
+## 0.1.29 Nov 12 2026
+
+- Remove Manifest API/controller and dead k8s RBAC scaffold
+- added more testing of ECR env variables, fixed write-mode of ImageContainerSources
+
+
 ## 0.1.28 Nov 03 2026
 
 - ROSAENG-67911 | refactor: keep namespace sharding, document why
