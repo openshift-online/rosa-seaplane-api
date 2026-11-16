@@ -12,7 +12,10 @@
 	image-api image-operator image-push-api image-push-operator
 
 helm-lint: ## Lint the platform-api Helm chart
-	helm lint platform-api/charts
+	helm lint seaplane-api/charts \
+	  --set platformApi.authz.tables.policies=lint-policies \
+	  --set platformApi.authz.tables.global=lint-global \
+	  --set platformApi.authz.tables.regional=lint-regional
 
 # ── Configuration ────────────────────────────────────────────────────────
 
