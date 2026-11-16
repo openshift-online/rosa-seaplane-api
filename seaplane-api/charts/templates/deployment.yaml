@@ -14,11 +14,10 @@ spec:
     metadata:
       labels:
         app: {{ .Values.platformApi.app.name }}
+      {{- if .Values.platformApi.rateLimit.enabled }}
       annotations:
-        checksum/authz-config: {{ include (print $.Template.BasePath "/authz-configmap.yaml") . | sha256sum }}
-        {{- if .Values.platformApi.rateLimit.enabled }}
         checksum/rate-limits: {{ include (print $.Template.BasePath "/ratelimit-configmap.yaml") . | sha256sum }}
-        {{- end }}
+      {{- end }}
     spec:
       serviceAccountName: {{ .Values.platformApi.serviceAccount.name }}
       topologySpreadConstraints:
@@ -54,9 +53,15 @@ spec:
           env:
             - name: AWS_REGION
               value: {{ .Values.global.aws_region | quote }}
-            - name: AUTHZ_CONFIG_FILE
-              value: /etc/platform-api/authz/config.yaml
-            # The only account that may change the temporary account allowlist.
+            # Authz table names, one source: regional_cluster.authz_tables.
+            {{- $tables := .Values.platformApi.authz.tables | default dict }}
+            - name: AUTHZ_POLICY_TABLE
+              value: {{ required "platformApi.authz.tables.policies is required" $tables.policies | quote }}
+            - name: AUTHZ_GLOBAL_TABLE
+              value: {{ required "platformApi.authz.tables.global is required" $tables.global | quote }}
+            - name: AUTHZ_REGIONAL_TABLE
+              value: {{ required "platformApi.authz.tables.regional is required" $tables.regional | quote }}
+            # Only the RC account may change resource enrollment.
             - name: AWS_ACCOUNT_ID
               value: {{ .Values.global.aws_account_id | quote }}
             # "id:account" pairs platform-api registers on startup.
@@ -87,15 +92,12 @@ spec:
             - name: REDIS_ENDPOINT
               value: {{ .Values.platformApi.rateLimit.redisEndpoint | quote }}
             {{- end }}
+          {{- if .Values.platformApi.rateLimit.enabled }}
           volumeMounts:
-            - name: authz-config
-              mountPath: /etc/platform-api/authz
-              readOnly: true
-            {{- if .Values.platformApi.rateLimit.enabled }}
             - name: rate-limits
               mountPath: /etc/platform-api/rate-limits
               readOnly: true
-            {{- end }}
+          {{- end }}
           ports:
             - name: api
               containerPort: {{ .Values.platformApi.app.args.apiPort }}
@@ -129,13 +131,9 @@ spec:
             limits:
               cpu: {{ .Values.platformApi.app.resources.limits.cpu }}
               memory: {{ .Values.platformApi.app.resources.limits.memory }}
+      {{- if .Values.platformApi.rateLimit.enabled }}
       volumes:
-        - name: authz-config
-          configMap:
-            name: authz-config
-            defaultMode: 0644
-        {{- if .Values.platformApi.rateLimit.enabled }}
         - name: rate-limits
           configMap:
             name: rate-limits
-        {{- end }}
+      {{- end }}
