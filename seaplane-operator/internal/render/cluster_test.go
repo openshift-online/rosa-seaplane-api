@@ -107,8 +107,8 @@ func TestClusterResourcesCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
-	if got := len(resources); got != 6 {
-		t.Errorf("expected 6 resources, got %d", got)
+	if got := len(resources); got != 7 {
+		t.Errorf("expected 7 resources, got %d", got)
 	}
 }
 
@@ -126,6 +126,7 @@ func TestClusterResourcesTypes(t *testing.T) {
 		{"configmaps", "cluster-config"},
 		{"externalsecrets", "pull-secret"},
 		{"certificates", "api-serving-cert"},
+		{"certificates", "ingress-serving-cert"},
 		{"hostedclusters", HostedClusterName(testCluster())},
 		{"secrets", "ssh-key"},
 	}
@@ -313,8 +314,8 @@ func TestClusterResourcesWithOidcConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
-	if got := len(resources); got != 7 {
-		t.Fatalf("expected 7 resources, got %d", got)
+	if got := len(resources); got != 8 {
+		t.Fatalf("expected 8 resources, got %d", got)
 	}
 
 	last := resources[len(resources)-1]
@@ -609,7 +610,57 @@ func TestHostedClusterControlPlaneOperatorImageAnnotation(t *testing.T) {
 	}
 }
 
-func tagPairs(tags []hypershiftv1beta1.AWSResourceTag) map[string]string {
+// TestHostedClusterManagedIngress verifies the managed ingress DNS wiring: the
+// ingress domain, the ManagedDNS spec, the DNS01 serving Certificate, and the
+// defaultCertificate propagation (OCPSTRAT-3499) that points the default
+// IngressController at that cert.
+func TestHostedClusterManagedIngress(t *testing.T) {
+	const wantIngressDomain = "apps.in.my-cluster.f7a3.0.example.com"
+
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
+	if err != nil {
+		t.Fatalf("ClusterResources: %v", err)
+	}
+	hc := hostedClusterFrom(t, resources)
+
+	if got := hc.Spec.Configuration.Ingress.Domain; got != wantIngressDomain {
+		t.Errorf("ingress domain = %q, want %q", got, wantIngressDomain)
+	}
+
+	if hc.Spec.Platform.AWS == nil {
+		t.Fatal("expected AWS platform spec")
+	}
+	mdns := hc.Spec.Platform.AWS.ManagedDNS
+	if mdns.IngressDomainPrefix != "in" {
+		t.Errorf("managedDNS.ingressDomainPrefix = %q, want %q", mdns.IngressDomainPrefix, "in")
+	}
+	if got := mdns.Delegation.NSDelegationMode; got != hypershiftv1beta1.NSDelegationExternalDNS {
+		t.Errorf("managedDNS.delegation.nsDelegationMode = %q, want %q", got, hypershiftv1beta1.NSDelegationExternalDNS)
+	}
+
+	if hc.Spec.OperatorConfiguration == nil || hc.Spec.OperatorConfiguration.IngressOperator == nil {
+		t.Fatal("expected operatorConfiguration.ingressOperator to be set")
+	}
+	if got := hc.Spec.OperatorConfiguration.IngressOperator.DefaultCertificate.Name; got != "ingress-serving-cert" {
+		t.Errorf("ingressOperator.defaultCertificate.name = %q, want %q", got, "ingress-serving-cert")
+	}
+
+	var ingressCert *Certificate
+	for _, m := range resources {
+		if m.Resource == "certificates" && m.Name == "ingress-serving-cert" {
+			ingressCert = m.Object.(*Certificate)
+		}
+	}
+	if ingressCert == nil {
+		t.Fatal("no ingress-serving-cert Certificate resource found")
+	}
+	wantDNSName := "*." + wantIngressDomain
+	if got := ingressCert.Spec.DNSNames; len(got) != 1 || got[0] != wantDNSName {
+		t.Errorf("ingress cert DNSNames = %v, want [%q]", got, wantDNSName)
+	}
+}
+
+func tagPairs(tags []hypershiftv1beta1.AWSClusterResourceTag) map[string]string {
 	out := make(map[string]string, len(tags))
 	for _, tag := range tags {
 		out[tag.Key] = tag.Value
@@ -713,7 +764,7 @@ func TestHostedClusterCustomerTagsDeterministicOrder(t *testing.T) {
 // resourceTags passthrough values are not rendered.
 func TestHostedClusterUsesRootTagsInsteadOfPlatformPassthrough(t *testing.T) {
 	cluster := testCluster()
-	cluster.Spec.HostedCluster.Platform.AWS.ResourceTags = []hypershiftv1beta1.AWSResourceTag{
+	cluster.Spec.HostedCluster.Platform.AWS.ResourceTags = []hypershiftv1beta1.AWSClusterResourceTag{
 		{Key: "environment", Value: "passthrough"},
 		{Key: "legacy", Value: "ignored"},
 	}
@@ -739,7 +790,7 @@ func TestHostedClusterUsesRootTagsInsteadOfPlatformPassthrough(t *testing.T) {
 
 func TestHostedClusterIgnoresPassthroughSystemTags(t *testing.T) {
 	cluster := testCluster()
-	cluster.Spec.HostedCluster.Platform.AWS.ResourceTags = []hypershiftv1beta1.AWSResourceTag{
+	cluster.Spec.HostedCluster.Platform.AWS.ResourceTags = []hypershiftv1beta1.AWSClusterResourceTag{
 		{Key: "red-hat-managed", Value: "false"},
 		{Key: "kubernetes.io/cluster/abc12345", Value: "shared"},
 	}

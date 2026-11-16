@@ -52,6 +52,7 @@ func ClusterResources(cluster *seaplanev1alpha1.Cluster, oidcSigningKeyExternal 
 		clusterConfig(clusterID, clusterName, ns),
 		pullSecret(clusterID, ns, esoTargetName),
 		apiServingCert(clusterID, hostedClusterName, baseDomain, ns),
+		ingressServingCert(clusterID, hostedClusterName, baseDomain, ns),
 		hc,
 		sshKey(clusterID, ns),
 	}
@@ -231,6 +232,33 @@ func apiServingCert(clusterID, hostedClusterName, baseDomain, ns string) Resourc
 	}
 }
 
+func ingressServingCert(clusterID, hostedClusterName, baseDomain, ns string) Resource {
+	return Resource{
+		Group: "cert-manager.io", Version: "v1", Resource: "certificates",
+		Name: "ingress-serving-cert", Namespace: ns,
+		Object: &Certificate{
+			TypeMeta: metav1.TypeMeta{APIVersion: "cert-manager.io/v1", Kind: "Certificate"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "ingress-serving-cert",
+				Namespace: ns,
+				Labels: map[string]string{
+					"hyperfleet.io/cluster-id": clusterID,
+				},
+			},
+			Spec: CertificateSpec{
+				SecretName: "ingress-serving-cert",
+				IssuerRef: CertificateIssuerRef{
+					Name: "letsencrypt-dns01",
+					Kind: "ClusterIssuer",
+				},
+				DNSNames: []string{
+					fmt.Sprintf("*.apps.in.%s.%s", hostedClusterName, baseDomain),
+				},
+			},
+		},
+	}
+}
+
 func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClusterName string, oidcSigningKeyExternal bool,
 	baseDomain, controlPlaneOperatorImage string, ecrMirror ECRMirrorConfig) (Resource, error) {
 	clusterName := cluster.Name // customer-facing identity
@@ -270,6 +298,22 @@ func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClust
 		}
 	}
 
+	ingressDomain := fmt.Sprintf("apps.in.%s.%s", hostedClusterName, baseDomain)
+	if hcSpec.Configuration.Ingress == nil {
+		hcSpec.Configuration.Ingress = &configv1.IngressSpec{}
+	}
+	hcSpec.Configuration.Ingress.Domain = ingressDomain
+
+	if hcSpec.OperatorConfiguration == nil {
+		hcSpec.OperatorConfiguration = &hypershiftv1beta1.OperatorConfiguration{}
+	}
+	if hcSpec.OperatorConfiguration.IngressOperator == nil {
+		hcSpec.OperatorConfiguration.IngressOperator = &hypershiftv1beta1.IngressOperatorSpec{}
+	}
+	hcSpec.OperatorConfiguration.IngressOperator.DefaultCertificate = hypershiftv1beta1.IngressDefaultCertificateReference{
+		Name: "ingress-serving-cert",
+	}
+
 	// --- Defaults (only set if customer didn't specify) ---
 	if hcSpec.Etcd.ManagementType == "" {
 		hcSpec.Etcd = defaultEtcdSpec()
@@ -302,7 +346,16 @@ func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClust
 	// --- Platform overrides ---
 	if hcSpec.Platform.AWS != nil {
 		hcSpec.Platform.AWS.EndpointAccess = hypershiftv1beta1.PublicAndPrivate
-		hcSpec.Platform.AWS.ResourceTags = appendSystemTags(clusterID, cluster.Spec.Tags)
+		hcSpec.Platform.AWS.ResourceTags = appendSystemTags(clusterID, cluster.Spec.Tags,
+			func(key, value string) hypershiftv1beta1.AWSClusterResourceTag {
+				return hypershiftv1beta1.AWSClusterResourceTag{Key: key, Value: value}
+			})
+		hcSpec.Platform.AWS.ManagedDNS = hypershiftv1beta1.AWSManagedDNSSpec{
+			IngressDomainPrefix: "in",
+			Delegation: hypershiftv1beta1.AWSManagedDNSDelegationSpec{
+				NSDelegationMode: hypershiftv1beta1.NSDelegationExternalDNS,
+			},
+		}
 	}
 
 	// References the Secret materialized by oidcSigningKeySecret's ExternalSecret.
@@ -412,24 +465,29 @@ func defaultEtcdSpec() hypershiftv1beta1.EtcdSpec {
 // appendSystemTags emits reserved system tags followed by non-conflicting
 // customer tags. Customer tags are sorted so repeated renders produce an
 // identical spec and do not cause spurious updates.
-func appendSystemTags(clusterID string, customerTags map[string]string) []hypershiftv1beta1.AWSResourceTag {
-	tags := []hypershiftv1beta1.AWSResourceTag{
-		{Key: "red-hat-managed", Value: "true"},
+// Upstream splits AWS resource tags into distinct cluster and node-pool types,
+// so the shared ordering/dedup logic yields key/value pairs that each caller
+// maps onto its own tag type via mk.
+func appendSystemTags[T any](clusterID string, customerTags map[string]string, mk func(key, value string) T) []T {
+	pairs := [][2]string{
+		{"red-hat-managed", "true"},
 	}
 	if clusterID != "" {
-		tags = append(tags, hypershiftv1beta1.AWSResourceTag{
-			Key: fmt.Sprintf("kubernetes.io/cluster/%s", clusterID), Value: "owned",
-		})
+		pairs = append(pairs, [2]string{fmt.Sprintf("kubernetes.io/cluster/%s", clusterID), "owned"})
 	}
-	seen := make(map[string]struct{}, len(tags))
-	for _, t := range tags {
-		seen[t.Key] = struct{}{}
+	seen := make(map[string]struct{}, len(pairs))
+	for _, p := range pairs {
+		seen[p[0]] = struct{}{}
 	}
 	for _, key := range slices.Sorted(maps.Keys(customerTags)) {
 		if _, taken := seen[key]; taken {
 			continue
 		}
-		tags = append(tags, hypershiftv1beta1.AWSResourceTag{Key: key, Value: customerTags[key]})
+		pairs = append(pairs, [2]string{key, customerTags[key]})
+	}
+	tags := make([]T, len(pairs))
+	for i, p := range pairs {
+		tags[i] = mk(p[0], p[1])
 	}
 	return tags
 }

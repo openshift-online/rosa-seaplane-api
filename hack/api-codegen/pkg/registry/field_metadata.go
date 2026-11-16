@@ -536,6 +536,13 @@ var FieldRegistry = TypedFieldRegistry{
 			OwnerType: "Cluster",
 			OwnerGVK:  "seaplane.io/v1alpha1.Cluster",
 		},
+		"spec.hostedCluster.monitoring": {
+			FieldPath: "spec.hostedCluster.monitoring",
+			WriteMode: ServiceSet,
+			Hidden:    true,
+			OwnerType: "Cluster",
+			OwnerGVK:  "seaplane.io/v1alpha1.Cluster",
+		},
 		"spec.hostedCluster.networking.allocateNodeCIDRs": {
 			FieldPath: "spec.hostedCluster.networking.allocateNodeCIDRs",
 			WriteMode: Immutable,
@@ -589,6 +596,7 @@ var FieldRegistry = TypedFieldRegistry{
 		"spec.hostedCluster.operatorConfiguration": {
 			FieldPath: "spec.hostedCluster.operatorConfiguration",
 			WriteMode: ServiceSet,
+			Hidden:    true,
 			OwnerType: "Cluster",
 			OwnerGVK:  "seaplane.io/v1alpha1.Cluster",
 		},
