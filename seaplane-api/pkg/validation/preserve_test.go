@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	v1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
-	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/internal/codegen/featuregate"
+	"github.com/openshift-online/rosa-seaplane-api/featuregate"
 	configv1 "github.com/openshift/api/config/v1"
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 )

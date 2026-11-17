@@ -1,6 +1,6 @@
 package featuregate
 
-// FeatureStage represents the maturity stage of a feature gate
+// FeatureStage represents the maturity stage of a feature gate.
 type FeatureStage int
 
 const (
@@ -22,13 +22,11 @@ func (s FeatureStage) String() string {
 	}
 }
 
-// FeatureGateInfo describes a single feature gate
 type FeatureGateInfo struct {
 	Stage       FeatureStage
 	Description string
 }
 
-// FeatureSet represents a collection of feature gates
 type FeatureSet string
 
 const (
