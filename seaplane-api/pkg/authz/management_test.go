@@ -4,9 +4,12 @@ package authz_test
 
 import (
 	"errors"
+	"net/http"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/internal/authztest"
 )
@@ -63,5 +66,36 @@ func TestManagementGlobalIsolation(t *testing.T) {
 	decision, err := prepared.Check(ctx, authz.ListClusters, authz.Resource{Kind: authz.Collection, CollectionKind: authz.Cluster, AccountID: account})
 	if err != nil || decision.Allowed {
 		t.Fatalf("admin resource = %+v, %v", decision, err)
+	}
+}
+
+// countingHTTP counts DynamoDB requests.
+type countingHTTP struct{ calls atomic.Int32 }
+
+func (c *countingHTTP) Do(r *http.Request) (*http.Response, error) {
+	c.calls.Add(1)
+	return http.DefaultClient.Do(r)
+}
+
+// TestUnscopedListResolvesGrantsOnce authorizes both scopes from one grant read.
+func TestUnscopedListResolvesGrantsOnce(t *testing.T) {
+	_, _, admin, _, cfg := managementFixture(t)
+	counter := &countingHTTP{}
+	client := dynamodb.New(localClient().Options(), func(o *dynamodb.Options) { o.HTTPClient = counter })
+	m, err := authz.NewService(client, cfg, "us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := func(scope authz.AttachmentScope) int32 {
+		counter.calls.Store(0)
+		if _, err := m.ListAttachments(t.Context(), admin, scope); err != nil {
+			t.Fatal(err)
+		}
+		return counter.calls.Load()
+	}
+	regional, unscoped := requests(authz.RegionalScope), requests("")
+	// Both resolve global and regional grants; the unscoped list only adds the global bindings read.
+	if unscoped != regional+1 {
+		t.Fatalf("unscoped list made %d DynamoDB requests, regional %d; want regional+1", unscoped, regional)
 	}
 }

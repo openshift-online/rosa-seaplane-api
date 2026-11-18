@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
@@ -66,9 +67,10 @@ func (m *Service) store(account string) *Store {
 	return &store
 }
 
-// authorize checks the caller identity and scope-specific Cedar grants.
+// authorize checks the caller identity and scope-specific Cedar grants, resolving
+// grants once for every action so a multi-scope request reads storage once.
 // The first grants for an account are seeded directly into storage (see docs/authz/storage-contract.md).
-func (m *Service) authorize(ctx context.Context, caller ManagementCaller, action Action, id string) (*Store, error) {
+func (m *Service) authorize(ctx context.Context, caller ManagementCaller, id string, actions ...Action) (*Store, error) {
 	store := m.store(caller.AccountID)
 	identity := Identity{AccountID: caller.AccountID, CallerARN: caller.CallerARN}
 	if _, err := checkedIdentity(identity); err != nil || store == nil {
@@ -78,24 +80,26 @@ func (m *Service) authorize(ctx context.Context, caller ManagementCaller, action
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	scopes := []AttachmentScope{GlobalScope}
-	if isRegionalAction(action) {
+	if slices.ContainsFunc(actions, isRegionalAction) {
 		scopes = append(scopes, RegionalScope)
 	}
 	prepared, err := store.prepareScopes(ctx, identity, caller.Request, scopes)
 	if err != nil {
 		return nil, err
 	}
-	kind := actionResourceKind(action)
-	resource := Resource{Kind: kind, AccountID: caller.AccountID, ID: id}
-	if listAction(action) {
-		resource.Kind, resource.CollectionKind, resource.ID = Collection, kind, ""
-	}
-	decision, err := prepared.Check(ctx, action, resource)
-	if err != nil {
-		return nil, err
-	}
-	if !decision.Allowed {
-		return nil, ErrManagementDenied
+	for _, action := range actions {
+		kind := actionResourceKind(action)
+		resource := Resource{Kind: kind, AccountID: caller.AccountID, ID: id}
+		if listAction(action) {
+			resource.Kind, resource.CollectionKind, resource.ID = Collection, kind, ""
+		}
+		decision, err := prepared.Check(ctx, action, resource)
+		if err != nil {
+			return nil, err
+		}
+		if !decision.Allowed {
+			return nil, ErrManagementDenied
+		}
 	}
 	return store, nil
 }
@@ -157,7 +161,7 @@ func checkPolicyMutation(ref PolicyRef, expected string) error {
 
 // CreatePolicy validates and commits a custom policy in the service region.
 func (m *Service) CreatePolicy(ctx context.Context, caller ManagementCaller, id, content string) (StoredPolicy, error) {
-	store, err := m.authorize(ctx, caller, CreatePolicy, id)
+	store, err := m.authorize(ctx, caller, id, CreatePolicy)
 	if err != nil {
 		return StoredPolicy{}, err
 	}
@@ -167,7 +171,7 @@ func (m *Service) CreatePolicy(ctx context.Context, caller ManagementCaller, id,
 
 // ListPolicies returns managed and account-owned custom policies without merging colliding IDs.
 func (m *Service) ListPolicies(ctx context.Context, caller ManagementCaller) ([]StoredPolicy, error) {
-	store, err := m.authorize(ctx, caller, ListPolicies, "")
+	store, err := m.authorize(ctx, caller, "", ListPolicies)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +184,7 @@ func (m *Service) GetPolicy(ctx context.Context, caller ManagementCaller, ref Po
 	if err := checkPolicyRef(ref); err != nil {
 		return StoredPolicy{}, err
 	}
-	store, err := m.authorize(ctx, caller, DescribePolicy, ref.ID)
+	store, err := m.authorize(ctx, caller, ref.ID, DescribePolicy)
 	if err != nil {
 		return StoredPolicy{}, err
 	}
@@ -193,7 +197,7 @@ func (m *Service) UpdatePolicy(ctx context.Context, caller ManagementCaller, ref
 	if err := checkPolicyMutation(ref, expected); err != nil {
 		return StoredPolicy{}, err
 	}
-	store, err := m.authorize(ctx, caller, UpdatePolicy, ref.ID)
+	store, err := m.authorize(ctx, caller, ref.ID, UpdatePolicy)
 	if err != nil {
 		return StoredPolicy{}, err
 	}
@@ -206,7 +210,7 @@ func (m *Service) DeletePolicy(ctx context.Context, caller ManagementCaller, ref
 	if err := checkPolicyMutation(ref, expected); err != nil {
 		return DeletionReceipt{}, err
 	}
-	store, err := m.authorize(ctx, caller, DeletePolicy, ref.ID)
+	store, err := m.authorize(ctx, caller, ref.ID, DeletePolicy)
 	if err != nil {
 		return DeletionReceipt{}, err
 	}
@@ -234,7 +238,7 @@ func (m *Service) CreateAttachment(ctx context.Context, caller ManagementCaller,
 	if err != nil {
 		return StoredAttachment{}, err
 	}
-	store, err := m.authorize(ctx, caller, action, "")
+	store, err := m.authorize(ctx, caller, "", action)
 	if err != nil {
 		return StoredAttachment{}, err
 	}
@@ -255,16 +259,17 @@ func (m *Service) ListAttachments(ctx context.Context, caller ManagementCaller, 
 	if scope == "" {
 		scopes = []AttachmentScope{GlobalScope, RegionalScope}
 	}
-	var store *Store
+	actions := make([]Action, 0, len(scopes))
 	for _, scope := range scopes {
 		action, err := attachmentAction(scope, ListAttachments, ListAttachmentsRegional)
 		if err != nil {
 			return nil, err
 		}
-		store, err = m.authorize(ctx, caller, action, "")
-		if err != nil {
-			return nil, err
-		}
+		actions = append(actions, action)
+	}
+	store, err := m.authorize(ctx, caller, "", actions...)
+	if err != nil {
+		return nil, err
 	}
 	bindings := []StoredAttachment{}
 	for _, scope := range scopes {
@@ -286,7 +291,7 @@ func (m *Service) DeleteAttachment(ctx context.Context, caller ManagementCaller,
 	if !isStoreID(id) || !isRevision(expected) {
 		return DeletionReceipt{}, fmt.Errorf("%w: valid attachment ID and revision required", ErrValidation)
 	}
-	store, err := m.authorize(ctx, caller, action, id)
+	store, err := m.authorize(ctx, caller, id, action)
 	if err != nil {
 		return DeletionReceipt{}, err
 	}
