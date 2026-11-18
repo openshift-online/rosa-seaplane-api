@@ -252,6 +252,10 @@ Logs never include policy content.
   was submitted, otherwise `UnlabelResource`. Mixed patches emit one outcome.
 - `outcome`: `allow`, `deny`, `error`. `stage`: `resolution`, `binding`,
   `entity_validation`, `evaluation`, `resource_loading`.
+- Management calls (`/api/v0/authz/*`) use the same metrics and log messages,
+  with the management action (`CreatePolicy`, `ListPolicies`, ...) as `operation`.
+  Duration covers the DynamoDB grant read and Cedar evaluation, not the
+  management write itself.
 - Unauthenticated, unenrolled, rate-limited, and public requests record nothing.
 
 ## Verify locally

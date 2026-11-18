@@ -79,15 +79,28 @@ func (m *Service) authorize(ctx context.Context, caller ManagementCaller, id str
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
+	// One attempt per action, each timed from before the shared grant read, like resource requests.
+	// The first deny or error stops the checks; later actions record nothing.
+	attempts := make([]*Attempt, len(actions))
+	for i, action := range actions {
+		attempts[i] = DefaultMetrics.Start(action)
+	}
+	fail := func(err error, action Action, attempt *Attempt) (*Store, error) {
+		if failure, ok := errors.AsType[*Failure](err); ok && failure.Action == "" {
+			failure.Action = action
+		}
+		attempt.Finish(OutcomeError, failureStage(err))
+		return nil, err
+	}
 	scopes := []AttachmentScope{GlobalScope}
 	if slices.ContainsFunc(actions, isRegionalAction) {
 		scopes = append(scopes, RegionalScope)
 	}
 	prepared, err := store.prepareScopes(ctx, identity, caller.Request, scopes)
 	if err != nil {
-		return nil, err
+		return fail(err, actions[0], attempts[0])
 	}
-	for _, action := range actions {
+	for i, action := range actions {
 		kind := actionResourceKind(action)
 		resource := Resource{Kind: kind, AccountID: caller.AccountID, ID: id}
 		if listAction(action) {
@@ -95,13 +108,34 @@ func (m *Service) authorize(ctx context.Context, caller ManagementCaller, id str
 		}
 		decision, err := prepared.Check(ctx, action, resource)
 		if err != nil {
-			return nil, err
+			return fail(err, action, attempts[i])
 		}
 		if !decision.Allowed {
-			return nil, ErrManagementDenied
+			attempts[i].Finish(OutcomeDeny, StageNone)
+			return nil, &Denial{Action: action, Provenance: decision.Provenance}
 		}
+		attempts[i].Finish(OutcomeAllow, StageNone)
 	}
 	return store, nil
+}
+
+// Denial is ErrManagementDenied plus the grants that decided it, for logs only.
+type Denial struct {
+	Action     Action
+	Provenance []Provenance
+}
+
+func (d *Denial) Error() string { return ErrManagementDenied.Error() }
+
+// Is keeps errors.Is(err, ErrManagementDenied) true for denials.
+func (d *Denial) Is(target error) bool { return target == ErrManagementDenied }
+
+// failureStage labels an authorization error; untyped errors, such as a backend outage, are resolution failures.
+func failureStage(err error) Stage {
+	if failure, ok := errors.AsType[*Failure](err); ok {
+		return failure.Stage
+	}
+	return StageResolution
 }
 
 // managementResult preserves classified errors and fails closed on malformed stored state.
