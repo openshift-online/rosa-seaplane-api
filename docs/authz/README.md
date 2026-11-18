@@ -1,6 +1,6 @@
 # Platform API authorization
 
-Resource requests evaluate Cedar in-process (`cedar-go v1.8.0`). The authorization
+Resource requests evaluate Cedar in-process. The authorization
 service (`authz.Service`) resolves permissions only from DynamoDB. Gateway authentication,
 database enrollment, and management authority grant no resource permissions.
 
