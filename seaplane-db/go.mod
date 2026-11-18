@@ -3,17 +3,17 @@ module github.com/openshift-online/rosa-seaplane-api/seaplane-db
 go 1.26.3
 
 require (
-	github.com/Shopify/toxiproxy v2.1.4+incompatible
+	github.com/Shopify/toxiproxy v2.1.5+incompatible
 	github.com/go-logr/logr v1.4.4
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/prometheus/client_golang v1.24.1
+	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.2
 	github.com/stretchr/testify v1.12.1
-	k8s.io/api v0.36.0
-	k8s.io/apimachinery v0.36.0
-	k8s.io/client-go v0.36.0
-	sigs.k8s.io/controller-runtime v0.24.1
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/client-go v0.37.2
+	sigs.k8s.io/controller-runtime v0.25.2
 )
 
 require (
