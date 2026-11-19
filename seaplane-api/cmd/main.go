@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -15,7 +14,6 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/spf13/cobra"
 
-	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/server"
@@ -25,7 +23,6 @@ var (
 	// Config flags
 	logLevel                 string
 	logFormat                string
-	legacyDynamoDBRegion     string
 	postgresDSN              string
 	oidcIssuerBaseURL        string
 	defaultClusterExpiration time.Duration
@@ -56,11 +53,6 @@ var serveCmd = &cobra.Command{
 func init() {
 	serveCmd.Flags().StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
 	serveCmd.Flags().StringVar(&logFormat, "log-format", "json", "Log format (json, text)")
-	serveCmd.Flags().String("allowed-accounts", "", "Deprecated compatibility flag; ignored")
-	serveCmd.Flags().String("authz-config-file", "", "Authorization configuration bundle (required)")
-	serveCmd.Flags().String("authz-management-config-file", "", "Optional authorization management configuration")
-	serveCmd.Flags().StringVar(&legacyDynamoDBRegion, "dynamodb-region", "", "Deprecated compatibility flag; used only as a region fallback")
-	serveCmd.Flags().String("dynamodb-prefix", "", "Deprecated compatibility flag; ignored")
 	serveCmd.Flags().StringVar(&postgresDSN, "postgres-dsn", "", "PostgreSQL connection string (required)")
 	serveCmd.Flags().StringVar(&oidcIssuerBaseURL, "oidc-issuer-base-url", "", "Base URL for OIDC issuer (e.g. https://<cloudfront-domain>)")
 	serveCmd.Flags().DurationVar(&defaultClusterExpiration, "default-cluster-expiration", 0, "Default cluster lifetime (e.g. 24h). Clusters created without an explicit expirationTimestamp get one stamped at creation. Zero means no default.")
@@ -86,27 +78,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to detect AWS region: %w", err)
 	}
-	if awsCfg.Region == "" && legacyDynamoDBRegion != "" {
-		awsCfg.Region = legacyDynamoDBRegion
-	}
 	if awsCfg.Region == "" {
 		return fmt.Errorf("AWS region could not be detected from environment; set AWS_REGION")
 	}
 	logger.Info("detected AWS region", "region", awsCfg.Region)
 
 	// Validate authorization before database connections or serving listeners.
-	cfg, authorizer, err := loadStartupConfig(cmd, awsCfg.Region)
+	cfg := loadStartupConfig(awsCfg.Region)
+	authorization, err := loadAuthorization(awsCfg)
 	if err != nil {
-		if failure, ok := errors.AsType[*authz.Failure](err); ok {
-			logger.Error("authorization startup failed", "stage", failure.Stage, "cause", failure.Err, "provenance", failure.Provenance, "diagnostics", failure.Diagnostics)
-		} else {
-			logger.Error("authorization startup failed", "error", err)
-		}
-		return err
-	}
-
-	management, err := loadManagement(cmd, awsCfg)
-	if err != nil {
+		logger.Error("authorization startup failed", "error", err)
 		return err
 	}
 
@@ -196,7 +177,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create server
-	srv, err := server.New(cfg, dbClient, authorizer, management, logger)
+	srv, err := server.New(cfg, dbClient, authorization, logger)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}

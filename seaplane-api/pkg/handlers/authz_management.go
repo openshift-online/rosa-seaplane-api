@@ -18,7 +18,7 @@ import (
 
 // ManagementHandler adapts the management service to the public HTTP contract.
 type ManagementHandler struct {
-	management *authz.Management
+	management *authz.Service
 	logger     *slog.Logger
 }
 
@@ -49,7 +49,7 @@ type managementList[T any] struct {
 }
 
 // NewManagementHandler returns HTTP handlers backed by the account-scoped management service.
-func NewManagementHandler(management *authz.Management, logger *slog.Logger) *ManagementHandler {
+func NewManagementHandler(management *authz.Service, logger *slog.Logger) *ManagementHandler {
 	return &ManagementHandler{management: management, logger: logger}
 }
 
@@ -134,9 +134,8 @@ func (h *ManagementHandler) badRequest(w http.ResponseWriter, err error) {
 }
 
 // writeError maps typed service failures without classifying backend error strings.
-func (h *ManagementHandler) writeError(w http.ResponseWriter, err error) {
+func (h *ManagementHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status, message := 500, "Authorization management failed"
-	var writer *authz.WrongWriterError
 	_, isFailure := errors.AsType[*authz.Failure](err)
 	switch {
 	case isFailure:
@@ -148,26 +147,34 @@ func (h *ManagementHandler) writeError(w http.ResponseWriter, err error) {
 		status, message = 422, "Invalid authorization input"
 	case errors.Is(err, authz.ErrNotFound):
 		status, message = 404, "Authorization record not found"
-	case errors.Is(err, authz.ErrWrongWriter):
-		status, message = 409, "Global mutation requires the account writer region"
 	case errors.Is(err, authz.ErrConflict):
 		status, message = 409, "Authorization record revision conflict"
 	case errors.Is(err, authz.ErrUnavailable):
 		status, message = 503, "Authorization backend unavailable"
 	}
 	def := api.APIError{Code: "AUTHZ-MANAGEMENT-001", HTTPStatus: status, Message: message}
-	if errors.As(err, &writer) {
-		w.Header().Set("X-Authz-Writer-Region", writer.Region)
-		def = def.WithErrors([]map[string]string{{"field": "writerRegion", "detail": writer.Region}})
-	}
-	h.logger.Error("authorization management request failed", "status", status, "reason", message)
+	h.logError(r, err, status, message)
 	writeAPIError(w, def, h.logger)
 }
 
+// logError explains authorization denials and failures with grant provenance, never policy content.
+func (h *ManagementHandler) logError(r *http.Request, err error, status int, message string) {
+	caller := []any{"account_id", middleware.GetAccountID(r.Context()), "caller_arn", middleware.GetCallerARN(r.Context())}
+	if denial, ok := errors.AsType[*authz.Denial](err); ok {
+		h.logger.Info("request authorization denied", append(caller, "action", denial.Action, "provenance", denial.Provenance)...)
+		return
+	}
+	if failure, ok := errors.AsType[*authz.Failure](err); ok {
+		h.logger.Error("request authorization failed", append(caller, "action", failure.Action, "stage", failure.Stage, "cause", failure.Err, "provenance", failure.Provenance, "diagnostics", failure.Diagnostics)...)
+		return
+	}
+	h.logger.Error("authorization management request failed", "status", status, "reason", message)
+}
+
 // respond writes a committed result or a structured service failure.
-func (h *ManagementHandler) respond(w http.ResponseWriter, status int, value any, err error) {
+func (h *ManagementHandler) respond(w http.ResponseWriter, r *http.Request, status int, value any, err error) {
 	if err != nil {
-		h.writeError(w, err)
+		h.writeError(w, r, err)
 		return
 	}
 	if err := api.Write(w, status, value); err != nil {
@@ -186,7 +193,7 @@ func (h *ManagementHandler) CreatePolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	p, err := h.management.CreatePolicy(r.Context(), managementCaller(r), input.ID, input.Content)
-	h.respond(w, 201, publicPolicy(p), err)
+	h.respond(w, r, 201, publicPolicy(p), err)
 }
 
 // ListPolicies returns custom and managed policies available to the caller's account.
@@ -196,7 +203,7 @@ func (h *ManagementHandler) ListPolicies(w http.ResponseWriter, r *http.Request)
 	for _, p := range policies {
 		items = append(items, publicPolicy(p))
 	}
-	h.respond(w, 200, managementList[policyResponse]{Kind: "PolicyList", Total: len(items), Items: items}, err)
+	h.respond(w, r, 200, managementList[policyResponse]{Kind: "PolicyList", Total: len(items), Items: items}, err)
 }
 
 // GetPolicy describes a custom or managed policy selected by type.
@@ -207,7 +214,7 @@ func (h *ManagementHandler) GetPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := h.management.GetPolicy(r.Context(), managementCaller(r), ref)
-	h.respond(w, 200, publicPolicy(p), err)
+	h.respond(w, r, 200, publicPolicy(p), err)
 }
 
 // UpdatePolicy replaces a custom policy only when its revision matches.
@@ -218,7 +225,7 @@ func (h *ManagementHandler) UpdatePolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if ref.Kind == authz.ManagedPolicy {
-		h.writeError(w, authz.ErrManagedPolicy)
+		h.writeError(w, r, authz.ErrManagedPolicy)
 		return
 	}
 	revision, err := managementRevision(r)
@@ -234,7 +241,7 @@ func (h *ManagementHandler) UpdatePolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	p, err := h.management.UpdatePolicy(r.Context(), managementCaller(r), ref, revision, input.Content)
-	h.respond(w, 200, publicPolicy(p), err)
+	h.respond(w, r, 200, publicPolicy(p), err)
 }
 
 // DeletePolicy returns a committed deletion receipt for a revision-matched custom policy.
@@ -245,7 +252,7 @@ func (h *ManagementHandler) DeletePolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if ref.Kind == authz.ManagedPolicy {
-		h.writeError(w, authz.ErrManagedPolicy)
+		h.writeError(w, r, authz.ErrManagedPolicy)
 		return
 	}
 	revision, err := managementRevision(r)
@@ -254,7 +261,7 @@ func (h *ManagementHandler) DeletePolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	receipt, err := h.management.DeletePolicy(r.Context(), managementCaller(r), ref, revision)
-	h.respond(w, 200, receipt, err)
+	h.respond(w, r, 200, receipt, err)
 }
 
 // CreateAttachment attaches a policy globally by default or in the current region.
@@ -272,7 +279,7 @@ func (h *ManagementHandler) CreateAttachment(w http.ResponseWriter, r *http.Requ
 		input.Scope = authz.GlobalScope
 	}
 	a, err := h.management.CreateAttachment(r.Context(), managementCaller(r), authz.AttachmentSpec{Policy: authz.PolicyRef{ID: input.Policy.ID, Kind: input.Policy.Type}, PrincipalARN: input.PrincipalARN, Scope: input.Scope})
-	h.respond(w, 201, publicAttachment(a), err)
+	h.respond(w, r, 201, publicAttachment(a), err)
 }
 
 // ListAttachments lists the requested scope or requires permission for both scopes when omitted.
@@ -287,7 +294,7 @@ func (h *ManagementHandler) ListAttachments(w http.ResponseWriter, r *http.Reque
 	for _, a := range attachments {
 		items = append(items, publicAttachment(a))
 	}
-	h.respond(w, 200, managementList[attachmentResponse]{Kind: "AttachmentList", Total: len(items), Items: items}, err)
+	h.respond(w, r, 200, managementList[attachmentResponse]{Kind: "AttachmentList", Total: len(items), Items: items}, err)
 }
 
 // DeleteAttachment requires explicit scope and returns a revision-matched deletion receipt.
@@ -306,5 +313,5 @@ func (h *ManagementHandler) DeleteAttachment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	receipt, err := h.management.DeleteAttachment(r.Context(), managementCaller(r), scope, mux.Vars(r)["id"], revision)
-	h.respond(w, 200, receipt, err)
+	h.respond(w, r, 200, receipt, err)
 }

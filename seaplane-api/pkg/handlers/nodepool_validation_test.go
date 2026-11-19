@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -20,7 +18,6 @@ import (
 
 	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 	public "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1/public"
-	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 )
 
@@ -570,8 +567,6 @@ func TestNodePoolHandlerUpdateRejectsExplicitNullAtParentLevels(t *testing.T) {
 	}
 }
 
-const nodePoolTestCaller = "arn:aws:iam::123456789012:user/test"
-
 func newNodePoolValidationTestHandler(t *testing.T, objects ...client.Object) *NodePoolHandler {
 	t.Helper()
 	scheme := runtime.NewScheme()
@@ -596,14 +591,7 @@ func newNodePoolValidationTestHandler(t *testing.T, objects ...client.Object) *N
 	}
 	dbClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	path := filepath.Join(t.TempDir(), "authz.json")
-	if err := os.WriteFile(path, []byte(`{"formatVersion":1,"registeredAccounts":["123456789012"],"policies":[{"id":"all","ownerAccountID":"123456789012","content":"permit(principal, action in Seaplane::Action::\"AllActions\", resource);"}],"attachments":[{"id":"all","policyID":"all","principalARN":"`+nodePoolTestCaller+`","scope":"global"}]}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	authorizer, err := authz.LoadConfig(path, "us-east-1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	authorizer := clusterAuthorizer(t, lifecyclePermit)
 	return NewNodePoolHandler(seaplanedb.NewClientFrom(dbClient, logger), authorizer, logger)
 }
 

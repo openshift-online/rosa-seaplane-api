@@ -12,7 +12,10 @@
 	image-api image-operator image-push-api image-push-operator
 
 helm-lint: ## Lint the platform-api Helm chart
-	helm lint platform-api/charts
+	helm lint seaplane-api/charts \
+	  --set platformApi.authz.tables.policies=lint-policies \
+	  --set platformApi.authz.tables.global=lint-global \
+	  --set platformApi.authz.tables.regional=lint-regional
 
 # ── Configuration ────────────────────────────────────────────────────────
 
@@ -113,7 +116,7 @@ help:
 	@echo "  test-integration     Integration tests: seaplane-db + operator (podman) + API handlers"
 	@echo "  test-api-int         API handler integration tests (build tag: integration)"
 	@echo "  test-e2e-api         E2E API"
-	@echo "  test-e2e-authz       Local HTTP authorization (Podman PostgreSQL 16, no AWS credentials)"
+	@echo "  test-e2e-authz       E2E AUTHZ (local PostgreSQL + DynamoDB, no AWS)"
 	@echo "  test-e2e-cli         E2E CLI"
 	@echo "  test-e2e-sdk         E2E SDK (Go clientset lifecycle)"
 	@echo "  test-e2e-rosa-cli    E2E rosa CLI (clones rosa repo, builds CLI, runs seaplane tests)"

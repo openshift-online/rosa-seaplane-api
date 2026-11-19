@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
@@ -19,17 +20,6 @@ var (
 	ErrUnavailable = errors.New("authorization store unavailable")
 )
 
-// WrongWriterError identifies the region that accepts global mutations.
-type WrongWriterError struct{ Region string }
-
-// Error returns safe writer guidance.
-func (e *WrongWriterError) Error() string {
-	return "global mutation requires writer region " + e.Region
-}
-
-// Unwrap exposes ErrWrongWriter for classification.
-func (e *WrongWriterError) Unwrap() error { return ErrWrongWriter }
-
 // ManagementCaller carries the authenticated identity and request context.
 type ManagementCaller struct {
 	AccountID, CallerARN string
@@ -43,83 +33,109 @@ type DeletionReceipt struct {
 	CommittedRegion string `json:"committedRegion"`
 }
 
-// Management authorizes operations through account-scoped bootstrap administrators or stored grants.
-type Management struct {
-	stores         map[string]*Store
-	administrators map[string][]principalARN
+// Service manages account-scoped policies and prepares resource authorization.
+// Enrollment is enforced by the HTTP layer before any Service call.
+type Service struct {
+	base Store // Shared client, tables, region, and schema; the account is set per request.
 }
 
-// NewManagement creates account-scoped stores without changing resource authorization.
-func NewManagement(client *dynamodb.Client, cfg ManagementConfig, region string) (*Management, error) {
-	if err := checkManagementConfig(cfg); err != nil {
+// NewService validates configuration and loads the Cedar schema once for all accounts.
+func NewService(client *dynamodb.Client, cfg ServiceConfig, region string) (*Service, error) {
+	if err := checkServiceConfig(cfg); err != nil {
 		return nil, err
 	}
 	if client == nil || !regionPattern.MatchString(region) {
 		return nil, fmt.Errorf("%w: client and service region required", ErrValidation)
 	}
-	m := &Management{stores: map[string]*Store{}, administrators: map[string][]principalARN{}}
-	for account, config := range cfg.Accounts {
-		store, err := NewStore(client, StoreConfig{AccountID: account, Region: region, WriterRegion: config.WriterRegion, PolicyTable: cfg.PolicyTable, GlobalTable: cfg.GlobalTable, RegionalTable: cfg.RegionalTable})
-		if err != nil {
-			return nil, err
-		}
-		m.stores[account] = store
-		for _, value := range config.AdministratorARNs {
-			principal, err := parsePrincipal(value)
-			if err != nil {
-				return nil, err
-			}
-			m.administrators[account] = append(m.administrators[account], principal)
-		}
+	model, validator, err := loadSchema()
+	if err != nil {
+		return nil, err
 	}
-	return m, nil
+	base := Store{client: client, model: model, validator: validator, config: StoreConfig{
+		Region: region, PolicyTable: cfg.PolicyTable, GlobalTable: cfg.GlobalTable, RegionalTable: cfg.RegionalTable,
+	}}
+	return &Service{base: base}, nil
 }
 
-// IsAccountRegistered reports configured management enrollment, not resource access.
-func (m *Management) IsAccountRegistered(ctx context.Context, account string) bool {
-	return ctx.Err() == nil && m.stores[account] != nil
+// store returns the account's view of the shared tables, whose rows are keyed by account.
+func (m *Service) store(account string) *Store {
+	if !accountPattern.MatchString(account) {
+		return nil
+	}
+	store := m.base
+	store.config.AccountID = account
+	return &store
 }
 
-// authorize checks writer placement, bootstrap identity, and scope-specific Cedar grants.
-func (m *Management) authorize(ctx context.Context, caller ManagementCaller, action Action, id string) (*Store, error) {
-	store := m.stores[caller.AccountID]
+// authorize checks the caller identity and scope-specific Cedar grants, resolving
+// grants once for every action so a multi-scope request reads storage once.
+// The first grants for an account are seeded directly into storage (see docs/authz/storage-contract.md).
+func (m *Service) authorize(ctx context.Context, caller ManagementCaller, id string, actions ...Action) (*Store, error) {
+	store := m.store(caller.AccountID)
 	identity := Identity{AccountID: caller.AccountID, CallerARN: caller.CallerARN}
-	principal, err := checkedIdentity(identity)
-	if err != nil || store == nil {
+	if _, err := checkedIdentity(identity); err != nil || store == nil {
 		return nil, ErrManagementDenied
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
-	if isGlobalMutation(action) && store.config.Region != store.config.WriterRegion {
-		return nil, &WrongWriterError{Region: store.config.WriterRegion}
+	// One attempt per action, each timed from before the shared grant read, like resource requests.
+	// The first deny or error stops the checks; later actions record nothing.
+	attempts := make([]*Attempt, len(actions))
+	for i, action := range actions {
+		attempts[i] = DefaultMetrics.Start(action)
 	}
-	for _, admin := range m.administrators[caller.AccountID] {
-		if matchesPrincipal(admin, principal) {
-			return store, nil
+	fail := func(err error, action Action, attempt *Attempt) (*Store, error) {
+		if failure, ok := errors.AsType[*Failure](err); ok && failure.Action == "" {
+			failure.Action = action
 		}
+		attempt.Finish(OutcomeError, failureStage(err))
+		return nil, err
 	}
 	scopes := []AttachmentScope{GlobalScope}
-	if isRegionalAction(action) {
+	if slices.ContainsFunc(actions, isRegionalAction) {
 		scopes = append(scopes, RegionalScope)
 	}
 	prepared, err := store.prepareScopes(ctx, identity, caller.Request, scopes)
 	if err != nil {
-		return nil, err
+		return fail(err, actions[0], attempts[0])
 	}
-	kind := actionResourceKind(action)
-	resource := Resource{Kind: kind, AccountID: caller.AccountID, ID: id}
-	if listAction(action) {
-		resource.Kind, resource.CollectionKind, resource.ID = Collection, kind, ""
-	}
-	decision, err := prepared.Check(ctx, action, resource)
-	if err != nil {
-		return nil, err
-	}
-	if !decision.Allowed {
-		return nil, ErrManagementDenied
+	for i, action := range actions {
+		kind := actionResourceKind(action)
+		resource := Resource{Kind: kind, AccountID: caller.AccountID, ID: id}
+		if listAction(action) {
+			resource.Kind, resource.CollectionKind, resource.ID = Collection, kind, ""
+		}
+		decision, err := prepared.Check(ctx, action, resource)
+		if err != nil {
+			return fail(err, action, attempts[i])
+		}
+		if !decision.Allowed {
+			attempts[i].Finish(OutcomeDeny, StageNone)
+			return nil, &Denial{Action: action, Provenance: decision.Provenance}
+		}
+		attempts[i].Finish(OutcomeAllow, StageNone)
 	}
 	return store, nil
+}
+
+// Denial is ErrManagementDenied plus the grants that decided it, for logs only.
+type Denial struct {
+	Action     Action
+	Provenance []Provenance
+}
+
+func (d *Denial) Error() string { return ErrManagementDenied.Error() }
+
+// Is keeps errors.Is(err, ErrManagementDenied) true for denials.
+func (d *Denial) Is(target error) bool { return target == ErrManagementDenied }
+
+// failureStage labels an authorization error; untyped errors, such as a backend outage, are resolution failures.
+func failureStage(err error) Stage {
+	if failure, ok := errors.AsType[*Failure](err); ok {
+		return failure.Stage
+	}
+	return StageResolution
 }
 
 // managementResult preserves classified errors and fails closed on malformed stored state.
@@ -127,7 +143,7 @@ func managementResult(err error) error {
 	if err == nil {
 		return nil
 	}
-	for _, sentinel := range []error{ErrValidation, ErrNotFound, ErrConflict, ErrUnavailable, ErrManagedPolicy, ErrWrongWriter} {
+	for _, sentinel := range []error{ErrValidation, ErrNotFound, ErrConflict, ErrUnavailable, ErrManagedPolicy} {
 		if errors.Is(err, sentinel) {
 			return err
 		}
@@ -177,9 +193,9 @@ func checkPolicyMutation(ref PolicyRef, expected string) error {
 	return nil
 }
 
-// CreatePolicy validates and commits a custom policy in the account's writer region.
-func (m *Management) CreatePolicy(ctx context.Context, caller ManagementCaller, id, content string) (StoredPolicy, error) {
-	store, err := m.authorize(ctx, caller, CreatePolicy, id)
+// CreatePolicy validates and commits a custom policy in the service region.
+func (m *Service) CreatePolicy(ctx context.Context, caller ManagementCaller, id, content string) (StoredPolicy, error) {
+	store, err := m.authorize(ctx, caller, id, CreatePolicy)
 	if err != nil {
 		return StoredPolicy{}, err
 	}
@@ -188,8 +204,8 @@ func (m *Management) CreatePolicy(ctx context.Context, caller ManagementCaller, 
 }
 
 // ListPolicies returns managed and account-owned custom policies without merging colliding IDs.
-func (m *Management) ListPolicies(ctx context.Context, caller ManagementCaller) ([]StoredPolicy, error) {
-	store, err := m.authorize(ctx, caller, ListPolicies, "")
+func (m *Service) ListPolicies(ctx context.Context, caller ManagementCaller) ([]StoredPolicy, error) {
+	store, err := m.authorize(ctx, caller, "", ListPolicies)
 	if err != nil {
 		return nil, err
 	}
@@ -198,11 +214,11 @@ func (m *Management) ListPolicies(ctx context.Context, caller ManagementCaller) 
 }
 
 // GetPolicy returns the explicitly selected custom or managed policy.
-func (m *Management) GetPolicy(ctx context.Context, caller ManagementCaller, ref PolicyRef) (StoredPolicy, error) {
+func (m *Service) GetPolicy(ctx context.Context, caller ManagementCaller, ref PolicyRef) (StoredPolicy, error) {
 	if err := checkPolicyRef(ref); err != nil {
 		return StoredPolicy{}, err
 	}
-	store, err := m.authorize(ctx, caller, DescribePolicy, ref.ID)
+	store, err := m.authorize(ctx, caller, ref.ID, DescribePolicy)
 	if err != nil {
 		return StoredPolicy{}, err
 	}
@@ -211,11 +227,11 @@ func (m *Management) GetPolicy(ctx context.Context, caller ManagementCaller, ref
 }
 
 // UpdatePolicy replaces a custom policy only at the expected revision.
-func (m *Management) UpdatePolicy(ctx context.Context, caller ManagementCaller, ref PolicyRef, expected, content string) (StoredPolicy, error) {
+func (m *Service) UpdatePolicy(ctx context.Context, caller ManagementCaller, ref PolicyRef, expected, content string) (StoredPolicy, error) {
 	if err := checkPolicyMutation(ref, expected); err != nil {
 		return StoredPolicy{}, err
 	}
-	store, err := m.authorize(ctx, caller, UpdatePolicy, ref.ID)
+	store, err := m.authorize(ctx, caller, ref.ID, UpdatePolicy)
 	if err != nil {
 		return StoredPolicy{}, err
 	}
@@ -224,11 +240,11 @@ func (m *Management) UpdatePolicy(ctx context.Context, caller ManagementCaller, 
 }
 
 // DeletePolicy deletes a custom policy only at the expected revision.
-func (m *Management) DeletePolicy(ctx context.Context, caller ManagementCaller, ref PolicyRef, expected string) (DeletionReceipt, error) {
+func (m *Service) DeletePolicy(ctx context.Context, caller ManagementCaller, ref PolicyRef, expected string) (DeletionReceipt, error) {
 	if err := checkPolicyMutation(ref, expected); err != nil {
 		return DeletionReceipt{}, err
 	}
-	store, err := m.authorize(ctx, caller, DeletePolicy, ref.ID)
+	store, err := m.authorize(ctx, caller, ref.ID, DeletePolicy)
 	if err != nil {
 		return DeletionReceipt{}, err
 	}
@@ -251,12 +267,12 @@ func attachmentAction(scope AttachmentScope, global, regional Action) (Action, e
 }
 
 // CreateAttachment validates ownership and commits a new scoped attachment.
-func (m *Management) CreateAttachment(ctx context.Context, caller ManagementCaller, spec AttachmentSpec) (StoredAttachment, error) {
+func (m *Service) CreateAttachment(ctx context.Context, caller ManagementCaller, spec AttachmentSpec) (StoredAttachment, error) {
 	action, err := attachmentAction(spec.Scope, CreateAttachment, CreateAttachmentRegional)
 	if err != nil {
 		return StoredAttachment{}, err
 	}
-	store, err := m.authorize(ctx, caller, action, "")
+	store, err := m.authorize(ctx, caller, "", action)
 	if err != nil {
 		return StoredAttachment{}, err
 	}
@@ -272,21 +288,22 @@ func (m *Management) CreateAttachment(ctx context.Context, caller ManagementCall
 }
 
 // ListAttachments requires both permissions for an unfiltered list and never silently omits a scope.
-func (m *Management) ListAttachments(ctx context.Context, caller ManagementCaller, scope AttachmentScope) ([]StoredAttachment, error) {
+func (m *Service) ListAttachments(ctx context.Context, caller ManagementCaller, scope AttachmentScope) ([]StoredAttachment, error) {
 	scopes := []AttachmentScope{scope}
 	if scope == "" {
 		scopes = []AttachmentScope{GlobalScope, RegionalScope}
 	}
-	var store *Store
+	actions := make([]Action, 0, len(scopes))
 	for _, scope := range scopes {
 		action, err := attachmentAction(scope, ListAttachments, ListAttachmentsRegional)
 		if err != nil {
 			return nil, err
 		}
-		store, err = m.authorize(ctx, caller, action, "")
-		if err != nil {
-			return nil, err
-		}
+		actions = append(actions, action)
+	}
+	store, err := m.authorize(ctx, caller, "", actions...)
+	if err != nil {
+		return nil, err
 	}
 	bindings := []StoredAttachment{}
 	for _, scope := range scopes {
@@ -300,7 +317,7 @@ func (m *Management) ListAttachments(ctx context.Context, caller ManagementCalle
 }
 
 // DeleteAttachment removes a scoped attachment only at the expected revision.
-func (m *Management) DeleteAttachment(ctx context.Context, caller ManagementCaller, scope AttachmentScope, id, expected string) (DeletionReceipt, error) {
+func (m *Service) DeleteAttachment(ctx context.Context, caller ManagementCaller, scope AttachmentScope, id, expected string) (DeletionReceipt, error) {
 	action, err := attachmentAction(scope, DeleteAttachment, DeleteAttachmentRegional)
 	if err != nil {
 		return DeletionReceipt{}, err
@@ -308,7 +325,7 @@ func (m *Management) DeleteAttachment(ctx context.Context, caller ManagementCall
 	if !isStoreID(id) || !isRevision(expected) {
 		return DeletionReceipt{}, fmt.Errorf("%w: valid attachment ID and revision required", ErrValidation)
 	}
-	store, err := m.authorize(ctx, caller, action, id)
+	store, err := m.authorize(ctx, caller, id, action)
 	if err != nil {
 		return DeletionReceipt{}, err
 	}

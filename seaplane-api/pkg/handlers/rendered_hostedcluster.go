@@ -18,10 +18,10 @@ import (
 type RenderedHostedClusterHandler struct {
 	db         *seaplanedb.Client
 	logger     *slog.Logger
-	authorizer *authz.Authorizer
+	authorizer authz.Resolver
 }
 
-func NewRenderedHostedClusterHandler(db *seaplanedb.Client, authorizer *authz.Authorizer, logger *slog.Logger) *RenderedHostedClusterHandler {
+func NewRenderedHostedClusterHandler(db *seaplanedb.Client, authorizer authz.Resolver, logger *slog.Logger) *RenderedHostedClusterHandler {
 	if authorizer == nil {
 		panic("rendered HostedCluster authorizer is required")
 	}
