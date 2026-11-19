@@ -53,11 +53,6 @@ type HostedClusterSpecPassthrough struct {
 	// +seaplane:write-mode=service-set
 	// +optional
 	Configuration *ClusterConfiguration `json:"configuration,omitempty"`
-	// operatorConfiguration specifies configuration for individual OCP operators in the cluster.
-	// +k8s:openapi-gen=true
-	// +seaplane:write-mode=service-set
-	// +optional
-	OperatorConfiguration *hypershiftv1beta1.OperatorConfiguration `json:"operatorConfiguration,omitempty"`
 	// fips indicates whether this cluster's nodes will be running in FIPS mode.
 	// +k8s:openapi-gen=true
 	// +seaplane:write-mode=service-set

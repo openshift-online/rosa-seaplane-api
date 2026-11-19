@@ -498,7 +498,7 @@ func TestNodePoolInheritsClusterCustomerTags(t *testing.T) {
 		"environment": "staging",
 		"team":        "workers",
 	}
-	nodePool.Spec.NodePool.Platform.AWS.ResourceTags = []hypershiftv1beta1.AWSResourceTag{
+	nodePool.Spec.NodePool.Platform.AWS.ResourceTags = []hypershiftv1beta1.AWSNodePoolResourceTag{
 		{Key: "legacy", Value: "ignored"},
 	}
 
@@ -508,7 +508,7 @@ func TestNodePoolInheritsClusterCustomerTags(t *testing.T) {
 	}
 	np := resource.Object.(*hypershiftv1beta1.NodePool)
 
-	got := tagPairs(np.Spec.Platform.AWS.ResourceTags)
+	got := nodePoolTagPairs(np.Spec.Platform.AWS.ResourceTags)
 	if got["cost-center"] != "cc-1234" {
 		t.Errorf("cost-center = %q, want %q", got["cost-center"], "cc-1234")
 	}
@@ -719,4 +719,12 @@ func TestNodePoolOmitsUnsetDrainTimeouts(t *testing.T) {
 	if np.Spec.NodeDrainTimeout != nil {
 		t.Errorf("NodeDrainTimeout = %v, want nil", np.Spec.NodeDrainTimeout)
 	}
+}
+
+func nodePoolTagPairs(tags []hypershiftv1beta1.AWSNodePoolResourceTag) map[string]string {
+	out := make(map[string]string, len(tags))
+	for _, tag := range tags {
+		out[tag.Key] = tag.Value
+	}
+	return out
 }

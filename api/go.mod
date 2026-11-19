@@ -3,10 +3,10 @@ module github.com/openshift-online/rosa-seaplane-api/api
 go 1.26.3
 
 require (
-	github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
-	github.com/openshift/hypershift/api v0.0.0-20260625052409-9acec4759a16
-	k8s.io/api v0.35.1
-	k8s.io/apimachinery v0.36.0
+	github.com/openshift/api v0.0.0-20261028163820-1f109e9eefc7
+	github.com/openshift/hypershift/api v0.0.0-20261114214040-8401e2dc80dc
+	k8s.io/api v0.37.1
+	k8s.io/apimachinery v0.37.1
 )
 
 require (
@@ -21,7 +21,7 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
+	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect

@@ -201,7 +201,9 @@ spec:
                               description: karpenter specifies the configuration for the Karpenter provisioner.
                               properties:
                                 aws:
-                                  description: aws specifies the AWS-specific configuration for Karpenter.
+                                  description: |-
+                                    aws specifies the AWS-specific configuration for Karpenter.
+                                    Required when platform is "AWS", and forbidden otherwise.
                                   properties:
                                     roleARN:
                                       description: "roleARN specifies the ARN of the IAM role that Karpenter assumes to provision\nand manage EC2 instances in the hosted cluster's AWS account.\n\nThe referenced role must have a trust relationship that allows it to be assumed\nby the karpenter service account in the hosted cluster via OIDC.\nExample:\n{\n\t\"Version\": \"2012-10-17\",\n\t\"Statement\": [\n\t\t{\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Principal\": {\n\t\t\t\t\"Federated\": \"<oidc-provider-arn>\"\n\t\t\t},\n\t\t\t\"Action\": \"sts:AssumeRoleWithWebIdentity\",\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringEquals\": {\n\t\t\t\t\t\"<oidc-provider-name>:sub\": \"system:serviceaccount:kube-system:karpenter\"\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t]\n}\n\nThe following is an example of the policy document for this role.\n\n{\n\t\"Version\": \"2012-10-17\",\n\t\"Statement\": [\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedEC2InstanceAccessActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": [\n\t\t\t\t\"arn:*:ec2:*::image/*\",\n\t\t\t\t\"arn:*:ec2:*::snapshot/*\",\n\t\t\t\t\"arn:*:ec2:*:*:security-group/*\",\n\t\t\t\t\"arn:*:ec2:*:*:subnet/*\"\n\t\t\t],\n\t\t\t\"Action\": [\n\t\t\t\t\"ec2:RunInstances\",\n\t\t\t\t\"ec2:CreateFleet\"\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedEC2LaunchTemplateAccessActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"arn:*:ec2:*:*:launch-template/*\",\n\t\t\t\"Action\": [\n\t\t\t\t\"ec2:RunInstances\",\n\t\t\t\t\"ec2:CreateFleet\"\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedEC2InstanceActionsWithTags\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": [\n\t\t\t\t\"arn:*:ec2:*:*:fleet/*\",\n\t\t\t\t\"arn:*:ec2:*:*:instance/*\",\n\t\t\t\t\"arn:*:ec2:*:*:volume/*\",\n\t\t\t\t\"arn:*:ec2:*:*:network-interface/*\",\n\t\t\t\t\"arn:*:ec2:*:*:launch-template/*\",\n\t\t\t\t\"arn:*:ec2:*:*:spot-instances-request/*\"\n\t\t\t],\n\t\t\t\"Action\": [\n\t\t\t\t\"ec2:RunInstances\",\n\t\t\t\t\"ec2:CreateFleet\",\n\t\t\t\t\"ec2:CreateLaunchTemplate\"\n\t\t\t],\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringLike\": {\n\t\t\t\t\t\"aws:RequestTag/karpenter.sh/nodepool\": \"*\"\n\t\t\t\t}\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedResourceCreationTagging\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": [\n\t\t\t\t\"arn:*:ec2:*:*:fleet/*\",\n\t\t\t\t\"arn:*:ec2:*:*:instance/*\",\n\t\t\t\t\"arn:*:ec2:*:*:volume/*\",\n\t\t\t\t\"arn:*:ec2:*:*:network-interface/*\",\n\t\t\t\t\"arn:*:ec2:*:*:launch-template/*\",\n\t\t\t\t\"arn:*:ec2:*:*:spot-instances-request/*\"\n\t\t\t],\n\t\t\t\"Action\": \"ec2:CreateTags\",\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringEquals\": {\n\t\t\t\t\t\"ec2:CreateAction\": [\n\t\t\t\t\t\t\"RunInstances\",\n\t\t\t\t\t\t\"CreateFleet\",\n\t\t\t\t\t\t\"CreateLaunchTemplate\"\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t\"StringLike\": {\n\t\t\t\t\t\"aws:RequestTag/karpenter.sh/nodepool\": \"*\"\n\t\t\t\t}\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedResourceTagging\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"arn:*:ec2:*:*:instance/*\",\n\t\t\t\"Action\": \"ec2:CreateTags\",\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringLike\": {\n\t\t\t\t\t\"aws:ResourceTag/karpenter.sh/nodepool\": \"*\"\n\t\t\t\t}\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedDeletion\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": [\n\t\t\t\t\"arn:*:ec2:*:*:instance/*\",\n\t\t\t\t\"arn:*:ec2:*:*:launch-template/*\"\n\t\t\t],\n\t\t\t\"Action\": [\n\t\t\t\t\"ec2:TerminateInstances\",\n\t\t\t\t\"ec2:DeleteLaunchTemplate\"\n\t\t\t],\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringLike\": {\n\t\t\t\t\t\"aws:ResourceTag/karpenter.sh/nodepool\": \"*\"\n\t\t\t\t}\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowRegionalReadActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"*\",\n\t\t\t\"Action\": [\n\t\t\t\t\"ec2:DescribeImages\",\n\t\t\t\t\"ec2:DescribeInstances\",\n\t\t\t\t\"ec2:DescribeInstanceTypeOfferings\",\n\t\t\t\t\"ec2:DescribeInstanceTypes\",\n\t\t\t\t\"ec2:DescribeLaunchTemplates\",\n\t\t\t\t\"ec2:DescribeSecurityGroups\",\n\t\t\t\t\"ec2:DescribeSpotPriceHistory\",\n\t\t\t\t\"ec2:DescribeSubnets\"\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowSSMReadActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"arn:*:ssm:*::parameter/aws/service/*\",\n\t\t\t\"Action\": \"ssm:GetParameter\"\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowPricingReadActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"*\",\n\t\t\t\"Action\": \"pricing:GetProducts\"\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowInterruptionQueueActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"*\",\n\t\t\t\"Action\": [\n\t\t\t\t\"sqs:DeleteMessage\",\n\t\t\t\t\"sqs:GetQueueUrl\",\n\t\t\t\t\"sqs:ReceiveMessage\"\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowPassingInstanceRole\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"arn:*:iam::*:role/*\",\n\t\t\t\"Action\": \"iam:PassRole\",\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringEquals\": {\n\t\t\t\t\t\"iam:PassedToService\": [\n\t\t\t\t\t\t\"ec2.amazonaws.com\",\n\t\t\t\t\t\t\"ec2.amazonaws.com.cn\"\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedInstanceProfileCreationActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"arn:*:iam::*:instance-profile/*\",\n\t\t\t\"Action\": [\n\t\t\t\t\"iam:CreateInstanceProfile\"\n\t\t\t],\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringLike\": {\n\t\t\t\t\t\"aws:RequestTag/karpenter.k8s.aws/ec2nodeclass\": \"*\"\n\t\t\t\t}\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedInstanceProfileTagActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"arn:*:iam::*:instance-profile/*\",\n\t\t\t\"Action\": [\n\t\t\t\t\"iam:TagInstanceProfile\"\n\t\t\t],\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringLike\": {\n\t\t\t\t\t\"aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass\": \"*\",\n\t\t\t\t\t\"aws:RequestTag/karpenter.k8s.aws/ec2nodeclass\": \"*\"\n\t\t\t\t}\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowScopedInstanceProfileActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"arn:*:iam::*:instance-profile/*\",\n\t\t\t\"Action\": [\n\t\t\t\t\"iam:AddRoleToInstanceProfile\",\n\t\t\t\t\"iam:RemoveRoleFromInstanceProfile\",\n\t\t\t\t\"iam:DeleteInstanceProfile\"\n\t\t\t],\n\t\t\t\"Condition\": {\n\t\t\t\t\"StringLike\": {\n\t\t\t\t\t\"aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass\": \"*\"\n\t\t\t\t}\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowInstanceProfileReadActions\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"arn:*:iam::*:instance-profile/*\",\n\t\t\t\"Action\": \"iam:GetInstanceProfile\"\n\t\t},\n\t\t{\n\t\t\t\"Sid\": \"AllowUnscopedInstanceProfileListAction\",\n\t\t\t\"Effect\": \"Allow\",\n\t\t\t\"Resource\": \"*\",\n\t\t\t\"Action\": \"iam:ListInstanceProfiles\"\n\t\t}\n\t]\n}"
@@ -210,10 +212,36 @@ spec:
                                   required:
                                     - roleARN
                                   type: object
+                                azure:
+                                  description: |-
+                                    azure specifies the Azure-specific configuration for Karpenter.
+                                    Required when platform is "Azure", and forbidden otherwise.
+                                  properties:
+                                    clientID:
+                                      description: |-
+                                        clientID is the client ID of the user-assigned managed identity Karpenter uses
+                                        to provision and manage Azure VMs in the hosted cluster's subscription.
+
+                                        The identity must have a federated credential that trusts the hosted cluster
+                                        OIDC issuer for subject system:serviceaccount:kube-system:karpenter.
+
+                                        The identity must be granted Virtual Machine Contributor, Network Contributor,
+                                        and Managed Identity Operator on the cluster resource group (and Network Contributor
+                                        on the VNet resource group when it differs).
+
+                                        The client ID must be a valid UUID. It should be 5 groups of hyphen separated hexadecimal characters in the form 8-4-4-4-12.
+                                      maxLength: 36
+                                      minLength: 36
+                                      pattern: ^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$
+                                      type: string
+                                  required:
+                                    - clientID
+                                  type: object
                                 platform:
                                   description: platform specifies the infrastructure platform that Karpenter should provision nodes on.
                                   enum:
                                     - AWS
+                                    - Azure
                                   maxLength: 100
                                   type: string
                               required:
@@ -275,6 +303,28 @@ spec:
                           maxItems: 3
                           minItems: 1
                           type: array
+                        kubeClientBurst:
+                          description: |-
+                            kubeClientBurst sets the "--kube-client-burst" flag on cluster-autoscaler.
+                            Controls the maximum burst of queries to the kube-apiserver.
+                            Valid values are 1 through 2000.
+                            When omitted, HyperShift sets the flag to 300. An explicit value overrides this default.
+                          format: int32
+                          maximum: 2000
+                          minimum: 1
+                          type: integer
+                        kubeClientQPS:
+                          description: |-
+                            kubeClientQPS sets the "--kube-client-qps" flag on cluster-autoscaler.
+                            Controls the maximum queries-per-second the autoscaler may send to the
+                            kube-apiserver. Valid values are -1 through 1000.
+                            When set to -1, client-side rate limiting is disabled.
+                            When set to 0, the flag is passed but client-go applies its default QPS of 5.
+                            When omitted, HyperShift sets the flag to 200. An explicit value overrides this default.
+                          format: int32
+                          maximum: 1000
+                          minimum: -1
+                          type: integer
                         maxFreeDifferenceRatioPercent:
                           description: |-
                             maxFreeDifferenceRatioPercent sets the maximum difference ratio for free resources between similar node groups. This parameter controls how strict the similarity check is when comparing node groups for load balancing.
@@ -565,43 +615,46 @@ spec:
                                     managing the lifecyle of the encryption keys outside of the control plane.
                                     This allows integration with an external provider to manage the data encryption keys securely.
                                   properties:
-                                    aws:
+                                    pluginConfig:
                                       description: |-
-                                        aws defines the key config for using an AWS KMS instance
-                                        for the encryption. The AWS KMS instance is managed
-                                        by the user outside the purview of the control plane.
+                                        pluginConfig is a required reference to a cluster-scoped resource with a status subresource
+                                        that satisfies the OpenShift KMS plugin configuration status interface.
                                       properties:
-                                        keyARN:
+                                        apiVersion:
                                           description: |-
-                                            keyARN specifies the Amazon Resource Name (ARN) of the AWS KMS key used for encryption.
-                                            The value must adhere to the format `arn:aws:kms:<region>:<account_id>:key/<key_id>`, where:
-                                            - `<region>` is the AWS region consisting of lowercase letters and hyphens followed by a number.
-                                            - `<account_id>` is a 12-digit numeric identifier for the AWS account.
-                                            - `<key_id>` is a unique identifier for the KMS key, consisting of lowercase hexadecimal characters and hyphens.
-                                          maxLength: 128
-                                          minLength: 1
-                                          type: string
-                                        region:
-                                          description: |-
-                                            region specifies the AWS region where the KMS instance exists, and follows the format
-                                            `<region-prefix>-<region-name>-<number>`, e.g.: `us-east-1`.
-                                            Only lowercase letters and hyphens followed by numbers are allowed.
+                                            apiVersion is required and identifies the API version of the referenced KMS plugin configuration resource.
+                                            The value must be in the format <group>/<version>, where group is a DNS subdomain
+                                            and version is a Kubernetes API version (for example, v1 or v1alpha1).
+                                            It must contain between 1 and 64 characters.
                                           maxLength: 64
                                           minLength: 1
                                           type: string
+                                        name:
+                                          description: |-
+                                            name is required and is the metadata.name of the referenced KMS plugin configuration resource.
+                                            The referenced resource must be cluster-scoped.
+                                            The name must be a valid DNS subdomain name: it must contain between 1 and 253 characters,
+                                            contain only lowercase alphanumeric characters, '-' or '.', and start and end with an alphanumeric character.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        resource:
+                                          description: |-
+                                            resource is required and is the resource name of the referenced KMS plugin configuration custom resource.
+                                            This is the plural name used in the Kubernetes API (for example, vaultkmsconfigs),
+                                            not the Kind (for example, VaultKMSConfig).
+                                            The value must be between 1 and 63 characters, contain only lowercase alphanumeric
+                                            characters or '-', and start and end with an alphanumeric character.
+                                          maxLength: 63
+                                          minLength: 1
+                                          type: string
                                       required:
-                                        - keyARN
-                                        - region
+                                        - apiVersion
+                                        - name
+                                        - resource
                                       type: object
-                                    type:
-                                      description: |-
-                                        type defines the kind of platform for the KMS provider.
-                                        Available provider types are AWS only.
-                                      enum:
-                                        - AWS
-                                      type: string
                                   required:
-                                    - type
+                                    - pluginConfig
                                   type: object
                                 type:
                                   description: |-
@@ -707,8 +760,11 @@ spec:
                                 custom:
                                   description: |-
                                     custom is a user-defined TLS security profile. Be extremely careful using a custom
-                                    profile as invalid configurations can be catastrophic. An example custom profile
-                                    looks like this:
+                                    profile as invalid configurations can be catastrophic.
+
+                                    The supported groups list for this profile is empty by default.
+
+                                    An example custom profile looks like this:
 
                                       minTLSVersion: VersionTLS11
                                       ciphers:
@@ -733,6 +789,46 @@ spec:
                                         type: string
                                       type: array
                                       x-kubernetes-list-type: atomic
+                                    groups:
+                                      description: |-
+                                        groups is an optional, ordered field used to specify the supported groups (formerly known as
+                                        elliptic curves) that are used during the TLS handshake.  The order of the groups represents
+                                        a suggested preference, with the most preferred group first. Note that not all platform
+                                        components honor the ordering: Go-based components use Go's internal preference order and
+                                        treat this list as a filter of allowed groups rather than an ordered preference.
+                                        Operators may remove entries their operands do not support.
+
+                                        When omitted, this means no opinion and the platform is left to choose reasonable defaults which are
+                                        subject to change over time and may be different per platform component depending on the underlying TLS
+                                        libraries they use. If specified, the list must contain at least one and at most 7 groups,
+                                        and each group must be unique.
+
+                                        For example, to use X25519 and secp256r1 (yaml):
+
+                                          groups:
+                                            - X25519
+                                            - secp256r1
+                                      items:
+                                        description: |-
+                                          TLSGroup is a supported group identifier that can be used in TLSProfile.Groups.
+                                          There is a one-to-one mapping between these names and the group IDs defined
+                                          in Go's crypto/tls package based on IANA's "TLS Supported Groups" registry:
+                                          https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-8
+                                          Note that X25519MLKEM768 is a post-quantum hybrid group that is not
+                                          FIPS-approved and should be ignored by components running in FIPS mode.
+                                        enum:
+                                          - X25519
+                                          - secp256r1
+                                          - secp384r1
+                                          - secp521r1
+                                          - X25519MLKEM768
+                                          - SecP256r1MLKEM768
+                                          - SecP384r1MLKEM1024
+                                        type: string
+                                      maxItems: 7
+                                      minItems: 1
+                                      type: array
+                                      x-kubernetes-list-type: set
                                     minTLSVersion:
                                       description: |-
                                         minTLSVersion is used to specify the minimal version of the TLS protocol
@@ -753,6 +849,10 @@ spec:
                                     legacy clients and want to remain highly secure while being compatible with
                                     most clients currently in use.
 
+                                    The supported groups list includes by default the following groups
+                                    in suggested preference order (ordering may not be honored by all implementations):
+                                    X25519MLKEM768, X25519, secp256r1, secp384r1.
+
                                     This profile is equivalent to a Custom profile specified as:
                                       minTLSVersion: VersionTLS12
                                       ciphers:
@@ -771,7 +871,9 @@ spec:
                                   description: |-
                                     modern is a TLS security profile for use with clients that support TLS 1.3 and
                                     do not need backward compatibility for older clients.
-
+                                    The supported groups list includes by default the following groups
+                                    in suggested preference order (ordering may not be honored by all implementations):
+                                    X25519MLKEM768, X25519, secp256r1, secp384r1.
                                     This profile is equivalent to a Custom profile specified as:
                                       minTLSVersion: VersionTLS13
                                       ciphers:
@@ -784,6 +886,10 @@ spec:
                                   description: |-
                                     old is a TLS profile for use when services need to be accessed by very old
                                     clients or libraries and should be used only as a last resort.
+
+                                    The supported groups list includes by default the following groups
+                                    in suggested preference order (ordering may not be honored by all implementations):
+                                    X25519MLKEM768, X25519, secp256r1, secp384r1.
 
                                     This profile is equivalent to a Custom profile specified as:
                                       minTLSVersion: VersionTLS10
@@ -801,11 +907,14 @@ spec:
                                         - ECDHE-RSA-AES128-SHA256
                                         - ECDHE-ECDSA-AES128-SHA
                                         - ECDHE-RSA-AES128-SHA
+                                        - ECDHE-ECDSA-AES256-SHA384
+                                        - ECDHE-RSA-AES256-SHA384
                                         - ECDHE-ECDSA-AES256-SHA
                                         - ECDHE-RSA-AES256-SHA
                                         - AES128-GCM-SHA256
                                         - AES256-GCM-SHA384
                                         - AES128-SHA256
+                                        - AES256-SHA256
                                         - AES128-SHA
                                         - AES256-SHA
                                         - DES-CBC3-SHA
@@ -816,10 +925,16 @@ spec:
                                     type is one of Old, Intermediate, Modern or Custom. Custom provides the
                                     ability to specify individual TLS security profile parameters.
 
-                                    The profiles are based on version 5.7 of the Mozilla Server Side TLS
-                                    configuration guidelines. The cipher lists consist of the configuration's
-                                    "ciphersuites" followed by the Go-specific "ciphers" from the guidelines.
-                                    See: https://ssl-config.mozilla.org/guidelines/5.7.json
+                                    The cipher and groups lists in these profiles are based on version 5.8 of the
+                                    Mozilla Server Side TLS configuration guidelines.
+                                    See: https://ssl-config.mozilla.org/guidelines/5.8.json
+
+                                    The groups are listed in suggested preference order, with the most preferred group first.
+                                    Note that not all platform components honor the ordering: Go-based components use Go's
+                                    internal preference order and treat this list as a filter of allowed groups rather than
+                                    an ordered preference.
+                                    Note that X25519MLKEM768 is a post-quantum hybrid group that is not
+                                    FIPS-approved and should be ignored by components running in FIPS mode.
 
                                     The profiles are intent based, so they may change over time as new ciphers are
                                     developed and existing ciphers are found to be insecure. Depending on
@@ -836,6 +951,8 @@ spec:
                           description: |-
                             authentication specifies cluster-wide settings for authentication (like OAuth and
                             webhook token authenticators).
+                            Note: the serviceAccountIssuer field within this configuration is ignored; the
+                            HostedCluster's spec.issuerURL is always used as the service account issuer instead.
                           properties:
                             oauthMetadata:
                               description: |-
@@ -1150,6 +1267,359 @@ spec:
                                       required:
                                         - type
                                       type: object
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  externalClaimsSources:
+                                    description: |-
+                                      externalClaimsSources is an optional field that can be used to configure
+                                      sources, external to the token provided in a request, in which claims
+                                      should be fetched from and made available to the claim mapping process
+                                      that is used to build the identity of a token holder.
+
+                                      For example, fetching additional user metadata from an OIDC provider's UserInfo endpoint.
+
+                                      When not specified, only claims present in the token itself will be available
+                                      in the claim mapping process.
+
+                                      When specified, at least one external claim source must be specified and no more than 5
+                                      sources may be specified.
+                                      All external claim sources must have unique claim mappings.
+                                      When an external source responds and resolves additional claims successfully, they will
+                                      be made available as claims during the claim mapping process.
+                                      Externally sourced claims with the same name as a claim existing within the token will
+                                      overwrite the claim data from the token with the externally sourced information.
+                                      If an external source does not respond, responds with an error, or the additional
+                                      claim data cannot be resolved from the response successfully it will not be
+                                      included in the claim data passed to the claim mapping process.
+                                    items:
+                                      description: ExternalClaimsSource provides the configuration for a single external claim source.
+                                      properties:
+                                        authentication:
+                                          description: |-
+                                            authentication is an optional field that configures how the apiserver authenticates with an external claims source.
+                                            When not specified, anonymous authentication is used which means no 'Authorization' header
+                                            is sent in the HTTP request to fetch the external claims.
+                                          properties:
+                                            clientCredential:
+                                              description: |-
+                                                clientCredential configures the client credentials
+                                                and token endpoint to use to get an access token.
+                                                clientCredential is required when type is 'ClientCredential', and forbidden otherwise.
+                                              properties:
+                                                clientID:
+                                                  description: |-
+                                                    clientID is a required client identifier to use during the OAuth2 client credentials flow.
+                                                    clientID must be at least 1 character in length, must not exceed 256 characters in length,
+                                                    and must only contain printable ASCII characters.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
+                                                clientSecret:
+                                                  description: |-
+                                                    clientSecret is a required reference to a Secret in the openshift-config namespace to be used
+                                                    as the client secret during the OAuth2 client credentials flow.
+
+                                                    The key 'client-secret' is used to locate the client secret data in the Secret.
+                                                  properties:
+                                                    name:
+                                                      description: |-
+                                                        name is the required name of the Secret that exists in the openshift-config namespace.
+
+                                                        It must be at least 1 character in length, must not exceed 253 characters in length,
+                                                        must start and end with a lowercase alphanumeric character, and must only contain
+                                                        lowercase alphanumeric characters, '-' or '.'.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                    - name
+                                                  type: object
+                                                scopes:
+                                                  description: |-
+                                                    scopes is an optional list of OAuth2 scopes to request when obtaining
+                                                    an access token.
+
+                                                    If not specified, the token endpoint's default scopes
+                                                    will be used.
+
+                                                    When specified, there must be at least 1 entry and must not exceed 16 entries.
+                                                    Each entry must be at least 1 character in length and must not exceed 256 characters in length.
+                                                    Each entry must only contain printable ASCII characters, excluding spaces, double quotes and backslashes.
+                                                    Entries must be unique.
+                                                  items:
+                                                    description: |-
+                                                      OAuth2Scope is a string alias that represents an OAuth2 Scope as defined by https://datatracker.ietf.org/doc/html/rfc6749#appendix-A.4
+                                                      Must be at least 1 character in length, must not exceed 256 characters in length and must only contain printable ASCII characters, excluding spaces, double quotes and backslashes.
+                                                    maxLength: 256
+                                                    minLength: 1
+                                                    type: string
+                                                  maxItems: 16
+                                                  minItems: 1
+                                                  type: array
+                                                  x-kubernetes-list-type: set
+                                                tls:
+                                                  description: |-
+                                                    tls is an optional field that allows configuring the TLS
+                                                    settings used to interact with the identity provider
+                                                    as an OAuth2 client.
+
+                                                    When omitted, system default TLS settings will be used
+                                                    for the OAuth2 client.
+                                                  properties:
+                                                    certificateAuthority:
+                                                      description: |-
+                                                        certificateAuthority is a required reference to a ConfigMap in the openshift-config
+                                                        namespace that contains the CA certificate to use to validate TLS connections with the external claims source.
+                                                        The key "ca-bundle.crt" must be present in the referenced ConfigMap and must contain the CA certificate to be used
+                                                        to verify the external source's TLS certificate.
+                                                      properties:
+                                                        name:
+                                                          description: |-
+                                                            name is the required name of the ConfigMap that exists in the openshift-config namespace.
+                                                            The key "ca-bundle.crt" must be present and must contain the CA certificate to be used
+                                                            to verify the external source's TLS certificate.
+
+                                                            It must be at least 1 character in length, must not exceed 253 characters in length,
+                                                            must start and end with a lowercase alphanumeric character, and must only contain
+                                                            lowercase alphanumeric characters, '-' or '.'.
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                        - name
+                                                      type: object
+                                                  required:
+                                                    - certificateAuthority
+                                                  type: object
+                                                tokenEndpoint:
+                                                  description: |-
+                                                    tokenEndpoint is a required URL to query for an access token using
+                                                    the client credential OAuth2 flow.
+                                                    tokenEndpoint must be at least 1 character in length and must not exceed 2048 characters in length.
+                                                    tokenEndpoint must be a valid HTTPS URL.
+                                                    tokenEndpoint must have a host and a path.
+                                                    tokenEndpoint must not contain query parameters, fragments,
+                                                    or user information (e.g., "user:password@host").
+                                                  maxLength: 2048
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                                - clientID
+                                                - clientSecret
+                                                - tokenEndpoint
+                                              type: object
+                                            type:
+                                              description: |-
+                                                type is a required field that sets the type of
+                                                authentication method used by the authenticator
+                                                when fetching external claims.
+
+                                                Allowed values are 'RequestProvidedToken' and 'ClientCredential'.
+
+                                                When set to 'RequestProvidedToken', the authenticator will
+                                                use the token provided to the kube-apiserver as part of the
+                                                request to authenticate with the external claims source.
+
+                                                When set to 'ClientCredential', the authenticator will
+                                                use the configured client-id, client-secret, and token endpoint
+                                                to fetch an access token using the OAuth2 client credentials grant
+                                                flow. The fetched access token will then be used to authenticate
+                                                with the external claims source.
+                                              enum:
+                                                - RequestProvidedToken
+                                                - ClientCredential
+                                              type: string
+                                          required:
+                                            - type
+                                          type: object
+                                        mappings:
+                                          description: |-
+                                            mappings is a required list of the claim
+                                            and response handling expression pairs
+                                            that produces the claims from the external source.
+                                            mappings must have at least 1 entry and must not exceed 16 entries.
+                                            Entries must have a unique name across all external claim sources.
+                                          items:
+                                            description: |-
+                                              SourcedClaimMapping configures the mapping behavior for a single external claim
+                                              from the response the apiserver received from the external claim source.
+                                            properties:
+                                              expression:
+                                                description: |-
+                                                  expression is a required CEL expression that
+                                                  will produce a value to be assigned to the claim.
+                                                  The full response body from the request to the
+                                                  external claim source is provided via the
+                                                  `response.body` variable.
+
+                                                  The contents of the `response.body` variable varies based on the response received
+                                                  from the external source. It is the responsibility of those configuring
+                                                  this expression to understand what is returned from the external source.
+
+                                                  expression must be at least 1 character and must not exceed 1024 characters in length.
+                                                maxLength: 1024
+                                                minLength: 1
+                                                type: string
+                                              name:
+                                                description: |-
+                                                  name is a required name of the claim that
+                                                  will be produced and made available during
+                                                  the claim-to-identity mapping process.
+                                                  name must consist of only lowercase alpha characters and underscores ('_').
+                                                  name must be at least 1 character and must not exceed 256 characters in length.
+                                                maxLength: 256
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                              - expression
+                                              - name
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                            - name
+                                          x-kubernetes-list-type: map
+                                        predicates:
+                                          description: |-
+                                            predicates is an optional list of constraints in
+                                            which claims should attempt to be fetched from this
+                                            external source.
+
+                                            When omitted, claims are always fetched
+                                            from this external source.
+
+                                            When specified, all predicates must evaluate to 'true'
+                                            before claims are attempted to be fetched from this external source.
+                                            predicates must have at least 1 entry and must not exceed 16 entries.
+                                            Entries must have unique expressions.
+                                          items:
+                                            description: |-
+                                              ExternalSourcePredicate configures a singular condition
+                                              that must return true before the external source is queried
+                                              to retrieve external claims.
+                                            properties:
+                                              expression:
+                                                description: |-
+                                                  expression is a required CEL expression that
+                                                  is used to determine whether or not an external
+                                                  source should be used to fetch external claims.
+
+                                                  The expression must return a boolean value,
+                                                  where true means that the source should be consulted
+                                                  and false means that it should not.
+
+                                                  Claims from the token used for the request to the kube-apiserver
+                                                  are made available via the `claims` variable.
+
+                                                  The contents of the `claims` variable varies based on the claims that are
+                                                  present in the token being validated. It is the responsibility of those configuring this
+                                                  field to understand what claims the identity provider includes when issuing tokens.
+
+                                                  expression must be at least 1 character and must not exceed 1024 characters in length.
+                                                maxLength: 1024
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                              - expression
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                            - expression
+                                          x-kubernetes-list-type: map
+                                        tls:
+                                          description: |-
+                                            tls is an optional field that configures the http client TLS
+                                            settings when fetching external claims from this source.
+
+                                            When omitted, system default TLS settings will be used
+                                            for fetching claims from the external source.
+                                          properties:
+                                            certificateAuthority:
+                                              description: |-
+                                                certificateAuthority is a required reference to a ConfigMap in the openshift-config
+                                                namespace that contains the CA certificate to use to validate TLS connections with the external claims source.
+                                                The key "ca-bundle.crt" must be present in the referenced ConfigMap and must contain the CA certificate to be used
+                                                to verify the external source's TLS certificate.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    name is the required name of the ConfigMap that exists in the openshift-config namespace.
+                                                    The key "ca-bundle.crt" must be present and must contain the CA certificate to be used
+                                                    to verify the external source's TLS certificate.
+
+                                                    It must be at least 1 character in length, must not exceed 253 characters in length,
+                                                    must start and end with a lowercase alphanumeric character, and must only contain
+                                                    lowercase alphanumeric characters, '-' or '.'.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                          required:
+                                            - certificateAuthority
+                                          type: object
+                                        url:
+                                          description: |-
+                                            url is a required configuration of the URL
+                                            for which the external claims are located.
+                                          properties:
+                                            hostname:
+                                              description: |-
+                                                hostname is a required hostname for which the external claims are located.
+
+                                                It must be a valid DNS subdomain name as per RFC1123.
+
+                                                This means that it must start and end with a lowercase alphanumeric character,
+                                                must only consist of lowercase alphanumeric characters, '-', and '.'.
+                                                hostname may optionally specify a port in the format ':{port}'.
+                                                If a port is specified it must not exceed 65535.
+
+                                                hostname must be at least 1 character in length.
+                                                When specifying a port, hostname must not exceed 259 characters in length.
+                                                When not specifying a port, hostname must not exceed 253 characters in length.
+                                              maxLength: 259
+                                              minLength: 1
+                                              type: string
+                                            pathExpression:
+                                              description: |-
+                                                pathExpression is a required CEL expression that returns a list
+                                                of string values used to construct the URL path.
+                                                Claims from the token used for the request to the kube-apiserver
+                                                are made available via the `claims` variable.
+                                                expression must be at least 1 character in length and must not exceed 1024 characters in length.
+
+                                                Values in the returned list will be joined with the hostname using a forward slash
+                                                (`/`) as a separator. Values in the returned list do not need to include the forward slash.
+                                                If a forward slash is included in a returned value, it will be encoded as `%2F`.
+
+                                                Example of a static path configuration:
+
+                                                    pathExpression: ['realms', 'k8s', 'protocol', 'openid-connect', 'userinfo']
+
+                                                The above example would resolve to the path: '/realms/k8s/protocol/openid-connect/userinfo'
+
+                                                Example of a dynamic path configuration:
+
+                                                    pathExpression: "['admin', 'realms', 'k8s', 'users'] + [claims.sub] + ['groups']"
+
+                                                Assuming 'claims.sub' is set to '12345', the above example would resolve to the path: '/admin/realms/k8s/users/12345/groups'
+                                              maxLength: 1024
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                            - hostname
+                                            - pathExpression
+                                          type: object
+                                      required:
+                                        - mappings
+                                        - url
+                                      type: object
+                                    maxItems: 5
+                                    minItems: 1
                                     type: array
                                     x-kubernetes-list-type: atomic
                                   issuer:
@@ -1541,19 +2011,37 @@ spec:
                                 allowedRegistries:
                                   description: |-
                                     allowedRegistries are the only registries permitted for image pull and push actions. All other registries are denied.
+                                    Each entry must be a valid registry scope in the format hostname[:port][/path],
+                                    optionally prefixed with "*." for wildcard subdomains (e.g., "*.example.com").
+                                    The hostname must consist of valid DNS labels separated by dots, where each label
+                                    contains only alphanumeric characters and hyphens and does not start or end with a hyphen.
+                                    Entries must not be empty, must not include tags (e.g., ":latest") or digests (e.g., "@sha256:..."),
+                                    and must be at most 256 characters in length. The list may contain at most 1024 entries.
 
                                     Only one of BlockedRegistries or AllowedRegistries may be set.
                                   items:
+                                    maxLength: 256
+                                    minLength: 1
                                     type: string
+                                  maxItems: 1024
                                   type: array
                                   x-kubernetes-list-type: atomic
                                 blockedRegistries:
                                   description: |-
                                     blockedRegistries cannot be used for image pull and push actions. All other registries are permitted.
+                                    Each entry must be a valid registry scope in the format hostname[:port][/path],
+                                    optionally prefixed with "*." for wildcard subdomains (e.g., "*.example.com").
+                                    The hostname must consist of valid DNS labels separated by dots, where each label
+                                    contains only alphanumeric characters and hyphens and does not start or end with a hyphen.
+                                    Entries must not be empty, must not include tags (e.g., ":latest") or digests (e.g., "@sha256:..."),
+                                    and must be at most 256 characters in length. The list may contain at most 1024 entries.
 
                                     Only one of BlockedRegistries or AllowedRegistries may be set.
                                   items:
+                                    maxLength: 256
+                                    minLength: 1
                                     type: string
+                                  maxItems: 1024
                                   type: array
                                   x-kubernetes-list-type: atomic
                                 containerRuntimeSearchRegistries:
@@ -1568,9 +2056,19 @@ spec:
                                   type: array
                                   x-kubernetes-list-type: set
                                 insecureRegistries:
-                                  description: insecureRegistries are registries which do not have a valid TLS certificates or only support HTTP connections.
+                                  description: |-
+                                    insecureRegistries are registries which do not have a valid TLS certificates or only support HTTP connections.
+                                    Each entry must be a valid registry scope in the format hostname[:port][/path],
+                                    optionally prefixed with "*." for wildcard subdomains (e.g., "*.example.com").
+                                    The hostname must consist of valid DNS labels separated by dots, where each label
+                                    contains only alphanumeric characters and hyphens and does not start or end with a hyphen.
+                                    Entries must not be empty, must not include tags (e.g., ":latest") or digests (e.g., "@sha256:..."),
+                                    and must be at most 256 characters in length. The list may contain at most 1024 entries.
                                   items:
+                                    maxLength: 256
+                                    minLength: 1
                                     type: string
+                                  maxItems: 1024
                                   type: array
                                   x-kubernetes-list-type: atomic
                               type: object
@@ -1600,6 +2098,7 @@ spec:
                                 To determine the set of configurable Routes, look at namespace and name of entries in the
                                 .status.componentRoutes list, where participating operators write the status of
                                 configurable routes.
+                                A maximum of 250 component routes may be configured.
                               items:
                                 description: ComponentRouteSpec allows for configuration of a route's hostname and serving certificate.
                                 properties:
@@ -1607,6 +2106,38 @@ spec:
                                     description: hostname is the hostname that should be used by the route.
                                     pattern: ^([a-zA-Z0-9\p{S}\p{L}]((-?[a-zA-Z0-9\p{S}\p{L}]{0,62})?)|([a-zA-Z0-9\p{S}\p{L}](([a-zA-Z0-9-\p{S}\p{L}]{0,61}[a-zA-Z0-9\p{S}\p{L}])?)(\.)){1,}([a-zA-Z\p{L}]){2,63})$|^(([a-z0-9][-a-z0-9]{0,61}[a-z0-9]|[a-z0-9]{1,63})[\.]){0,}([a-z0-9][-a-z0-9]{0,61}[a-z0-9]|[a-z0-9]{1,63})$
                                     type: string
+                                  labels:
+                                    additionalProperties:
+                                      description: |-
+                                        LabelValue is the value part of a Kubernetes label.
+                                        A label value must be either empty or 1-63 characters, consisting of
+                                        alphanumeric characters, '-', '_', or '.', starting and ending with
+                                        an alphanumeric character.
+                                      maxLength: 63
+                                      minLength: 0
+                                      type: string
+                                    description: |-
+                                      labels defines additional labels to be applied to the route created
+                                      for the component. These labels are used by the IngressController to
+                                      determine which routes it should manage. Changing labels may cause the
+                                      route to be reassigned to a different IngressController.
+                                      When omitted, no additional labels are applied to the component route.
+                                      When specified, labels must contain at least one entry, up to a maximum of 8.
+                                      Label keys must be valid qualified names, consisting of a name segment and
+                                      an optional prefix separated by a slash (/). The name segment must be at most
+                                      63 characters in length and must consist only of alphanumeric characters,
+                                      dashes (-), underscores (_), and dots (.), and must start and end with
+                                      alphanumeric characters. The prefix, if specified, must be a DNS subdomain:
+                                      at most 253 characters in length, consisting of dot-separated segments where
+                                      each segment starts and ends with an alphanumeric character.
+                                      Label values must be either empty or 1-63 characters, consisting of
+                                      alphanumeric characters, dashes (-), underscores (_), or dots (.),
+                                      starting and ending with an alphanumeric character.
+                                      Keys with the "kubernetes.io/", "k8s.io/", and "openshift.io/" prefixes are reserved and may not be used.
+                                    maxProperties: 8
+                                    minProperties: 1
+                                    type: object
+                                    x-kubernetes-map-type: granular
                                   name:
                                     description: |-
                                       name is the logical name of the route to customize.
@@ -1644,6 +2175,7 @@ spec:
                                   - name
                                   - namespace
                                 type: object
+                              maxItems: 250
                               type: array
                               x-kubernetes-list-map-keys:
                                 - namespace
@@ -2081,6 +2613,28 @@ spec:
                                       type: array
                                       x-kubernetes-list-type: atomic
                                   type: object
+                              type: object
+                            networkObservability:
+                              description: |-
+                                networkObservability is an optional field that configures network observability installation
+                                during cluster deployment (day-0).
+                                When omitted, unless this is a SNO cluster, network observability will be installed if not already present, after that, no action taken.
+                              properties:
+                                installationPolicy:
+                                  description: |-
+                                    installationPolicy controls whether network observability is installed during cluster deployment.
+                                    Valid values are "InstallAndEnable" and "NoAction".
+                                    When set to "InstallAndEnable", ensure that network observability will be installed and enabled on the cluster. If already installed, no action taken, but if it gets uninstalled, it will install it again.
+                                    When set to "NoAction", nothing will be done regarding Network observability.
+                                    During the installation of NetworkObservability, the platform checks for any existing manual installations.
+                                    If a successful installation using the OLMv0 or OLMv1 API is detected, it will be used.
+                                    If the platform cannot determine how the current version was installed, or if the existing installation is incomplete, the installation process will stop.
+                                  enum:
+                                    - InstallAndEnable
+                                    - NoAction
+                                  type: string
+                              required:
+                                - installationPolicy
                               type: object
                             networkType:
                               description: |-
@@ -2999,9 +3553,10 @@ spec:
                                   properties:
                                     encryptionKeyURL:
                                       description: |-
-                                        encryptionKeyURL is the URL of the Azure Key Vault key to use for encrypting etcd backup artifacts.
-                                        Must be a valid Azure Key Vault key URL in the format
-                                        "https://<vault-name>.vault.azure.net/keys/<key-name>[/<key-version>]".
+                                        encryptionKeyURL is the URL of the Azure Key Vault or Managed HSM key to use for encrypting etcd backup artifacts.
+                                        Key Vault URLs are supported in Azure Public Cloud (vault.azure.net), Azure US Government Cloud (vault.usgovcloudapi.net), Azure China Cloud (vault.azure.cn), Azure German Cloud (vault.microsoftazure.de), and Azure Bleu Cloud (vault.sovcloud-api.fr).
+                                        Managed HSM URLs are supported in Azure Public Cloud (managedhsm.azure.net), Azure US Government Cloud (managedhsm.usgovcloudapi.net), Azure China Cloud (managedhsm.azure.cn), Azure German Cloud (managedhsm.microsoftazure.de), and Azure Bleu Cloud (managedhsm.sovcloud-api.fr).
+                                        Supporting another cloud requires adding its DNS suffix to this validation and the Azure endpoint resolver.
                                       maxLength: 210
                                       minLength: 1
                                       type: string
@@ -3019,6 +3574,291 @@ spec:
                               required:
                                 - platform
                               type: object
+                            scheduling:
+                              description: scheduling specifies scheduling constraints for the default etcd shard pods.
+                              minProperties: 1
+                              properties:
+                                nodeSelector:
+                                  additionalProperties:
+                                    type: string
+                                  description: |-
+                                    nodeSelector constrains this shard's pods to nodes matching the
+                                    specified labels, in addition to the framework's control plane node
+                                    selector. Keys and values must be valid Kubernetes label key/value
+                                    pairs. Maximum 16 entries.
+                                  maxProperties: 16
+                                  minProperties: 1
+                                  type: object
+                                tolerations:
+                                  description: |-
+                                    tolerations allows this shard's pods to schedule on nodes with
+                                    matching taints, in addition to the framework's control plane
+                                    tolerations. Maximum 16 entries.
+                                  items:
+                                    description: |-
+                                      The pod this Toleration is attached to tolerates any taint that matches
+                                      the triple <key,value,effect> using the matching operator <operator>.
+                                    properties:
+                                      effect:
+                                        description: |-
+                                          Effect indicates the taint effect to match. Empty means match all taint effects.
+                                          When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                                        type: string
+                                      key:
+                                        description: |-
+                                          Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                                          If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                                        type: string
+                                      operator:
+                                        description: |-
+                                          Operator represents a key's relationship to the value.
+                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Exists is equivalent to wildcard for value, so that a pod can
+                                          tolerate all taints of a particular category.
+                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
+                                        type: string
+                                      tolerationSeconds:
+                                        description: |-
+                                          TolerationSeconds represents the period of time the toleration (which must be
+                                          of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                                          it is not set, which means tolerate the taint forever (do not evict). Zero and
+                                          negative values will be treated as 0 (evict immediately) by the system.
+                                        format: int64
+                                        type: integer
+                                      value:
+                                        description: |-
+                                          Value is the taint value the toleration matches to.
+                                          If the operator is Exists, the value should be empty, otherwise just a regular string.
+                                        type: string
+                                    type: object
+                                  maxItems: 16
+                                  minItems: 1
+                                  type: array
+                                  x-kubernetes-list-type: atomic
+                              type: object
+                            shards:
+                              description: |-
+                                shards defines additional etcd shards for resource-level routing.
+                                The existing storage and scheduling fields above configure
+                                the default shard (catch-all for all resources not explicitly
+                                routed). Entries in this list define non-default shards,
+                                each deployed as an independent StatefulSet and ControlPlaneComponent.
+                                Minimum 1, maximum 10 entries. Resources must not overlap across
+                                shards. Immutable after creation: shards cannot be added, removed,
+                                or reordered.
+
+                                WARNING: In the current TechPreview implementation, shard data is NOT
+                                included in HCPEtcdBackup. Resources routed to shards will not be
+                                backed up. This will be addressed before promotion beyond TechPreview.
+                              items:
+                                description: |-
+                                  ManagedEtcdShardSpec defines the configuration for a single etcd shard
+                                  within a managed etcd deployment.
+                                properties:
+                                  name:
+                                    description: |-
+                                      name is a unique identifier for this shard. It is used to derive
+                                      resource names (e.g., StatefulSet "etcd-{name}", Service
+                                      "etcd-client-{name}").
+                                      Must be a valid DNS1123 label (lowercase alphanumeric with hyphens,
+                                      starting and ending with an alphanumeric character), max 48 characters.
+                                      Immutable once set.
+                                    maxLength: 48
+                                    minLength: 1
+                                    type: string
+                                  replicas:
+                                    description: |-
+                                      replicas is the number of etcd replicas for this shard. Must be 1 or 3.
+                                      Immutable once set.
+                                    enum:
+                                      - 1
+                                      - 3
+                                    format: int32
+                                    minimum: 1
+                                    type: integer
+                                  resources:
+                                    description: |-
+                                      resources is the list of Kubernetes resource types routed to this
+                                      shard. Each entry identifies a resource by its API group and plural
+                                      resource name. For example, events in the core group would be
+                                      {apiGroup: "", resource: "events"}, and leases in the coordination group would be
+                                      {apiGroup: "coordination.k8s.io", resource: "leases"}.
+                                      Only resource types built into the kube-apiserver are routed; entries
+                                      for CRD-backed or aggregated API resources have no effect (see
+                                      EtcdShardResource).
+                                      Minimum 1, maximum 20 entries. Immutable once set.
+                                    items:
+                                      description: |-
+                                        EtcdShardResource identifies a Kubernetes resource type to be routed to an
+                                        etcd shard. It is used to build the KAS --etcd-servers-overrides flag.
+                                        The combination of apiGroup and resource uniquely identifies a resource type.
+
+                                        Routing only takes effect for resource types compiled into the
+                                        kube-apiserver binary (built-in types such as events, pods, or
+                                        coordination.k8s.io/leases). This is a kube-apiserver limitation:
+                                        --etcd-servers-overrides does not apply to other resource types. In
+                                        particular, resources backed by CustomResourceDefinitions and resources
+                                        served by aggregated API servers (such as the openshift.io groups served
+                                        by openshift-apiserver and oauth-apiserver) are NOT routed: entries for
+                                        such resources are accepted but have no effect, and their data remains in
+                                        the default shard while the configured shard stays empty.
+                                      properties:
+                                        apiGroup:
+                                          description: |-
+                                            apiGroup is the API group of the resource (e.g., "coordination.k8s.io"
+                                            for leases). An empty string designates the core API group (e.g.,
+                                            events, pods, configmaps). For core-group resources, specify
+                                            apiGroup: "" explicitly (e.g., {apiGroup: "", resource: "events"}).
+                                            When non-empty, must be at most 253 characters in length and consist
+                                            of only lowercase alphanumeric characters, hyphens and periods. Each
+                                            period separated segment must start and end with an alphanumeric
+                                            character.
+                                          maxLength: 253
+                                          minLength: 0
+                                          type: string
+                                        resource:
+                                          description: |-
+                                            resource is the plural resource name (e.g., "events", "leases",
+                                            "configmaps"). Must be a valid DNS label (RFC 1123): lowercase
+                                            alphanumeric characters or hyphens, starting and ending with an
+                                            alphanumeric character, max 63 characters.
+                                          maxLength: 63
+                                          minLength: 1
+                                          type: string
+                                      required:
+                                        - apiGroup
+                                        - resource
+                                      type: object
+                                    maxItems: 20
+                                    minItems: 1
+                                    type: array
+                                    x-kubernetes-list-map-keys:
+                                      - apiGroup
+                                      - resource
+                                    x-kubernetes-list-type: map
+                                  scheduling:
+                                    description: |-
+                                      scheduling configures per-shard pod placement constraints. These
+                                      constraints are merged with the framework's control plane node
+                                      isolation settings (nodeSelector, tolerations, topology spread).
+                                    minProperties: 1
+                                    properties:
+                                      nodeSelector:
+                                        additionalProperties:
+                                          type: string
+                                        description: |-
+                                          nodeSelector constrains this shard's pods to nodes matching the
+                                          specified labels, in addition to the framework's control plane node
+                                          selector. Keys and values must be valid Kubernetes label key/value
+                                          pairs. Maximum 16 entries.
+                                        maxProperties: 16
+                                        minProperties: 1
+                                        type: object
+                                      tolerations:
+                                        description: |-
+                                          tolerations allows this shard's pods to schedule on nodes with
+                                          matching taints, in addition to the framework's control plane
+                                          tolerations. Maximum 16 entries.
+                                        items:
+                                          description: |-
+                                            The pod this Toleration is attached to tolerates any taint that matches
+                                            the triple <key,value,effect> using the matching operator <operator>.
+                                          properties:
+                                            effect:
+                                              description: |-
+                                                Effect indicates the taint effect to match. Empty means match all taint effects.
+                                                When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                                              type: string
+                                            key:
+                                              description: |-
+                                                Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                                                If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                                              type: string
+                                            operator:
+                                              description: |-
+                                                Operator represents a key's relationship to the value.
+                                                Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                                Exists is equivalent to wildcard for value, so that a pod can
+                                                tolerate all taints of a particular category.
+                                                Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
+                                              type: string
+                                            tolerationSeconds:
+                                              description: |-
+                                                TolerationSeconds represents the period of time the toleration (which must be
+                                                of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                                                it is not set, which means tolerate the taint forever (do not evict). Zero and
+                                                negative values will be treated as 0 (evict immediately) by the system.
+                                              format: int64
+                                              type: integer
+                                            value:
+                                              description: |-
+                                                Value is the taint value the toleration matches to.
+                                                If the operator is Exists, the value should be empty, otherwise just a regular string.
+                                              type: string
+                                          type: object
+                                        maxItems: 16
+                                        minItems: 1
+                                        type: array
+                                        x-kubernetes-list-type: atomic
+                                    type: object
+                                  storage:
+                                    description: |-
+                                      storage configures the storage backend for this shard.
+                                      If not specified, the shard inherits PersistentVolume storage from
+                                      the parent ManagedEtcdSpec.Storage. Immutable once set.
+                                    properties:
+                                      persistentVolume:
+                                        description: |-
+                                          persistentVolume configures PVC-based storage for this shard.
+                                          Only valid when type is PersistentVolume.
+                                          When omitted and type is PersistentVolume, the shard inherits the
+                                          StorageClass and volume size from the parent
+                                          spec.etcd.managed.storage.persistentVolume configuration.
+                                        minProperties: 1
+                                        properties:
+                                          storageClassName:
+                                            description: |-
+                                              storageClassName overrides the StorageClass for this shard's PVCs.
+                                              If not specified, the parent ManagedEtcdSpec's storageClassName is used.
+                                              Must be a valid DNS1123 subdomain (lowercase alphanumeric, hyphens, or
+                                              dots, starting and ending with an alphanumeric character), max 253
+                                              characters.
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                        type: object
+                                      type:
+                                        description: |-
+                                          type is the kind of storage backend to use for this shard.
+                                          Valid values are PersistentVolume and EmptyDir.
+                                          When set to PersistentVolume, a PersistentVolumeClaim is created for
+                                          each etcd replica via the StatefulSet volumeClaimTemplates. The
+                                          optional persistentVolume field can override the StorageClass for
+                                          this shard; when persistentVolume is omitted, the shard inherits
+                                          the StorageClass and size from the parent spec.etcd.managed.storage
+                                          configuration.
+                                          When set to EmptyDir, the shard uses memory-backed ephemeral
+                                          storage (tmpfs). Data is lost when the pod restarts. This is
+                                          suitable for shards holding expendable, high-churn data such as
+                                          events or leases.
+                                        enum:
+                                          - PersistentVolume
+                                          - EmptyDir
+                                        type: string
+                                    required:
+                                      - type
+                                    type: object
+                                required:
+                                  - name
+                                  - replicas
+                                  - resources
+                                type: object
+                              maxItems: 10
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-map-keys:
+                                - name
+                              x-kubernetes-list-type: map
                             storage:
                               description: storage specifies how etcd data is persisted.
                               properties:
@@ -3089,25 +3929,128 @@ spec:
                           properties:
                             endpoint:
                               description: |-
-                                endpoint is the full etcd cluster client endpoint URL. For example:
+                                endpoint is the full etcd cluster client endpoint HTTPS URL. For example:
 
                                     https://etcd-client:2379
 
-                                If the URL uses an HTTPS scheme, the TLS field is required.
+                                The tls field is required to authenticate to and verify the etcd endpoint.
                               maxLength: 255
                               pattern: ^https://
                               type: string
+                            shards:
+                              description: |-
+                                shards defines additional etcd shards for resource-level routing.
+                                The top-level endpoint and tls fields define the default shard
+                                (the catch-all for all resources not explicitly routed). Entries
+                                in this list define non-default shards, each with its own endpoint
+                                and TLS configuration.
+                                Minimum 1, maximum 10 entries. Resources must not overlap across
+                                shards. Immutable after creation: shards cannot be added, removed,
+                                or reordered.
+                              items:
+                                description: |-
+                                  UnmanagedEtcdShardSpec defines the configuration for a single etcd shard
+                                  within an unmanaged (externally operated) etcd deployment.
+                                properties:
+                                  endpoint:
+                                    description: |-
+                                      endpoint is the full etcd client endpoint URL for this shard.
+                                      Must be a valid HTTPS URL, max 267 characters. Immutable once set.
+                                      All shards must share the same CA and client certificate as the
+                                      top-level UnmanagedEtcdSpec.TLS, because kube-apiserver uses a
+                                      single --etcd-cafile/--etcd-certfile/--etcd-keyfile for all etcd
+                                      connections; --etcd-servers-overrides only overrides server URLs.
+                                    maxLength: 267
+                                    minLength: 1
+                                    type: string
+                                  name:
+                                    description: |-
+                                      name is a unique identifier for this shard.
+                                      Must be a valid DNS1123 label (lowercase alphanumeric with hyphens,
+                                      starting and ending with an alphanumeric character), max 48 characters.
+                                      Immutable once set.
+                                    maxLength: 48
+                                    minLength: 1
+                                    type: string
+                                  resources:
+                                    description: |-
+                                      resources is the list of Kubernetes resource types routed to this
+                                      shard. Uses the same format as ManagedEtcdShardSpec.Resources.
+                                      Only resource types built into the kube-apiserver are routed; entries
+                                      for CRD-backed or aggregated API resources have no effect (see
+                                      EtcdShardResource).
+                                      Minimum 1, maximum 20 entries. Immutable once set.
+                                    items:
+                                      description: |-
+                                        EtcdShardResource identifies a Kubernetes resource type to be routed to an
+                                        etcd shard. It is used to build the KAS --etcd-servers-overrides flag.
+                                        The combination of apiGroup and resource uniquely identifies a resource type.
+
+                                        Routing only takes effect for resource types compiled into the
+                                        kube-apiserver binary (built-in types such as events, pods, or
+                                        coordination.k8s.io/leases). This is a kube-apiserver limitation:
+                                        --etcd-servers-overrides does not apply to other resource types. In
+                                        particular, resources backed by CustomResourceDefinitions and resources
+                                        served by aggregated API servers (such as the openshift.io groups served
+                                        by openshift-apiserver and oauth-apiserver) are NOT routed: entries for
+                                        such resources are accepted but have no effect, and their data remains in
+                                        the default shard while the configured shard stays empty.
+                                      properties:
+                                        apiGroup:
+                                          description: |-
+                                            apiGroup is the API group of the resource (e.g., "coordination.k8s.io"
+                                            for leases). An empty string designates the core API group (e.g.,
+                                            events, pods, configmaps). For core-group resources, specify
+                                            apiGroup: "" explicitly (e.g., {apiGroup: "", resource: "events"}).
+                                            When non-empty, must be at most 253 characters in length and consist
+                                            of only lowercase alphanumeric characters, hyphens and periods. Each
+                                            period separated segment must start and end with an alphanumeric
+                                            character.
+                                          maxLength: 253
+                                          minLength: 0
+                                          type: string
+                                        resource:
+                                          description: |-
+                                            resource is the plural resource name (e.g., "events", "leases",
+                                            "configmaps"). Must be a valid DNS label (RFC 1123): lowercase
+                                            alphanumeric characters or hyphens, starting and ending with an
+                                            alphanumeric character, max 63 characters.
+                                          maxLength: 63
+                                          minLength: 1
+                                          type: string
+                                      required:
+                                        - apiGroup
+                                        - resource
+                                      type: object
+                                    maxItems: 20
+                                    minItems: 1
+                                    type: array
+                                    x-kubernetes-list-map-keys:
+                                      - apiGroup
+                                      - resource
+                                    x-kubernetes-list-type: map
+                                required:
+                                  - endpoint
+                                  - name
+                                  - resources
+                                type: object
+                              maxItems: 10
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-map-keys:
+                                - name
+                              x-kubernetes-list-type: map
                             tls:
-                              description: tls specifies TLS configuration for HTTPS etcd client endpoints.
+                              description: tls specifies the required TLS configuration for the HTTPS etcd client endpoint.
                               properties:
                                 clientSecret:
                                   description: |-
-                                    clientSecret refers to a secret for client mTLS authentication with the etcd cluster. It
-                                    may have the following key/value pairs:
+                                    clientSecret refers to a secret for client mTLS authentication with the etcd cluster.
+                                    The secret must contain all three of the following key/value pairs:
 
-                                        etcd-client-ca.crt: Certificate Authority value
-                                        etcd-client.crt: Client certificate value
-                                        etcd-client.key: Client certificate key value
+                                        etcd-client-ca.crt: CA bundle used to verify the etcd server certificate
+                                        etcd-client.crt: Client certificate used to authenticate to etcd
+                                        etcd-client.key: Private key for the client certificate
                                   properties:
                                     name:
                                       default: ""
@@ -3179,6 +4122,67 @@ spec:
                       additionalProperties:
                         type: string
                       description: labels when specified, define what custom labels are added to the hcp pods.
+                      type: object
+                    monitoring:
+                      description: monitoring configures monitoring for the hosted cluster, including
+                      minProperties: 1
+                      properties:
+                        metricsForwarding:
+                          description: |-
+                            metricsForwarding configures forwarding of control plane metrics into
+                            the hosted cluster's monitoring stack.
+                            When omitted, metrics forwarding behavior is determined by the
+                            hypershift.openshift.io/enable-metrics-forwarding annotation for backward compatibility.
+                            If neither is set, metrics forwarding is disabled.
+                          properties:
+                            metricsSet:
+                              description: |-
+                                metricsSet specifies which set of metrics to forward to the hosted
+                                cluster's monitoring stack. This controls only the metrics-proxy forwarding
+                                path and does not affect management-cluster-side ServiceMonitor/PodMonitor
+                                relabel configurations.
+                                When not specified, the value from monitoring.metricsSet is used, which itself
+                                falls back to the global METRICS_SET environment variable (default "Telemetry").
+
+                                "Telemetry" forwards only the minimal set of metrics required for OpenShift Telemetry.
+                                "SRE" forwards the Telemetry set plus additional metrics defined in the sre-metric-set
+                                ConfigMap, needed for SRE dashboards and alerts.
+                                "All" forwards all metrics from control plane components without filtering,
+                                which produces significantly higher metrics volume.
+                              enum:
+                                - Telemetry
+                                - SRE
+                                - All
+                              type: string
+                            mode:
+                              description: |-
+                                mode controls whether metrics forwarding is active for this hosted cluster.
+                                When set to "Forward", metrics-proxy and endpoint-resolver are deployed in the
+                                control plane, and a metrics-forwarder is deployed in the hosted cluster.
+                                When set to "None", metrics forwarding is inactive.
+                              enum:
+                                - Forward
+                                - None
+                              type: string
+                          required:
+                            - mode
+                          type: object
+                        metricsSet:
+                          description: |-
+                            metricsSet specifies which set of metrics to collect and forward.
+                            This overrides the global METRICS_SET environment variable configured on the HyperShift Operator.
+                            When not specified, the global METRICS_SET value is used, which defaults to "Telemetry".
+
+                            "Telemetry" collects only the minimal set of metrics required for OpenShift Telemetry.
+                            "SRE" collects the Telemetry set plus additional metrics defined in the sre-metric-set ConfigMap,
+                            needed for SRE dashboards and alerts.
+                            "All" collects all metrics from control plane components without filtering,
+                            which produces significantly higher metrics volume.
+                          enum:
+                            - Telemetry
+                            - SRE
+                            - All
+                          type: string
                       type: object
                     networking:
                       description: networking specifies network configuration for the hosted cluster.
@@ -3289,7 +4293,6 @@ spec:
                             networkType specifies the SDN provider used for cluster networking.
                             Defaults to OVNKubernetes.
                             This field is required and immutable.
-                            kubebuilder:validation:XValidation:rule="self == oldSelf", message="networkType is immutable"
                           enum:
                             - OpenShiftSDN
                             - Calico
@@ -3451,6 +4454,51 @@ spec:
                                   maximum: 9216
                                   minimum: 576
                                   type: integer
+                                v4InternalSubnet:
+                                  description: |-
+                                    v4InternalSubnet configures the IPv4 subnet used by OVN-Kubernetes for gateway
+                                    router logical router port (LRP) addresses and masquerade/SNAT traffic within
+                                    the OVN logical topology. It must not overlap with any other subnet being used
+                                    by OpenShift or by the node network. The size of the subnet must be larger than
+                                    the number of nodes.
+                                    This field is distinct from ipv4.internalJoinSubnet, which configures the subnet
+                                    for the join switch that interconnects per-node gateway routers with the cluster
+                                    router. Both default to 100.64.0.0/16 but control different OVN-Kubernetes
+                                    internal networks and can be configured independently to avoid overlaps with
+                                    existing network infrastructure.
+                                    Once set, the value is immutable and cannot be modified in subsequent updates.
+                                    The default is 100.64.0.0/16.
+                                    The value must be in IPv4 CIDR notation (e.g., 192.168.0.0/16), consisting of
+                                    four decimal octets (0-255) separated by dots, followed by a slash and a prefix
+                                    length. The prefix length must be between 0 and 30 inclusive, and the first
+                                    octet must not be 0.
+                                    The value must be between 9 and 18 characters in length.
+                                    This field is immutable once set.
+                                  maxLength: 18
+                                  minLength: 9
+                                  type: string
+                                v6InternalSubnet:
+                                  description: |-
+                                    v6InternalSubnet configures the IPv6 subnet used by OVN-Kubernetes for gateway
+                                    router logical router port (LRP) addresses and masquerade/SNAT traffic within
+                                    the OVN logical topology. It must not overlap with any other subnet being used
+                                    by OpenShift or by the node network. The size of the subnet must be larger than
+                                    the number of nodes.
+                                    This field is distinct from ipv6.internalJoinSubnet, which configures the subnet
+                                    for the join switch that interconnects per-node gateway routers with the cluster
+                                    router. Both default to fd98::/64 but control different OVN-Kubernetes internal
+                                    networks and can be configured independently to avoid overlaps with existing
+                                    network infrastructure.
+                                    Once set, the value is immutable and cannot be modified in subsequent updates.
+                                    The default is fd98::/64.
+                                    The value must be in IPv6 CIDR notation (e.g., fd98::/64), consisting of an
+                                    IPv6 address followed by a slash and a prefix length. The prefix length must
+                                    be between 0 and 125 inclusive.
+                                    The value must be between 4 and 48 characters in length.
+                                    This field is immutable once set.
+                                  maxLength: 48
+                                  minLength: 4
+                                  type: string
                               type: object
                           type: object
                         clusterVersionOperator:
@@ -3465,7 +4513,88 @@ spec:
                                 Valid values are: "Normal", "Debug", "Trace", "TraceAll".
                                 Defaults to "Normal".
                               enum:
-                                - ""
+                                - Normal
+                                - Debug
+                                - Trace
+                                - TraceAll
+                              type: string
+                          type: object
+                        csiDriverOperator:
+                          description: |-
+                            csiDriverOperator configures the CSI drivers of the hosted cluster.
+                            Settings are grouped by platform.
+
+                            When omitted, the CSI drivers use their default configuration.
+                          minProperties: 1
+                          properties:
+                            aws:
+                              description: |-
+                                aws configures the AWS EBS CSI driver.
+                                It can only be set when spec.platform.type is AWS.
+
+                                When omitted, no AWS-specific CSI driver configuration is applied and the
+                                default StorageClass uses the AWS account's default EBS encryption settings.
+                              minProperties: 1
+                              properties:
+                                initialKMSKeyARN:
+                                  description: |-
+                                    initialKMSKeyARN is the ARN of an AWS KMS key used to encrypt volumes
+                                    created by the default StorageClass. When set, new PersistentVolumes
+                                    provisioned by the default StorageClass are encrypted with this key
+                                    instead of the AWS account's default EBS encryption key.
+
+                                    When omitted, no KMS key is configured on the default StorageClass and
+                                    EBS volumes are encrypted with the AWS account's default EBS encryption
+                                    key.
+
+                                    The value may be either the ARN or Alias ARN of a KMS key and must follow
+                                    the format arn:<partition>:kms:<region>:<account-id>:(key|alias)/<key-id-or-alias>,
+                                    where <partition> is one of aws, aws-cn, aws-us-gov, aws-iso, aws-iso-b,
+                                    aws-iso-e, or aws-iso-f; <region> is the AWS region; <account-id> is the
+                                    12-digit AWS account identifier; and <key-id-or-alias> is the KMS key ID
+                                    or alias name. The key must be in the same region as the cluster
+                                    (spec.platform.aws.region).
+
+                                    When set, must be between 1 and 2048 characters.
+
+                                    This field can only be set when the HostedCluster is created and is
+                                    immutable afterwards. Day-2 changes to storage encryption must be made
+                                    directly on the ClusterCSIDriver resource in the hosted cluster.
+
+                                    The IAM role in spec.platform.aws.rolesRef.storageARN must have
+                                    kms:Decrypt, kms:GenerateDataKeyWithoutPlaintext, and kms:CreateGrant
+                                    permissions on the specified key.
+                                  maxLength: 2048
+                                  minLength: 1
+                                  type: string
+                              type: object
+                          type: object
+                        etcd:
+                          allOf:
+                            - minProperties: 1
+                            - minProperties: 1
+                          description: |-
+                            etcd configures the etcd component.
+                            Setting the logLevel field triggers a rolling restart of the component.
+                            Note: etcd supports fewer log levels than klog-based components,
+                            etcd supports only Normal and Debug log levels.
+                            When omitted, this means the user has no opinion and the platform
+                            chooses a reasonable default, which is subject to change over time.
+                            The current default log level is Normal.
+                          properties:
+                            logLevel:
+                              description: |-
+                                logLevel sets the log verbosity for the component.
+                                Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                                When set to Normal, standard operational log messages are produced for auditing and common operations.
+                                When set to Debug, more verbose logging is enabled for diagnosing problems.
+                                When set to Trace, very verbose logging is enabled including function-level tracing.
+                                When set to TraceAll, the most verbose logging is used, including full API body content,
+                                this can cause significant performance impact and produce large volumes of logs.
+                                When omitted, this means the user has no opinion and the platform
+                                chooses a reasonable default, which is subject to change over time.
+                                The current default log level is Normal.
+                              enum:
                                 - Normal
                                 - Debug
                                 - Trace
@@ -3477,6 +4606,44 @@ spec:
                             ingressOperator specifies the configuration for the Ingress Operator in the hosted cluster.
                             This allows configuring how the default ingress controller endpoints are published.
                           properties:
+                            defaultCertificate:
+                              description: |-
+                                defaultCertificate is a reference to a secret in the HostedCluster namespace
+                                that contains the default certificate served by the default ingress controller.
+                                When Routes don't specify their own certificate, defaultCertificate is used.
+
+                                The secret must contain the following keys and data:
+                                  tls.crt: certificate file contents
+                                  tls.key: key file contents
+
+                                When set, this certificate replaces the auto-generated wildcard certificate
+                                that is normally created by the control plane operator. The secret is synced
+                                from the HostedCluster namespace to the control plane, and then propagated
+                                to the hosted cluster's openshift-ingress namespace.
+
+                                When the referenced secret is updated, the new certificate data is
+                                automatically propagated to the hosted cluster.
+
+                                When not set, the control plane operator generates a wildcard certificate
+                                signed by the cluster's root CA.
+
+                                Note: a cluster-admin in the hosted cluster can override the default ingress
+                                controller's certificate directly. That override takes precedence and the
+                                certificate referenced here is no longer served.
+                              properties:
+                                name:
+                                  description: |-
+                                    name is the name of the Secret containing tls.crt and tls.key.
+                                    The Secret must exist in the same namespace as the HostedCluster.
+                                    name must be a valid DNS subdomain name (RFC 1123): it must contain only
+                                    lowercase alphanumeric characters, '-' or '.', and start and end with an
+                                    alphanumeric character.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                                - name
+                              type: object
                             endpointPublishingStrategy:
                               description: |-
                                 endpointPublishingStrategy is used to publish the default ingress controller endpoints.
@@ -3729,6 +4896,71 @@ spec:
                                                     minLength: 26
                                                     type: string
                                                   maxItems: 10
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                                protocol:
+                                                  description: |-
+                                                    protocol specifies whether the Network Load Balancer uses PROXY
+                                                    protocol to forward connections to the IngressController.
+
+                                                    When set to "TCP", the NLB uses AWS's native client IP preservation.
+                                                    This may cause hairpin connection failures for internal load
+                                                    balancers when connections are made from pods to router pods on
+                                                    the same node.
+
+                                                    When set to "PROXY", the NLB disables native client IP preservation
+                                                    and uses PROXY protocol v2. The IngressController enables PROXY
+                                                    protocol on HAProxy so that it can parse PROXY protocol headers to
+                                                    obtain the original client IP. This avoids hairpin connection
+                                                    failures.
+
+                                                    The following values are valid for this field:
+
+                                                    * "TCP".
+                                                    * "PROXY".
+
+                                                    When omitted, this means the user has no opinion and the value is
+                                                    left to the platform to choose a reasonable default, which is subject to
+                                                    change over time. The current default is "PROXY".
+
+                                                    Note that changing this field may cause brief connection failures
+                                                    during the transition as the NLB attribute change and router rollout
+                                                    occur independently.
+                                                  enum:
+                                                    - TCP
+                                                    - PROXY
+                                                  type: string
+                                                securityGroups:
+                                                  description: |-
+                                                    securityGroups is a list of security group IDs to attach to the
+                                                    Network Load Balancer. When specified, these security groups replace
+                                                    the managed security group that the Cloud Controller Manager would
+                                                    otherwise create automatically. The user is responsible for
+                                                    configuring the ingress and egress rules on the specified security
+                                                    groups.
+
+                                                    The specified security groups must exist in the same VPC as the
+                                                    cluster and must allow the necessary traffic for the
+                                                    IngressController to function.
+
+                                                    When this field is omitted, the Cloud Controller Manager
+                                                    automatically creates and manages a security group for the NLB.
+
+                                                    Each security group ID must be unique and must begin with "sg-"
+                                                    followed by 8 or 17 lowercase hexadecimal characters
+                                                    (e.g. "sg-abcd1234" or "sg-abcd1234abcd12345"). At least 1 and
+                                                    at most 5 security groups can be specified.
+                                                  items:
+                                                    description: |-
+                                                      SecurityGroupID is an AWS EC2 security group ID.
+                                                      Values must begin with "sg-" followed by 8 or 17 lowercase
+                                                      hexadecimal characters (e.g. "sg-abcd1234" or
+                                                      "sg-abcd1234abcd12345").
+                                                    maxLength: 20
+                                                    minLength: 11
+                                                    type: string
+                                                  maxItems: 5
+                                                  minItems: 1
                                                   type: array
                                                   x-kubernetes-list-type: atomic
                                                 subnets:
@@ -4051,6 +5283,234 @@ spec:
                               type: object
                               x-kubernetes-preserve-unknown-fields: true
                           type: object
+                        kubeAPIServer:
+                          allOf:
+                            - minProperties: 1
+                            - minProperties: 1
+                          description: |-
+                            kubeAPIServer configures the kube-apiserver component.
+                            Setting the logLevel field triggers a rolling restart of the component.
+                            When omitted, this means the user has no opinion and the platform
+                            chooses a reasonable default, which is subject to change over time.
+                            The current default log level is Normal.
+                          properties:
+                            eventTTLMinutes:
+                              description: |-
+                                eventTTLMinutes specifies the amount of time, in minutes, that events are stored
+                                in etcd before being deleted.
+                                The TTL is allowed between 5 minutes minimum up to a maximum of 180 minutes (3 hours).
+
+                                Lowering this value will reduce the storage required in etcd. Note that this setting
+                                will only apply to new events being created and will not update existing events.
+
+                                Changing this value causes the kube-apiserver to be rolled out with the new setting.
+
+                                When omitted this means no opinion, and the platform is left to choose a reasonable
+                                default, which is subject to change over time.
+                                The current default value is 180 minutes (3 hours).
+                              format: int32
+                              maximum: 180
+                              minimum: 5
+                              type: integer
+                            logLevel:
+                              description: |-
+                                logLevel sets the log verbosity for the component.
+                                Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                                When set to Normal, standard operational log messages are produced for auditing and common operations.
+                                When set to Debug, more verbose logging is enabled for diagnosing problems.
+                                When set to Trace, very verbose logging is enabled including function-level tracing.
+                                When set to TraceAll, the most verbose logging is used, including full API body content,
+                                this can cause significant performance impact and produce large volumes of logs.
+                                When omitted, this means the user has no opinion and the platform
+                                chooses a reasonable default, which is subject to change over time.
+                                The current default log level is Normal.
+                              enum:
+                                - Normal
+                                - Debug
+                                - Trace
+                                - TraceAll
+                              type: string
+                          type: object
+                        kubeControllerManager:
+                          allOf:
+                            - minProperties: 1
+                            - minProperties: 1
+                          description: |-
+                            kubeControllerManager configures the kube-controller-manager component.
+                            Setting the logLevel field triggers a rolling restart of the component.
+                            When omitted, this means the user has no opinion and the platform
+                            chooses a reasonable default, which is subject to change over time.
+                            The current default log level is Normal.
+                          properties:
+                            logLevel:
+                              description: |-
+                                logLevel sets the log verbosity for the component.
+                                Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                                When set to Normal, standard operational log messages are produced for auditing and common operations.
+                                When set to Debug, more verbose logging is enabled for diagnosing problems.
+                                When set to Trace, very verbose logging is enabled including function-level tracing.
+                                When set to TraceAll, the most verbose logging is used, including full API body content,
+                                this can cause significant performance impact and produce large volumes of logs.
+                                When omitted, this means the user has no opinion and the platform
+                                chooses a reasonable default, which is subject to change over time.
+                                The current default log level is Normal.
+                              enum:
+                                - Normal
+                                - Debug
+                                - Trace
+                                - TraceAll
+                              type: string
+                          type: object
+                        kubeScheduler:
+                          allOf:
+                            - minProperties: 1
+                            - minProperties: 1
+                          description: |-
+                            kubeScheduler configures the kube-scheduler component.
+                            Setting the logLevel field triggers a rolling restart of the component.
+                            When omitted, this means the user has no opinion and the platform
+                            chooses a reasonable default, which is subject to change over time.
+                            The current default log level is Normal.
+                          properties:
+                            logLevel:
+                              description: |-
+                                logLevel sets the log verbosity for the component.
+                                Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                                When set to Normal, standard operational log messages are produced for auditing and common operations.
+                                When set to Debug, more verbose logging is enabled for diagnosing problems.
+                                When set to Trace, very verbose logging is enabled including function-level tracing.
+                                When set to TraceAll, the most verbose logging is used, including full API body content,
+                                this can cause significant performance impact and produce large volumes of logs.
+                                When omitted, this means the user has no opinion and the platform
+                                chooses a reasonable default, which is subject to change over time.
+                                The current default log level is Normal.
+                              enum:
+                                - Normal
+                                - Debug
+                                - Trace
+                                - TraceAll
+                              type: string
+                          type: object
+                        oauthServer:
+                          allOf:
+                            - minProperties: 1
+                            - minProperties: 1
+                          description: |-
+                            oauthServer configures the oauth-server component.
+                            Setting the logLevel field triggers a rolling restart of the component.
+                            When omitted, this means the user has no opinion and the platform
+                            chooses a reasonable default, which is subject to change over time.
+                            The current default log level is Normal.
+                          properties:
+                            logLevel:
+                              description: |-
+                                logLevel sets the log verbosity for the component.
+                                Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                                When set to Normal, standard operational log messages are produced for auditing and common operations.
+                                When set to Debug, more verbose logging is enabled for diagnosing problems.
+                                When set to Trace, very verbose logging is enabled including function-level tracing.
+                                When set to TraceAll, the most verbose logging is used, including full API body content,
+                                this can cause significant performance impact and produce large volumes of logs.
+                                When omitted, this means the user has no opinion and the platform
+                                chooses a reasonable default, which is subject to change over time.
+                                The current default log level is Normal.
+                              enum:
+                                - Normal
+                                - Debug
+                                - Trace
+                                - TraceAll
+                              type: string
+                          type: object
+                        openShiftAPIServer:
+                          allOf:
+                            - minProperties: 1
+                            - minProperties: 1
+                          description: |-
+                            openShiftAPIServer configures the openshift-apiserver component.
+                            Setting the logLevel field triggers a rolling restart of the component.
+                            When omitted, this means the user has no opinion and the platform
+                            chooses a reasonable default, which is subject to change over time.
+                            The current default log level is Normal.
+                          properties:
+                            logLevel:
+                              description: |-
+                                logLevel sets the log verbosity for the component.
+                                Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                                When set to Normal, standard operational log messages are produced for auditing and common operations.
+                                When set to Debug, more verbose logging is enabled for diagnosing problems.
+                                When set to Trace, very verbose logging is enabled including function-level tracing.
+                                When set to TraceAll, the most verbose logging is used, including full API body content,
+                                this can cause significant performance impact and produce large volumes of logs.
+                                When omitted, this means the user has no opinion and the platform
+                                chooses a reasonable default, which is subject to change over time.
+                                The current default log level is Normal.
+                              enum:
+                                - Normal
+                                - Debug
+                                - Trace
+                                - TraceAll
+                              type: string
+                          type: object
+                        openShiftControllerManager:
+                          allOf:
+                            - minProperties: 1
+                            - minProperties: 1
+                          description: |-
+                            openShiftControllerManager configures the openshift-controller-manager component.
+                            Setting the logLevel field triggers a rolling restart of the component.
+                            When omitted, this means the user has no opinion and the platform
+                            chooses a reasonable default, which is subject to change over time.
+                            The current default log level is Normal.
+                          properties:
+                            logLevel:
+                              description: |-
+                                logLevel sets the log verbosity for the component.
+                                Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                                When set to Normal, standard operational log messages are produced for auditing and common operations.
+                                When set to Debug, more verbose logging is enabled for diagnosing problems.
+                                When set to Trace, very verbose logging is enabled including function-level tracing.
+                                When set to TraceAll, the most verbose logging is used, including full API body content,
+                                this can cause significant performance impact and produce large volumes of logs.
+                                When omitted, this means the user has no opinion and the platform
+                                chooses a reasonable default, which is subject to change over time.
+                                The current default log level is Normal.
+                              enum:
+                                - Normal
+                                - Debug
+                                - Trace
+                                - TraceAll
+                              type: string
+                          type: object
+                        openShiftOAuthAPIServer:
+                          allOf:
+                            - minProperties: 1
+                            - minProperties: 1
+                          description: |-
+                            openShiftOAuthAPIServer configures the openshift-oauth-apiserver component.
+                            Setting the logLevel field triggers a rolling restart of the component.
+                            When omitted, this means the user has no opinion and the platform
+                            chooses a reasonable default, which is subject to change over time.
+                            The current default log level is Normal.
+                          properties:
+                            logLevel:
+                              description: |-
+                                logLevel sets the log verbosity for the component.
+                                Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+                                When set to Normal, standard operational log messages are produced for auditing and common operations.
+                                When set to Debug, more verbose logging is enabled for diagnosing problems.
+                                When set to Trace, very verbose logging is enabled including function-level tracing.
+                                When set to TraceAll, the most verbose logging is used, including full API body content,
+                                this can cause significant performance impact and produce large volumes of logs.
+                                When omitted, this means the user has no opinion and the platform
+                                chooses a reasonable default, which is subject to change over time.
+                                The current default log level is Normal.
+                              enum:
+                                - Normal
+                                - Debug
+                                - Trace
+                                - TraceAll
+                              type: string
+                          type: object
                       type: object
                     pausedUntil:
                       description: pausedUntil is a field that can be used to pause reconciliation on the HostedCluster controller, resulting in any change to the HostedCluster being ignored.
@@ -4146,6 +5606,60 @@ spec:
                                 - PublicAndPrivate
                                 - Private
                               type: string
+                            managedDNS:
+                              description: |-
+                                managedDNS configures managed Route53 DNS zones for this cluster.
+                                Managed DNS is enabled when this field is set, which requires
+                                ingressDomainPrefix. When enabled, the control plane operator creates and
+                                reconciles the cluster's DNS zones in the customer's AWS account instead of
+                                requiring them to be pre-created externally and passed in as zone IDs.
+                                For standard clusters this covers the .hypershift.local private zone and
+                                the public and private ingress zones. For shared VPC clusters only the
+                                public ingress zone is managed, since the .hypershift.local and private
+                                ingress zones are owned by the VPC owner.
+                                managedDNS can only be set at cluster creation; it cannot be added to or
+                                removed from an existing cluster.
+                              properties:
+                                delegation:
+                                  description: |-
+                                    delegation configures service-side DNS delegation for certificate generation.
+                                    When set, the ControlPlaneOperator creates an ACME DNS01 challenge CNAME in the
+                                    public ingress zone and handles NS delegation based on the nsDelegationMode.
+                                    When absent, only zones are created and the consuming platform handles
+                                    delegation and certificate management.
+                                  properties:
+                                    nsDelegationMode:
+                                      description: |-
+                                        nsDelegationMode specifies how NS delegation records are created in the parent zone.
+                                        "ExternalDNS": the ControlPlaneOperator creates a DNSEndpoint CR in the control plane namespace;
+                                        external-dns creates NS records in the parent zone.
+                                        "Manual": the consuming platform handles NS delegation using nameservers
+                                        reported in HostedCluster status.
+                                      enum:
+                                        - ExternalDNS
+                                        - Manual
+                                      type: string
+                                  required:
+                                    - nsDelegationMode
+                                  type: object
+                                ingressDomainPrefix:
+                                  description: |-
+                                    ingressDomainPrefix is the subdomain prefix for the managed ingress DNS zones.
+                                    The zone is created as {ingressDomainPrefix}.{clusterBaseDomain}, where
+                                    {clusterBaseDomain} is the cluster base domain configured via the HostedCluster
+                                    spec.dns (baseDomainPrefix and baseDomain).
+                                    When delegation is configured, this prefix creates a DNS delegation boundary
+                                    that separates the ingress zone from the cluster domain, enabling ACME
+                                    challenge CNAME delegation back to the parent zone.
+                                    Must be 1-63 characters, consist only of lowercase alphanumeric characters or
+                                    hyphens, and must start and end with an alphanumeric character.
+                                    ingressDomainPrefix is immutable.
+                                  maxLength: 63
+                                  minLength: 1
+                                  type: string
+                              required:
+                                - ingressDomainPrefix
+                              type: object
                             multiArch:
                               default: false
                               description: |-
@@ -4174,26 +5688,49 @@ spec:
                                 Changes to this field will be propagated in-place to AWS resources (VPC Endpoints, EC2 instances, initial EBS volumes and default/endpoint security groups).
                                 These tags will be propagated to the infrastructure CR in the guest cluster, where other OCP operators might choose to honor this input to reconcile AWS resources created by them.
                                 Please consult the official documentation for a list of all AWS resources that support in-place tag updates.
+                                For NodePool-created resources (EC2 instances and their initial EBS volumes), these will be merged with NodePool-scoped tags.
+                                By default, HostedCluster tags take precedence over NodePool tags when both specify the same key.
+                                To allow a NodePool tag to override a specific HostedCluster tag, set overridePolicy to "Allow" on that tag.
+                                Cluster-scoped resources (VPC endpoints, security groups) only receive HostedCluster tags.
                                 These take precedence over tags defined out of band (i.e., tags added manually or by other tools outside of HyperShift) in AWS in case of conflicts.
                               items:
-                                description: AWSResourceTag is a tag to apply to AWS resources created for the cluster.
+                                description: |-
+                                  AWSClusterResourceTag is a tag to apply to AWS resources created for a
+                                  HostedCluster. It extends the base tag with an overridePolicy field that
+                                  controls whether NodePool-level tags can override this tag.
                                 properties:
                                   key:
-                                    description: key is the key of the tag.
+                                    description: |-
+                                      key is the key of the tag.
+                                      Must be between 1 and 128 characters and may only contain letters, digits,
+                                      spaces, and the characters _ . : / = + - @
                                     maxLength: 128
                                     minLength: 1
-                                    pattern: ^[0-9A-Za-z_.:/=+-@]+$
+                                    type: string
+                                  overridePolicy:
+                                    description: |-
+                                      overridePolicy controls whether a NodePool-level tag with the same key can
+                                      override this HostedCluster-level tag.
+
+                                      When set to "Allow", a NodePool tag with the same key will take precedence
+                                      over this HostedCluster tag. When set to "Deny" or omitted, the
+                                      HostedCluster value is preserved and the NodePool tag is ignored for that
+                                      key.
+                                    enum:
+                                      - Allow
+                                      - Deny
                                     type: string
                                   value:
                                     description: |-
                                       value is the value of the tag.
+                                      Must be between 1 and 256 characters and may only contain letters, digits,
+                                      spaces, and the characters _ . : / = + - @
 
                                       Some AWS service do not support empty values. Since tags are added to
                                       resources in many services, the length of the tag value must meet the
                                       requirements of all services.
                                     maxLength: 256
                                     minLength: 1
-                                    pattern: ^[0-9A-Za-z_.:/=+-@]+$
                                     type: string
                                 required:
                                   - key
@@ -4396,8 +5933,9 @@ spec:
                                 before they are terminated, providing a best effort for graceful shutdown.
 
                                 Supports both standard and FIFO queues (FIFO queues end with .fifo suffix).
+                                Supports FedRAMP/FIPS endpoints (sqs-fips prefix) and GovCloud regions.
                               maxLength: 512
-                              pattern: ^https://sqs\.[a-z0-9-]+\.amazonaws\.com/[0-9]{12}/[a-zA-Z0-9_-]+(\.fifo)?$
+                              pattern: ^https://sqs(-fips)?\.([a-z0-9-]+)\.amazonaws\.com/[0-9]{12}/[a-zA-Z0-9_-]+(\.fifo)?$
                               type: string
                           required:
                             - region
@@ -4988,12 +6526,13 @@ spec:
                               type: object
                             cloud:
                               default: AzurePublicCloud
-                              description: 'cloud is the cloud environment identifier, valid values could be found here: https://github.com/Azure/go-autorest/blob/4c0e21ca2bbb3251fe7853e6f9df6397f53dd419/autorest/azure/environments.go#L33'
+                              description: cloud is the Azure cloud environment identifier.
                               enum:
                                 - AzurePublicCloud
                                 - AzureUSGovernmentCloud
                                 - AzureChinaCloud
                                 - AzureGermanCloud
+                                - AzureBleuCloud
                                 - AzureStackCloud
                               type: string
                             containerRegistry:
@@ -5088,8 +6627,8 @@ spec:
                                         If not provided, the controller will auto-create a NAT subnet in the HC's VNet.
                                         The expected format is:
                                           /subscriptions/{subscriptionID}/resourceGroups/{resourceGroup}/providers/Microsoft.Network/virtualNetworks/{vnetName}/subnets/{subnetName}
-                                        The maximum length is 355 characters.
-                                      maxLength: 355
+                                        The maximum length is 357 characters: 85 fixed path characters + 38 for a fully braced UUID + 90 (resource group) + 64 (VNet) + 80 (subnet).
+                                      maxLength: 357
                                       minLength: 1
                                       type: string
                                   type: object
@@ -5151,17 +6690,17 @@ spec:
                               type: string
                             subnetID:
                               description: |-
-                                subnetID is the subnet ID of an existing subnet where the nodes in the nodepool will be created. This can be a
-                                different subnet than the one listed in the HostedCluster, HostedCluster.Spec.Platform.Azure.SubnetID, but must
-                                exist in the same network, HostedCluster.Spec.Platform.Azure.VnetID, and must exist under the same subscription ID,
-                                HostedCluster.Spec.Platform.Azure.SubscriptionID.
+                                subnetID is the ID of an existing subnet where the HostedCluster's nodes will be created. It must exist in the same
+                                network as VnetID and under the same subscription as SubscriptionID.
                                 subnetID is immutable once set.
                                 The subnetID should be in the format `/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/virtualNetworks/{vnetName}/subnets/{subnetName}`.
-                                The subscriptionId in the encryptionSetID must be a valid UUID. It should be 5 groups of hyphen separated hexadecimal characters in the form 8-4-4-4-12.
+                                The subscriptionId in the subnetID must be a valid UUID. It should be 5 groups of hyphen separated hexadecimal characters in the form 8-4-4-4-12.
                                 The resourceGroupName should be between 1 and 90 characters, consisting only of alphanumeric characters, hyphens, underscores, periods and parenthesis and must not end with a period (.) character.
                                 The vnetName should be between 2 and 64 characters, consisting only of alphanumeric characters, hyphens, underscores and periods and must not end with either a period (.) or hyphen (-) character.
                                 The subnetName should be between 1 and 80 characters, consisting only of alphanumeric characters, hyphens and underscores and must start with an alphanumeric character and must not end with a period (.) or hyphen (-) character.
-                              maxLength: 355
+
+                                MaxLength is 85 fixed path characters + 38 for a fully braced UUID + 90 (resource group) + 64 (VNet) + 80 (subnet).
+                              maxLength: 357
                               minLength: 1
                               type: string
                             subscriptionID:
@@ -5213,6 +6752,45 @@ spec:
                         gcp:
                           description: gcp specifies configuration for clusters running on Google Cloud Platform.
                           properties:
+                            delegation:
+                              description: |-
+                                delegation configures DNS delegation for the ingress wildcard certificate
+                                of the hosted cluster. When omitted, no delegation record is created.
+                              minProperties: 1
+                              properties:
+                                acmeChallengeTarget:
+                                  description: |-
+                                    acmeChallengeTarget delegates the ACME DNS-01 challenge for the ingress
+                                    wildcard certificate (*.apps) to a solver running outside the cluster.
+                                    When set, HyperShift publishes a CNAME record at
+                                    _acme-challenge.<ingress domain> in the cluster's public ingress DNS zone,
+                                    pointing at this target, so an external certificate issuer that can write
+                                    the target's zone but not the cluster's ingress zone (for example a central
+                                    cert-manager) can solve the challenge by following the CNAME.
+
+                                    The value is the fully qualified name the external solver writes its
+                                    challenge TXT records to. It must be lowercase, must start with the
+                                    _acme-challenge. label, must contain at least two further labels, must not
+                                    end with a dot, and is limited to 253 characters.
+
+                                    The record is only created when the cluster's ingress domain
+                                    (apps.<name>.<baseDomain> by default, apps.<baseDomainPrefix>.<baseDomain>
+                                    when spec.dns.baseDomainPrefix is set, or the spec.configuration.ingress
+                                    domain or appsDomain override when set) is within the cluster's base
+                                    domain, and when the target differs from the record name. When the record
+                                    is not created, the GCPACMECNAMEAvailable condition on the HostedCluster
+                                    reports why.
+
+                                    When this field is not set, no record is created and the deployment is
+                                    responsible for issuing the ingress wildcard certificate, solving its
+                                    DNS-01 challenge in the ingress zone itself.
+
+                                    The field can be set when the cluster is created or added later, but once
+                                    set it cannot be changed or removed.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              type: object
                             endpointAccess:
                               default: Private
                               description: |-
@@ -5289,6 +6867,10 @@ spec:
                                 Labels are key-value pairs used for organizing and managing GCP resources.
                                 Changes to this field will be propagated in-place to GCP resources where supported.
                                 GCP supports a maximum of 64 labels per resource. HyperShift reserves approximately 4 labels for system use.
+                                HyperShift sets hypershift-openshift-io-cluster to the HostedCluster name and,
+                                when an infrastructure ID is available, hypershift-openshift-io-infra-id to that ID.
+                                These system values override user-supplied values for those keys on GCPCluster
+                                and NodePool machine resources.
                                 For GCP labeling guidance, see https://cloud.google.com/compute/docs/labeling-resources
                               items:
                                 description: |-
@@ -5304,7 +6886,8 @@ spec:
                                       - Contain only lowercase letters, digits, underscores, or hyphens
                                       - End with a lowercase letter or digit (not a hyphen or underscore)
                                       - Be 1-63 characters long
-                                      GCP reserves the 'goog' prefix for system labels.
+                                      GCP reserves the 'goog' prefix for system labels, with the exception of
+                                      'goog-partner-solution' which Google requires for partner attribution tracking.
                                       See https://cloud.google.com/compute/docs/labeling-resources for Compute Engine label requirements.
                                     maxLength: 63
                                     minLength: 1
@@ -5328,6 +6911,84 @@ spec:
                               x-kubernetes-list-map-keys:
                                 - key
                               x-kubernetes-list-type: map
+                            resourceTags:
+                              description: |-
+                                resourceTags are pre-existing Google Cloud Resource Manager tags to apply to
+                                GCP resources created for the hosted cluster.
+                                Currently, tags are applied to newly provisioned persistent disks and, when the
+                                image registry is enabled, to its storage bucket. Other GCP resources, such as
+                                worker VMs and their boot disks, are not tagged.
+                                The set of tagged resources is subject to change over time.
+
+                                When omitted, no tags are applied through this setting. When specified,
+                                the list must contain 1 to 50 entries, and each short key must be unique
+                                across the list, even when the tags have different parents. A tag's
+                                parentID defaults to the HostedCluster's GCP project if omitted.
+                                Google Cloud permits at most 50 directly attached tags per resource,
+                                including tags attached by other actors. Coordinate with external tagging
+                                automation to leave sufficient capacity; admission does not reserve tag slots.
+
+                                The referenced tags must already exist, and the storage and imageRegistry
+                                service accounts must have permission to use them. Neither is checked when the
+                                HostedCluster is created. When a tag cannot be applied, provisioning of the
+                                affected disk or bucket can fail, and the error is reported in the persistent
+                                volume claim's events or the image registry operator's status.
+
+                                resourceTags can only be set when the HostedCluster is created. It cannot be
+                                added, removed or changed afterwards. If the configured list must change,
+                                the HostedCluster must be recreated.
+                                Resource tags require a control plane operator image that supports GCP resource
+                                tag propagation. When that capability is unavailable, reconciliation fails
+                                with a message identifying resourceTags on the ReconciliationSucceeded
+                                condition, and dependent component deployments are blocked until a
+                                supporting control plane operator image is configured.
+                              items:
+                                description: |-
+                                  GCPResourceTag selects a pre-existing Google Cloud Resource Manager tag by
+                                  its parent, short key, and short value. The tag must be defined in the
+                                  HostedCluster project or an organization before the cluster is created.
+                                  See https://cloud.google.com/resource-manager/docs/tags/tags-overview.
+                                properties:
+                                  key:
+                                    description: |-
+                                      key is required and is the short name of the pre-existing Resource Manager TagKey.
+                                      A key is 1-63 characters, begins and ends with
+                                      an ASCII alphanumeric character, and may contain letters, digits, '.',
+                                      '_', or '-' between them.
+                                    maxLength: 63
+                                    minLength: 1
+                                    type: string
+                                  parentID:
+                                    description: |-
+                                      parentID is the ID of the project or organization that defines the TagKey.
+                                      When omitted, the HostedCluster's GCP project is used.
+                                      An explicit value must be the HostedCluster's GCP project ID or a numeric
+                                      organization ID. A numeric value is treated as an organization ID; project
+                                      numbers are not supported.
+                                      An organization ID consists of 1 to 32 decimal digits and must not start with 0.
+                                      A project ID is 6 to 30 characters long, contains only lowercase letters, digits
+                                      and hyphens, starts with a letter and must not end with a hyphen.
+                                    maxLength: 32
+                                    minLength: 1
+                                    type: string
+                                  value:
+                                    description: |-
+                                      value is required and is the short name of the pre-existing Resource Manager TagValue for
+                                      key. Exactly one value for a TagKey can be attached to a resource. A value
+                                      is 1-63 characters, begins and ends with an ASCII alphanumeric character,
+                                      and may contain ASCII letters and digits, `_-.@%=+:,*#&()[]{}`, and
+                                      spaces between them.
+                                    maxLength: 63
+                                    minLength: 1
+                                    type: string
+                                required:
+                                  - key
+                                  - value
+                                type: object
+                              maxItems: 50
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-type: atomic
                             workloadIdentity:
                               description: |-
                                 workloadIdentity configures Workload Identity Federation for the cluster.
@@ -5416,6 +7077,7 @@ spec:
                                         - roles/dns.admin (DNS Admin - for managing DNS records)
                                         - roles/compute.networkAdmin (Compute Network Admin - for network management)
                                         - roles/compute.viewer (Compute Viewer - for CCM to read instance metadata)
+                                        - roles/compute.securityAdmin (Security Admin - for managing worker firewall rules)
                                         See cmd/infra/gcp/iam-bindings.json for the authoritative role definitions.
                                         Format: service-account-name@project-id.iam.gserviceaccount.com
 
@@ -5431,8 +7093,33 @@ spec:
                                         that manages GCS storage for the internal container image registry.
                                         This GSA requires the following IAM roles:
                                         - roles/storage.admin (Storage Admin - for creating and managing GCS buckets and objects)
+                                        - roles/resourcemanager.tagUser (Tag User - for applying resource tags to the bucket)
                                         See cmd/infra/gcp/iam-bindings.json for the authoritative role definitions.
                                         Format: service-account-name@project-id.iam.gserviceaccount.com
+
+                                        This is a user-provided value referencing a pre-created Google Service Account.
+                                        Typically obtained from the output of `hypershift infra create gcp` which creates
+                                        the required service accounts with appropriate IAM roles and WIF bindings.
+                                      maxLength: 85
+                                      minLength: 37
+                                      type: string
+                                    ingress:
+                                      description: |-
+                                        ingress is the Google Service Account email for the cluster Ingress Operator
+                                        that manages the default IngressController's wildcard (*.apps) Cloud DNS records.
+                                        This GSA requires the following IAM role:
+                                        - roles/dns.admin (DNS Admin - for managing records in the ingress managed zone)
+                                        See cmd/infra/gcp/iam-bindings.json for the authoritative role definitions.
+
+                                        When the Ingress capability is enabled (the default), creating the cluster
+                                        through the CLI without this field fails fast, and a cluster created
+                                        without it (e.g. via direct YAML) reports a non-blocking
+                                        IngressCredentialsFound condition: the guest ingress operator runs
+                                        without credentials and cannot publish the *.apps DNS records. Because
+                                        the field is immutable, such a cluster cannot be fixed after creation.
+                                        When the Ingress capability is disabled, this field is ignored. The email
+                                        must belong to the GCP project in spec.platform.gcp.project, and it can
+                                        only be set at creation time.
 
                                         This is a user-provided value referencing a pre-created Google Service Account.
                                         Typically obtained from the output of `hypershift infra create gcp` which creates
@@ -6571,14 +8258,14 @@ spec:
                                   description: activeKey defines the active key used to encrypt new secrets
                                   properties:
                                     keyName:
-                                      description: keyName is the name of the keyvault key used for encrypt/decrypt
+                                      description: keyName is the name of the key used for encrypt/decrypt.
                                       maxLength: 255
                                       minLength: 1
                                       type: string
                                     keyVaultName:
                                       description: |-
-                                        keyVaultName is the name of the keyvault. Must match criteria specified at https://docs.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates#vault-name-and-object-name
-                                        Your Microsoft Entra application used to create the cluster must be authorized to access this keyvault, e.g using the AzureCLI:
+                                        keyVaultName is the name of the Key Vault or Managed HSM. Must match criteria specified at https://docs.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates#vault-name-and-object-name
+                                        Your Microsoft Entra application used to create the cluster must be authorized to access this resource, e.g using the AzureCLI:
                                         `az keyvault set-policy -n $KEYVAULT_NAME --key-permissions decrypt encrypt --spn <YOUR APPLICATION CLIENT ID>`
                                       maxLength: 255
                                       minLength: 1
@@ -6602,14 +8289,14 @@ spec:
                                     The system automatically manages the previous key via the status field.
                                   properties:
                                     keyName:
-                                      description: keyName is the name of the keyvault key used for encrypt/decrypt
+                                      description: keyName is the name of the key used for encrypt/decrypt.
                                       maxLength: 255
                                       minLength: 1
                                       type: string
                                     keyVaultName:
                                       description: |-
-                                        keyVaultName is the name of the keyvault. Must match criteria specified at https://docs.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates#vault-name-and-object-name
-                                        Your Microsoft Entra application used to create the cluster must be authorized to access this keyvault, e.g using the AzureCLI:
+                                        keyVaultName is the name of the Key Vault or Managed HSM. Must match criteria specified at https://docs.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates#vault-name-and-object-name
+                                        Your Microsoft Entra application used to create the cluster must be authorized to access this resource, e.g using the AzureCLI:
                                         `az keyvault set-policy -n $KEYVAULT_NAME --key-permissions decrypt encrypt --spn <YOUR APPLICATION CLIENT ID>`
                                       maxLength: 255
                                       minLength: 1
@@ -6634,6 +8321,18 @@ spec:
                                     - Public
                                     - Private
                                     - ""
+                                  type: string
+                                keyVaultType:
+                                  description: |-
+                                    keyVaultType specifies whether activeKey and backupKey are hosted by Azure Key Vault or Azure Managed HSM.
+                                    Valid values are "KeyVault" and "ManagedHSM".
+                                    When set to "KeyVault", both keys are hosted by Azure Key Vault.
+                                    When set to "ManagedHSM", both keys are hosted by Azure Managed HSM.
+                                    The type is immutable; key rotation must remain within the same service.
+                                    When omitted, the keys are treated as Key Vault keys.
+                                  enum:
+                                    - KeyVault
+                                    - ManagedHSM
                                   type: string
                                 kms:
                                   description: |-
@@ -6862,6 +8561,53 @@ spec:
                                     maxLength: 253
                                     minLength: 1
                                     type: string
+                                  loadBalancerClass:
+                                    description: |-
+                                      loadBalancerClass sets Service.spec.loadBalancerClass to select which
+                                      LB controller provisions the Service. Required when the management
+                                      cluster runs multiple LB controllers (e.g., F5 for management + MetalLB
+                                      for tenant workloads). Maps to the Kubernetes Service field directly.
+                                      Immutable after creation — matches Kubernetes semantics.
+                                      Must be a valid Kubernetes qualified-name: an optional lowercase DNS
+                                      subdomain prefix followed by '/' and a name segment starting and ending
+                                      with an alphanumeric character (e.g., "example.com/my-lb-class").
+                                      Maximum length is 253 characters.
+                                    maxLength: 253
+                                    minLength: 1
+                                    type: string
+                                  serviceAnnotations:
+                                    additionalProperties:
+                                      type: string
+                                    description: |-
+                                      serviceAnnotations is a map of annotations passed through to the
+                                      LoadBalancer Service. The user provides the exact annotations their LB
+                                      provider expects (e.g., metallb.io/loadBalancerIPs,
+                                      service.beta.kubernetes.io/aws-load-balancer-eip-allocations).
+                                      Immutable during TechPreview — set at creation, cannot be changed.
+                                      Becomes mutable at GA when the Day 2 sidecar mechanism is in place.
+
+                                      Annotations are applied per-key — existing annotations set by other
+                                      controllers are preserved. HyperShift does not validate annotation
+                                      value semantics — correctness is the user's responsibility, same as
+                                      setting annotations on any Kubernetes Service.
+                                      Only keys starting with a known load balancer provider prefix are
+                                      accepted: metallb.io/, metallb.universe.tf/,
+                                      service.beta.kubernetes.io/aws-load-balancer-eip,
+                                      service.beta.kubernetes.io/aws-load-balancer-subnet,
+                                      service.beta.kubernetes.io/aws-load-balancer-target-group,
+                                      service.beta.kubernetes.io/azure-load-balancer-ipv,
+                                      service.beta.kubernetes.io/azure-load-balancer-resource-group,
+                                      networking.gke.io/, cis.f5.com/, lbipam.cilium.io/ and
+                                      loadbalancer.openstack.org/. The networking.gke.io/load-balancer-type
+                                      annotation is not allowed because it controls whether the load
+                                      balancer is internal or external. Annotation keys are limited to 317
+                                      characters. The name segment must start and end with an alphanumeric
+                                      character and is limited to 63 characters.
+                                      Values are limited to 253 characters.
+                                      Minimum 1, maximum 10 annotations per service.
+                                    maxProperties: 10
+                                    minProperties: 1
+                                    type: object
                                 type: object
                               nodePort:
                                 description: nodePort configures exposing a service using a NodePort.
@@ -6873,9 +8619,10 @@ spec:
                                     type: string
                                   port:
                                     description: |-
-                                      port is the port of the NodePort service. If <=0, the port is dynamically
-                                      assigned when the service is created.
+                                      port is the port of the NodePort service.
+                                      If omitted, the port is dynamically assigned when the service is created.
                                     format: int32
+                                    minimum: 1
                                     type: integer
                                 required:
                                   - address

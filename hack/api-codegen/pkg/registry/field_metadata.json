@@ -507,6 +507,13 @@
     "ownerGVK": "seaplane.io/v1alpha1.Cluster"
   },
   {
+    "fieldPath": "spec.hostedCluster.monitoring",
+    "writeMode": "service-set",
+    "hidden": true,
+    "ownerType": "Cluster",
+    "ownerGVK": "seaplane.io/v1alpha1.Cluster"
+  },
+  {
     "fieldPath": "spec.hostedCluster.networking.allocateNodeCIDRs",
     "writeMode": "immutable",
     "ownerType": "Cluster",
@@ -559,6 +566,7 @@
   {
     "fieldPath": "spec.hostedCluster.operatorConfiguration",
     "writeMode": "service-set",
+    "hidden": true,
     "ownerType": "Cluster",
     "ownerGVK": "seaplane.io/v1alpha1.Cluster"
   },

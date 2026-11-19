@@ -55,12 +55,12 @@ type NodePoolSpecPassthrough struct {
 	// +seaplane:write-mode=mutable
 	// +optional
 	NodeVolumeDetachTimeout *metav1.Duration `json:"nodeVolumeDetachTimeout,omitempty"`
-	// nodeLabels propagates a list of labels to Nodes, only once on creation.
+	// nodeLabels propagates a list of labels to Nodes.
 	// +k8s:openapi-gen=false
 	// +seaplane:write-mode=mutable
 	// +optional
 	NodeLabels map[string]string `json:"nodeLabels,omitempty"`
-	// taints if specified, propagates a list of taints to Nodes, only once on creation.
+	// taints if specified, propagates a list of taints to Nodes.
 	// +k8s:openapi-gen=false
 	// +seaplane:write-mode=mutable
 	// +seaplane:resettable=true

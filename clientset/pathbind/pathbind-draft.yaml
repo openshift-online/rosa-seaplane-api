@@ -36,6 +36,11 @@ resources:
               operations:
                 - create
                 - update
+            - path: spec.hostedCluster.autoNode.provisionerConfig.karpenter.azure.clientID
+              goType: string
+              operations:
+                - create
+                - update
             - path: spec.hostedCluster.autoNode.provisionerConfig.karpenter.platform
               goType: string
               operations:
@@ -53,6 +58,16 @@ resources:
                 - update
             - path: spec.hostedCluster.autoscaling.expanders
               goType: array(string)
+              operations:
+                - create
+                - update
+            - path: spec.hostedCluster.autoscaling.kubeClientBurst
+              goType: integer(int32)
+              operations:
+                - create
+                - update
+            - path: spec.hostedCluster.autoscaling.kubeClientQPS
+              goType: integer(int32)
               operations:
                 - create
                 - update

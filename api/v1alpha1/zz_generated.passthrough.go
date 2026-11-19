@@ -117,7 +117,7 @@ type HostedClusterSpecPassthrough struct {
 	// +optional
 	Configuration *hypershiftv1beta1.ClusterConfiguration `json:"configuration,omitempty"`
 	// operatorConfiguration specifies configuration for individual OCP operators in the cluster.
-	// +k8s:openapi-gen=true
+	// +k8s:openapi-gen=false
 	// +seaplane:write-mode=service-set
 	// +optional
 	OperatorConfiguration *hypershiftv1beta1.OperatorConfiguration `json:"operatorConfiguration,omitempty"`
@@ -176,6 +176,11 @@ type HostedClusterSpecPassthrough struct {
 	// +seaplane:write-mode=service-set
 	// +optional
 	Capabilities *hypershiftv1beta1.Capabilities `json:"capabilities,omitempty"`
+	// monitoring configures monitoring for the hosted cluster, including
+	// +k8s:openapi-gen=false
+	// +seaplane:write-mode=service-set
+	// +optional
+	Monitoring hypershiftv1beta1.MonitoringSpec `json:"monitoring,omitzero"`
 }
 
 // NodePoolSpecPassthrough mirrors NodePoolSpec from upstream HyperShift
@@ -225,12 +230,12 @@ type NodePoolSpecPassthrough struct {
 	// +seaplane:write-mode=mutable
 	// +optional
 	NodeVolumeDetachTimeout *metav1.Duration `json:"nodeVolumeDetachTimeout,omitempty"`
-	// nodeLabels propagates a list of labels to Nodes, only once on creation.
+	// nodeLabels propagates a list of labels to Nodes.
 	// +k8s:openapi-gen=false
 	// +seaplane:write-mode=mutable
 	// +optional
 	NodeLabels map[string]string `json:"nodeLabels,omitempty"`
-	// taints if specified, propagates a list of taints to Nodes, only once on creation.
+	// taints if specified, propagates a list of taints to Nodes.
 	// +k8s:openapi-gen=false
 	// +seaplane:write-mode=mutable
 	// +seaplane:resettable=true

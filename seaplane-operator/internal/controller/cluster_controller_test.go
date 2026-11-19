@@ -477,8 +477,8 @@ var _ = Describe("Cluster Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			// 6 cluster manifests → 6 ApplyDesires + 1 ReadDesire.
-			Expect(fd.applyCount).To(Equal(6))
+			// 7 cluster manifests → 7 ApplyDesires + 1 ReadDesire.
+			Expect(fd.applyCount).To(Equal(7))
 			Expect(fd.readCount).To(Equal(1))
 			Expect(fd.reads[0].Spec.TargetItem.Name).To(Equal(render.HostedClusterName(resource)))
 		})
@@ -536,13 +536,13 @@ var _ = Describe("Cluster Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			// 7 cluster manifests (6 base + oidc-signing-key ExternalSecret)
-			// → 7 ApplyDesires + 1 ReadDesire.
-			Expect(fd.applyCount).To(Equal(7))
+			// 8 cluster manifests (7 base + oidc-signing-key ExternalSecret)
+			// → 8 ApplyDesires + 1 ReadDesire.
+			Expect(fd.applyCount).To(Equal(8))
 			Expect(fd.readCount).To(Equal(1))
 		})
 
-		It("should switch all 6 desires to Type=Delete in-place, wait for confirmation, then remove finalizer", func() {
+		It("should switch all 7 desires to Type=Delete in-place, wait for confirmation, then remove finalizer", func() {
 			resource := newTestCluster(clusterName)
 			Expect(createTestClusterWithReservation(ctx, resource)).To(Succeed())
 
@@ -586,14 +586,14 @@ var _ = Describe("Cluster Controller", func() {
 			// Delete the CR — sets DeletionTimestamp.
 			Expect(k8sClient.Delete(ctx, &updated)).To(Succeed())
 
-			// First deletion reconcile: switches all 6 desires to Type=Delete
+			// First deletion reconcile: switches all 7 desires to Type=Delete
 			// in-place; no status yet → requeues.
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: testNS, Name: clusterName},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			deleteApplies := filterDeleteDesires(fd.applies)
-			Expect(deleteApplies).To(HaveLen(6), "all 6 resources should be switched to Type=Delete")
+			Expect(deleteApplies).To(HaveLen(7), "all 7 resources should be switched to Type=Delete")
 			Expect(result.RequeueAfter).NotTo(BeZero(), "should requeue while waiting for deletion confirmation")
 
 			// Placement should still exist (finalizer not removed yet).
@@ -616,7 +616,7 @@ var _ = Describe("Cluster Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			deleteApplies = filterDeleteDesires(fd.applies)
-			Expect(deleteApplies).To(HaveLen(12), "6 desires re-upserted on second pass")
+			Expect(deleteApplies).To(HaveLen(14), "7 desires re-upserted on second pass")
 			Expect(result.RequeueAfter).NotTo(BeZero(), "should requeue while resources still terminating")
 
 			// Simulate all resources fully deleted (Successful=True).
@@ -628,23 +628,23 @@ var _ = Describe("Cluster Controller", func() {
 				}},
 			}
 
-			// Third deletion reconcile: all 6 confirmed deleted → cleans up
+			// Third deletion reconcile: all 7 confirmed deleted → cleans up
 			// desire specs and ReadDesire, deletes Placement, removes finalizer.
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: testNS, Name: clusterName},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			deleteApplies = filterDeleteDesires(fd.applies)
-			Expect(deleteApplies).To(HaveLen(18), "6 desires re-upserted on third pass")
+			Expect(deleteApplies).To(HaveLen(21), "7 desires re-upserted on third pass")
 
 			// Verify the Placement was deleted.
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: testNS, Name: clusterName + ".placement"}, &p)
 			Expect(err).To(HaveOccurred())
 
 			// Verify desire specs were cleaned up once at the end (not on every pass).
-			// 6 ApplyDesire cleanups + 1 ReadDesire cleanup.
+			// 7 ApplyDesire cleanups + 1 ReadDesire cleanup.
 			applyCleanups, readCleanups := fd.countSpecCleanups()
-			Expect(applyCleanups).To(Equal(6), "should clean up all 6 ApplyDesire specs once deletion confirmed")
+			Expect(applyCleanups).To(Equal(7), "should clean up all 7 ApplyDesire specs once deletion confirmed")
 			Expect(readCleanups).To(Equal(1), "should clean up ReadDesire spec")
 		})
 

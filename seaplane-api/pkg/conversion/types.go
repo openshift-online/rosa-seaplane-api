@@ -61,6 +61,8 @@ type ServiceSetFieldsHostedCluster struct {
 	KubeAPIServerDNSName string `json:"kubeAPIServerDNSName,omitempty"`
 	// Labels is service-set (platform-managed, hidden from API)
 	Labels map[string]string `json:"labels,omitempty"`
+	// Monitoring is service-set (platform-managed, hidden from API)
+	Monitoring hypershiftv1beta1.MonitoringSpec `json:"monitoring,omitempty"`
 	// Network is service-set (platform-managed, hidden from API)
 	Network string `json:"network,omitempty"`
 	// NodeSelector is service-set (platform-managed, hidden from API)
