@@ -267,19 +267,12 @@ These tests in `rosa/tests/e2e/` exercise HCP cluster lifecycle through the CLI,
 | `e2e_setup_test.go`         | Cluster provisioning (precondition)                     | setup                             |
 | `e2e_tear_down_test.go`     | Cluster deletion (cleanup)                              | cleanup                           |
 
-### Seaplane CLI E2E Tests (this repo)
+### Seaplane Lifecycle E2E Tests (this repo)
 
-These tests in `test/e2e-cli/` exercise the full lifecycle through `rosactl`:
-
-| Test area      | Labels                                                      | What it exercises            |
-| -------------- | ----------------------------------------------------------- | ---------------------------- |
-| VPC setup      | `vpc-create`, `vpc-list`                                    | AWS VPC creation for cluster |
-| IAM setup      | `iam-create`, `iam-list`                                    | IAM roles and OIDC           |
-| Cluster create | `hcp-create`                                                | `rosactl cluster create`     |
-| Cluster status | `cluster-status`                                            | Poll until cluster is ready  |
-| Node pools     | `nodepools-wait`                                            | Node pool readiness          |
-| Cluster update | `hcp-patch`                                                 | `rosactl cluster patch`      |
-| Cleanup        | `bundles-delete`, `oidc-delete`, `iam-delete`, `vpc-delete` | Full teardown                |
+The `test/e2e-lifecycle/` suite exercises the full HCP lifecycle through the
+**clientset**, using the rosa CLI for customer AWS infra (VPC/IAM/OIDC): DNS
+reservation → VPC/IAM/OIDC → cluster → nodepool → ingress/DNS01 → KAS → metric →
+scale → teardown. See [ci/e2e/README.md](../../ci/e2e/README.md).
 
 ### Seaplane Platform API E2E Tests (this repo)
 
@@ -296,7 +289,7 @@ Each test suite below must pass against **both** the v1 SDK (ocm-sdk-go, baselin
 | #   | Test suite                                                                                                                                                                           | v1 SDK (baseline)                                                           | v2 SDK                                                                            |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | 1   | **Rosa CLI HCP tests** (`hcp_cluster_test.go`, `hcp_machine_pool_test.go`): create HCP cluster, CRUD node pools, delete cluster                                                      | Must pass against ocm-sdk-go to establish baseline behavior                 | Must pass against `clientset/` with identical observable outcomes                 |
-| 2   | **Seaplane CLI lifecycle** (`test/e2e-cli/cluster_test.go` labels: `setup`, `create`, `monitor`, `cleanup`): full VPC → IAM → cluster → node pool → teardown cycle through rosactl | Must pass against ocm-sdk-go to establish baseline behavior                 | Must pass against `clientset/` with identical observable outcomes                 |
+| 2   | **Seaplane lifecycle** (`test/e2e-lifecycle/`): full DNS → VPC → IAM → OIDC → cluster → node pool → teardown cycle via the clientset, rosa CLI for AWS infra | Must pass against ocm-sdk-go to establish baseline behavior                 | Must pass against `clientset/` with identical observable outcomes                 |
 | 3   | **Terraform basic lifecycle**: `terraform apply` + `terraform destroy` of an HCP cluster with node pools                                                                             | Must pass with provider backed by ocm-sdk-go to establish baseline behavior | Must pass with provider backed by `clientset/` with identical observable outcomes |
 
 **Behavioral-parity validation**: For each test suite, the v1 and v2 runs must produce the same observable outcomes — identical resource states, API response codes, and CLI/Terraform output (excluding endpoint URLs and auth-mechanism differences). Any behavioral divergence must be documented and justified before the initiative is declared complete.

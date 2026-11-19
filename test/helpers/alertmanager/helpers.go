@@ -34,16 +34,12 @@ type gettableSilence struct {
 	Comment   string        `json:"comment"`
 }
 
-// ClusterNamespace returns the hosted cluster namespace used by silence matchers.
-func ClusterNamespace(clusterID string) string {
-	return "cluster-" + strings.ToLower(clusterID)
-}
-
-// ListManagedSilences returns active silences managed by the seaplane silence reconciler.
-func ListManagedSilences(ctx context.Context, baseURL, clusterID, clusterName string) ([]gettableSilence, error) {
-	ns := ClusterNamespace(clusterID)
+// ListManagedSilences returns active silences managed by the seaplane silence
+// reconciler, matched by the cluster's namespace and name. namespace must be the
+// Cluster CR namespace (account-<id>), matching silence.IdentityFromCluster.
+func ListManagedSilences(ctx context.Context, baseURL, namespace, clusterName string) ([]gettableSilence, error) {
 	values := url.Values{}
-	values.Add("filter", fmt.Sprintf(`namespace=%q`, ns))
+	values.Add("filter", fmt.Sprintf(`namespace=%q`, namespace))
 	values.Add("filter", fmt.Sprintf(`name=%q`, clusterName))
 	endpoint := strings.TrimRight(baseURL, "/") + "/api/v2/silences?" + values.Encode()
 
