@@ -1,5 +1,11 @@
 # Changes
 
+## 0.1.28 Nov 19 2026
+
+- feat: manage default ingress DNS and serving cert for hosted clusters
+- chore: bump to k8s 0.37 and pin released openshift/hypershift deps
+
+
 ## 0.1.27 Nov 10 2026
 
 - added more testing of ECR env variables, fixed write-mode of ImageContainerSources
