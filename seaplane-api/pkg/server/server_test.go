@@ -13,6 +13,8 @@ import (
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/middleware"
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -187,7 +189,12 @@ func TestServer_RenderedResourceRoutesAcceptGet(t *testing.T) {
 	if err := hypershiftv1beta1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
-	db := seaplanedb.NewClientFrom(fake.NewClientBuilder().WithScheme(scheme).Build(), logger)
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	// Rendered routes require enrollment like every resource route.
+	enrollment := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "accounts", Name: "123456789012"}}
+	db := seaplanedb.NewClientFrom(fake.NewClientBuilder().WithScheme(scheme).WithObjects(enrollment).Build(), logger)
 	server, err := newConfiguredServer(t, config.NewConfig(), db, logger)
 	if err != nil {
 		t.Fatalf("unexpected error creating server: %v", err)

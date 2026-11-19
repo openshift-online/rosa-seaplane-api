@@ -16,10 +16,10 @@ import (
 type RenderedNodePoolHandler struct {
 	db         *seaplanedb.Client
 	logger     *slog.Logger
-	authorizer *authz.Authorizer
+	authorizer authz.Resolver
 }
 
-func NewRenderedNodePoolHandler(db *seaplanedb.Client, authorizer *authz.Authorizer, logger *slog.Logger) *RenderedNodePoolHandler {
+func NewRenderedNodePoolHandler(db *seaplanedb.Client, authorizer authz.Resolver, logger *slog.Logger) *RenderedNodePoolHandler {
 	if authorizer == nil {
 		panic("rendered NodePool authorizer is required")
 	}
