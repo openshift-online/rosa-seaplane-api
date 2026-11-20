@@ -222,7 +222,9 @@ can't be resolved instead of failing the whole request.
 - **Update:** spec and annotations only. Identity, ownerReferences, labels, and
   service-set fields never change.
 - **Delete:** by name. The owner's finalizer deletes its children and finishes once
-  they are gone.
+  they are gone. As in Kubernetes, starting a delete sets the deletion timestamp and
+  bumps `generation`, so `GenerationChangedPredicate` sees it. Deleting again changes
+  neither.
 
 **Write what you checked.** Updates and deletes use the `resourceVersion` of the
 snapshot that was validated and authorized. Don't re-read between the check and the
