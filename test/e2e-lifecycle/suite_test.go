@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e_sdk_test
+package e2e_lifecycle_test
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestE2ESDK(t *testing.T) {
+func TestE2ELifecycle(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Seaplane SDK E2E Suite")
+	RunSpecs(t, "Seaplane Lifecycle E2E Suite")
 }

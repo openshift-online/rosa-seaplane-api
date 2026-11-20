@@ -21,7 +21,7 @@ import (
 )
 
 // See wk_dev/oidc-e2e-testing-plan.md for the scope decisions behind these tests: none of them wait
-// for a real HostedCluster to reach Ready (that's e2e-sdk/e2e-cli's job); they only exercise the
+// for a real HostedCluster to reach Ready (that's e2e-lifecycle's job); they only exercise the
 // synchronous OidcConfig<->Cluster binding in seaplane-api and the operator's real reconciliation
 // against real AWS (CloudFront TLS reachability, and for unmanaged, real Secrets Manager).
 
@@ -273,7 +273,7 @@ var _ = Describe("OIDC Config Lifecycle: Reusability", Ordered, Label("oidcconfi
 })
 
 // stsAccountID returns the AWS account ID for the given profile (empty string for the default
-// profile) by shelling out to `aws sts get-caller-identity`, mirroring e2e-cli/e2e-sdk's pattern.
+// profile) by shelling out to `aws sts get-caller-identity`, mirroring e2e-lifecycle's pattern.
 func stsAccountID(profile string) string {
 	cmd := exec.Command("aws", "sts", "get-caller-identity", "--query", "Account", "--output", "text")
 	if profile != "" {
@@ -287,7 +287,7 @@ func stsAccountID(profile string) string {
 // Cross-account isolation is enforced by API Gateway deriving X-Amz-Account-Id from the caller's
 // real SigV4 identity (see seaplane-api/pkg/middleware/identity.go), not from a client-supplied
 // header. So exercising it for real requires two genuinely distinct AWS identities, matching
-// e2e-cli/e2e-sdk's CUSTOMER_AWS_PROFILE convention; this Skips when that isn't configured.
+// e2e-lifecycle's CUSTOMER_AWS_PROFILE convention; this Skips when that isn't configured.
 var _ = Describe("OIDC Config Lifecycle: Cross-Account Isolation", Label("oidcconfig", "oidc-lifecycle"), func() {
 	It("hides account A's OIDC config from account B's Get, List, and Delete", func() {
 		customerProfile := os.Getenv("CUSTOMER_AWS_PROFILE")
