@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	github.com/openshift-online/rosa-seaplane-api/api v0.0.0-00010101000000-000000000000
+	github.com/openshift-online/rosa-seaplane-api/featuregate v0.0.0
 	github.com/openshift/hypershift/api v0.0.0-20261114214040-8401e2dc80dc
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apiextensions-apiserver v0.36.0
@@ -12,6 +13,8 @@ require (
 )
 
 replace github.com/openshift-online/rosa-seaplane-api/api => ../../api
+
+replace github.com/openshift-online/rosa-seaplane-api/featuregate => ../../featuregate
 
 require (
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect

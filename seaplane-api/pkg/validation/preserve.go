@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/openshift-online/rosa-seaplane-api/featuregate"
 	"github.com/openshift-online/rosa-seaplane-api/hack/api-codegen/pkg/registry"
-	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/internal/codegen/featuregate"
 )
 
 // PreserveServiceSet copies stored service-set values into a merged update

@@ -4,6 +4,7 @@ go 1.26.3
 
 replace (
 	github.com/openshift-online/rosa-seaplane-api/api => ../api
+	github.com/openshift-online/rosa-seaplane-api/featuregate => ../featuregate
 	github.com/openshift-online/rosa-seaplane-api/hack/api-codegen => ../hack/api-codegen
 	github.com/openshift-online/rosa-seaplane-api/seaplane-db => ../seaplane-db
 )
@@ -20,6 +21,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/openshift-online/rosa-seaplane-api/api v0.0.0
+	github.com/openshift-online/rosa-seaplane-api/featuregate v0.0.0
 	github.com/openshift-online/rosa-seaplane-api/hack/api-codegen v0.0.0-00010101000000-000000000000
 	github.com/openshift-online/rosa-seaplane-api/seaplane-db v0.0.0
 	github.com/openshift/api v0.0.0-20261028163820-1f109e9eefc7
