@@ -338,53 +338,6 @@ var _ = BeforeSuite(func() {
 			}
 		}
 	}()
-
-	// ── kube-applier-aws readdesires simulator ──
-
-	// Simulate kube-applier-aws: poll specs-readdesires and write status
-	// entries with fabricated KubeContent (a completed Job).
-	go func() {
-		defer GinkgoRecover()
-		specsTable := mc + "-specs-readdesires"
-		statusTable := mc + "-status-readdesires"
-		completedJob := []byte(
-			`{"apiVersion":"batch/v1","kind":"Job",` +
-				`"metadata":{"name":"e2e-job-abc123","namespace":"e2e-actions"},` +
-				`"status":{"succeeded":1,"startTime":"2026-06-25T10:00:00Z",` +
-				`"completionTime":"2026-06-25T10:00:05Z"}}`,
-		)
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				out, err := dynamoDBCli.Scan(ctx, &dynamodb.ScanInput{
-					TableName: aws.String(specsTable),
-				})
-				if err != nil {
-					continue
-				}
-				for _, item := range out.Items {
-					docID, ok := item["documentID"]
-					if !ok {
-						continue
-					}
-					_, err = dynamoDBCli.PutItem(ctx, &dynamodb.PutItemInput{
-						TableName: aws.String(statusTable),
-						Item: map[string]dynamodbtypes.AttributeValue{
-							"documentID":         docID,
-							"updateTime":         &dynamodbtypes.AttributeValueMemberS{Value: time.Now().UTC().Format(time.RFC3339)},
-							"shard":              &dynamodbtypes.AttributeValueMemberS{Value: hd.ComputeShardDefault(docID.(*dynamodbtypes.AttributeValueMemberS).Value)},
-							"status_kubeContent": &dynamodbtypes.AttributeValueMemberS{Value: string(completedJob)},
-						},
-					})
-					Expect(err).NotTo(HaveOccurred(), "write simulated ReadDesire status")
-				}
-			}
-		}
-	}()
 })
 
 var _ = AfterSuite(func() {
