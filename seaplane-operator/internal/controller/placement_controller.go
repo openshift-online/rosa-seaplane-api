@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,15 +36,29 @@ import (
 	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 )
 
-// PlacementReconciler watches Cluster CRs and ensures each has a Placement.
+// PlacementReconciler watches Cluster CRs and ensures each has a Placement on
+// a management cluster and an HCP slot.
 type PlacementReconciler struct {
 	client.Client
 	Scheme                  *runtime.Scheme
 	MaxConcurrentReconciles int
+	// HCPSlotCount is the number of HCP slots on every management cluster.
+	HCPSlotCount int
 }
 
 func (r *PlacementReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	placementName := fmt.Sprintf("%s.placement", req.Name)
+	var placement seaplanev1alpha1.Placement
+	err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: placementName}, &placement)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return ctrl.Result{}, fmt.Errorf("get placement: %w", err)
+	}
+	placementFound := err == nil
+	if placementFound && !placement.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, r.finalizePlacement(ctx, &placement)
+	}
 
 	var cluster seaplanev1alpha1.Cluster
 	if err := r.Get(ctx, req.NamespacedName, &cluster); err != nil {
@@ -57,43 +70,20 @@ func (r *PlacementReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
-	placementName := fmt.Sprintf("%s.placement", cluster.Name)
-
-	var placement seaplanev1alpha1.Placement
-	err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: placementName}, &placement)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("get placement: %w", err)
-	}
-
-	if apierrors.IsNotFound(err) {
-		mc, err := r.selectManagementCluster(ctx)
+	if !placementFound {
+		mc, slot, err := r.claimSlot(ctx, &cluster)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("select management cluster: %w", err)
 		}
-		log.Info("Creating Placement for Cluster", "cluster", cluster.Name, "mc", mc)
-		placement = seaplanev1alpha1.Placement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      placementName,
-				Namespace: cluster.Namespace,
-				Labels: map[string]string{
-					clusterUIDLabel: string(cluster.UID),
-				},
-			},
-			Spec: seaplanev1alpha1.PlacementSpec{
-				ClusterName:       cluster.Name,
-				ManagementCluster: mc,
-			},
+		if slot == 0 {
+			log.Info("No management cluster has a free HCP slot", "cluster", cluster.Name)
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
-		if err := controllerutil.SetControllerReference(&cluster, &placement, r.Scheme); err != nil {
-			return ctrl.Result{}, fmt.Errorf("set Placement ownerReference: %w", err)
+		created, err := r.createPlacement(ctx, &cluster, placementName, mc, slot)
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-		if err := r.Create(ctx, &placement); err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				// The Create failed, so no watch event is emitted; requeue explicitly.
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-			}
-			return ctrl.Result{}, fmt.Errorf("create placement: %w", err)
-		}
+		placement = *created
 	}
 
 	// Ensure Placement status is Bound.
@@ -150,19 +140,61 @@ func (r *PlacementReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
-// TODO: Implement proper MC scheduling (least-loaded, capacity-aware, affinity).
-func (r *PlacementReconciler) selectManagementCluster(ctx context.Context) (string, error) {
-	var list seaplanev1alpha1.ManagementClusterList
-	if err := r.List(ctx, &list); err != nil {
-		return "", fmt.Errorf("list management clusters: %w", err)
+// createPlacement writes the Cluster's Placement on (mc, slot).
+func (r *PlacementReconciler) createPlacement(ctx context.Context, cluster *seaplanev1alpha1.Cluster,
+	name, mc string, slot int32) (*seaplanev1alpha1.Placement, error) {
+	log := logf.FromContext(ctx)
+	log.Info("Creating Placement for Cluster", "cluster", cluster.Name, "mc", mc, "hcpSlot", slot)
+	placement := &seaplanev1alpha1.Placement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       name,
+			Namespace:  cluster.Namespace,
+			Labels:     map[string]string{clusterUIDLabel: string(cluster.UID)},
+			Finalizers: []string{hcpSlotFinalizer},
+		},
+		Spec: seaplanev1alpha1.PlacementSpec{
+			ClusterName:       cluster.Name,
+			ManagementCluster: mc,
+			HCPSlot:           slot,
+		},
 	}
-	for i := range list.Items {
-		// Skip fake MCs created by e2e tests.
-		if !strings.HasPrefix(list.Items[i].Name, "test-mc") {
-			return list.Items[i].Name, nil
+	if err := controllerutil.SetControllerReference(cluster, placement, r.Scheme); err != nil {
+		return nil, fmt.Errorf("set Placement ownerReference: %w", err)
+	}
+	if err := r.Create(ctx, placement); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("create placement: %w", err)
 		}
+		// A racing attempt placed the Cluster first; give back our slot if it differs.
+		var existing seaplanev1alpha1.Placement
+		if err := r.Get(ctx, client.ObjectKeyFromObject(placement), &existing); err != nil {
+			return nil, fmt.Errorf("get existing placement: %w", err)
+		}
+		if existing.Spec.ManagementCluster != mc || existing.Spec.HCPSlot != slot {
+			if err := r.releaseHCPSlot(ctx, mc, slot, cluster.UID); err != nil {
+				return nil, err
+			}
+		}
+		return &existing, nil
 	}
-	return "", fmt.Errorf("no management clusters configured")
+
+	return placement, nil
+}
+
+// finalizePlacement releases a deleting Placement's HCP slot and removes its finalizer.
+func (r *PlacementReconciler) finalizePlacement(ctx context.Context, placement *seaplanev1alpha1.Placement) error {
+	if !controllerutil.ContainsFinalizer(placement, hcpSlotFinalizer) {
+		return nil
+	}
+	if err := r.releaseHCPSlot(ctx, placement.Spec.ManagementCluster, placement.Spec.HCPSlot,
+		types.UID(placement.Labels[clusterUIDLabel])); err != nil {
+		return err
+	}
+	controllerutil.RemoveFinalizer(placement, hcpSlotFinalizer)
+	if err := r.Update(ctx, placement); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("remove placement finalizer: %w", err)
+	}
+	return nil
 }
 
 func (r *PlacementReconciler) SetupWithManager(mgr ctrl.Manager) error {

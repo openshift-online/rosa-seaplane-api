@@ -41,6 +41,7 @@ const (
 	pgContainerName  = "seaplane-test-postgres"
 	amContainerName  = "seaplane-test-alertmanager"
 	mc               = "mc01"
+	hcpSlotCount     = 3
 
 	postgresImage         = "quay.io/sclorg/postgresql-16-c10s"
 	dynamoLocalImage      = "public.ecr.aws/aws-dynamodb-local/aws-dynamodb-local:latest"
@@ -212,8 +213,9 @@ var _ = BeforeSuite(func() {
 	nodePoolStatusEvents := make(chan event.GenericEvent, 256)
 
 	Expect((&controller.PlacementReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		HCPSlotCount: hcpSlotCount,
 	}).SetupWithManager(mgr)).To(Succeed())
 
 	Expect((&controller.DNSReservationReconciler{

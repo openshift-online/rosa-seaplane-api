@@ -76,6 +76,8 @@ func clearFinalizersAndDelete() {
 	var placements seaplanev1alpha1.PlacementList
 	if err := c.List(ctx, &placements); err == nil {
 		for i := range placements.Items {
+			placements.Items[i].SetFinalizers(nil)
+			_ = c.Update(ctx, &placements.Items[i])
 			_ = c.Delete(ctx, &placements.Items[i])
 		}
 	}
@@ -163,6 +165,12 @@ func cleanupTestPlacements(ctx context.Context, c client.Client) (int, error) {
 		return 0, err
 	}
 	for i := range placements.Items {
+		if len(placements.Items[i].Finalizers) > 0 {
+			placements.Items[i].SetFinalizers(nil)
+			if err := c.Update(ctx, &placements.Items[i]); err != nil {
+				return 0, err
+			}
+		}
 		if err := c.Delete(ctx, &placements.Items[i]); err != nil && !apierrors.IsNotFound(err) {
 			return 0, err
 		}

@@ -7,6 +7,8 @@ image:
 
 awsRegion: ""
 baseDomain: ""
+# HCP slots per management cluster (required, 1 to 99); must match the MCs' hcp_slot_count.
+hcpSlotCount: null
 
 # Optional regional Alertmanager base URL for lifecycle silence reconciliation.
 # When unset, the silence reconciler is not started.

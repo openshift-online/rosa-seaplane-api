@@ -20,9 +20,9 @@ import (
 
 // ClusterResources generates the Kubernetes resources for a cluster on the MC.
 // baseDomain is the fully assembled DNS base domain from the DNSReservation
-// (e.g. "f7a3.0.openshiftapps.com").
+// (e.g. "f7a3.0.openshiftapps.com"). hcpSlot 0 renders no slot placement.
 func ClusterResources(cluster *seaplanev1alpha1.Cluster, oidcSigningKeyExternal bool,
-	baseDomain, controlPlaneOperatorImage string, ecrMirror ECRMirrorConfig) ([]Resource, error) {
+	baseDomain, controlPlaneOperatorImage string, ecrMirror ECRMirrorConfig, hcpSlot int32) ([]Resource, error) {
 	clusterID, ns, err := managementClusterIdentity(cluster)
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func ClusterResources(cluster *seaplanev1alpha1.Cluster, oidcSigningKeyExternal 
 		return nil, fmt.Errorf("cluster %s/%s has no valid HostedCluster name", cluster.Namespace, cluster.Name)
 	}
 
-	hc, err := hostedCluster(cluster, clusterID, ns, hostedClusterName, oidcSigningKeyExternal, baseDomain, controlPlaneOperatorImage, ecrMirror)
+	hc, err := hostedCluster(cluster, clusterID, ns, hostedClusterName, oidcSigningKeyExternal, baseDomain, controlPlaneOperatorImage, ecrMirror, hcpSlot)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func ingressServingCert(clusterID, hostedClusterName, baseDomain, ns string) Res
 }
 
 func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClusterName string, oidcSigningKeyExternal bool,
-	baseDomain, controlPlaneOperatorImage string, ecrMirror ECRMirrorConfig) (Resource, error) {
+	baseDomain, controlPlaneOperatorImage string, ecrMirror ECRMirrorConfig, hcpSlot int32) (Resource, error) {
 	clusterName := cluster.Name // customer-facing identity
 	apiHost := fmt.Sprintf("api.%s.%s", hostedClusterName, baseDomain)
 
@@ -380,6 +380,11 @@ func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClust
 		annotations[hypershiftv1beta1.ControlPlaneOperatorImageAnnotation] = controlPlaneOperatorImage
 	}
 
+	labels := clusterLabels(clusterID)
+	if hcpSlot > 0 {
+		placeOnHCPSlot(hcSpec, labels, annotations, hostedControlPlaneNamespace(ns, hostedClusterName), hcpSlot)
+	}
+
 	return Resource{
 		Group: "hypershift.openshift.io", Version: "v1beta1", Resource: "hostedclusters",
 		Name: hostedClusterName, Namespace: ns,
@@ -391,12 +396,25 @@ func hostedCluster(cluster *seaplanev1alpha1.Cluster, clusterID, ns, hostedClust
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        hostedClusterName,
 				Namespace:   ns,
-				Labels:      clusterLabels(clusterID),
+				Labels:      labels,
 				Annotations: annotations,
 			},
 			Spec: *hcSpec,
 		},
 	}, nil
+}
+
+// placeOnHCPSlot pins the control plane to its own nodes in its HCP slot.
+func placeOnHCPSlot(hcSpec *hypershiftv1beta1.HostedClusterSpec, labels, annotations map[string]string,
+	hcpNamespace string, hcpSlot int32) {
+	slot := HCPSlotName(hcpSlot)
+	hcSpec.NodeSelector = map[string]string{
+		controlPlaneNodeLabel:                "true",
+		hypershiftv1beta1.HostedClusterLabel: hcpNamespace,
+		HCPSlotLabel:                         slot,
+	}
+	labels[HCPSlotLabel] = slot
+	annotations[hypershiftv1beta1.AWSLoadBalancerTargetNodesAnnotation] = hypershiftv1beta1.HostedClusterLabel + "=" + hcpNamespace
 }
 
 func servicePublishingStrategies(hostedClusterName, baseDomain string) []hypershiftv1beta1.ServicePublishingStrategyMapping {

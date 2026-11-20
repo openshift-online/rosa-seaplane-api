@@ -62,6 +62,13 @@ spec:
                   is for.
                 minLength: 1
                 type: string
+              hcpSlot:
+                description: HCPSlot is the management cluster slot (own subnets,
+                  NACL and NodePool) that runs this Cluster's control plane.
+                format: int32
+                maximum: 99
+                minimum: 1
+                type: integer
               managementCluster:
                 description: ManagementCluster is the target management cluster ID
                   (e.g. mc01).
@@ -69,11 +76,14 @@ spec:
                 type: string
             required:
             - clusterName
+            - hcpSlot
             - managementCluster
             type: object
             x-kubernetes-validations:
             - message: spec.clusterName is immutable
               rule: self.clusterName == oldSelf.clusterName
+            - message: spec.hcpSlot is immutable
+              rule: self.hcpSlot == oldSelf.hcpSlot
           status:
             description: PlacementStatus defines the observed state of a Placement.
             properties:

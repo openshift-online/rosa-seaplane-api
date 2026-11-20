@@ -35,6 +35,7 @@ spec:
           args:
             - --aws-region={{ required "awsRegion is required" .Values.awsRegion }}
             - --base-domain={{ required "baseDomain is required" .Values.baseDomain }}
+            - --hcp-slot-count={{ required "hcpSlotCount is required" .Values.hcpSlotCount }}
             - --health-probe-bind-address=:8081
           env:
             - name: POSTGRES_DSN
