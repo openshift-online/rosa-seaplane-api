@@ -452,6 +452,7 @@ var _ = Describe("Cluster Controller", func() {
 				Spec: seaplanev1alpha1.PlacementSpec{
 					ClusterName:       clusterName,
 					ManagementCluster: "mc01",
+					HCPSlot:           1,
 				},
 			}
 			Expect(k8sClient.Create(ctx, placement)).To(Succeed())
@@ -511,6 +512,7 @@ var _ = Describe("Cluster Controller", func() {
 				Spec: seaplanev1alpha1.PlacementSpec{
 					ClusterName:       clusterName,
 					ManagementCluster: "mc01",
+					HCPSlot:           1,
 				},
 			}
 			Expect(k8sClient.Create(ctx, placement)).To(Succeed())
@@ -556,6 +558,7 @@ var _ = Describe("Cluster Controller", func() {
 				Spec: seaplanev1alpha1.PlacementSpec{
 					ClusterName:       clusterName,
 					ManagementCluster: "mc01",
+					HCPSlot:           1,
 				},
 			}
 			Expect(k8sClient.Create(ctx, placement)).To(Succeed())
@@ -661,6 +664,7 @@ var _ = Describe("Cluster Controller", func() {
 				Spec: seaplanev1alpha1.PlacementSpec{
 					ClusterName:       clusterName,
 					ManagementCluster: "mc01",
+					HCPSlot:           1,
 				},
 			}
 			Expect(k8sClient.Create(ctx, placement)).To(Succeed())
@@ -745,6 +749,7 @@ var _ = Describe("Cluster Controller", func() {
 				Spec: seaplanev1alpha1.PlacementSpec{
 					ClusterName:       clusterName,
 					ManagementCluster: "mc01",
+					HCPSlot:           1,
 				},
 			}
 			Expect(k8sClient.Create(ctx, placement)).To(Succeed())
@@ -839,6 +844,7 @@ var _ = Describe("Cluster Controller", func() {
 				Spec: seaplanev1alpha1.PlacementSpec{
 					ClusterName:       clusterName,
 					ManagementCluster: "mc01",
+					HCPSlot:           1,
 				},
 			}
 			Expect(k8sClient.Create(ctx, placement)).To(Succeed())

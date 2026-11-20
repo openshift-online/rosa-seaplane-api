@@ -2,6 +2,7 @@ package integration
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -9,6 +10,7 @@ import (
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -48,6 +50,7 @@ var _ = Describe("Cluster lifecycle", func() {
 			g.Expect(k8sClient.Get(ctx, nn, &p)).To(Succeed())
 			g.Expect(p.Status.Phase).To(Equal(seaplanev1alpha1.PlacementPhaseBound))
 			g.Expect(p.Spec.ManagementCluster).To(Equal("mc01"))
+			g.Expect(p.Spec.HCPSlot).To(Equal(int32(1)))
 		}).Should(Succeed())
 
 		By("waiting for ApplyDesires to appear in DynamoDB")
@@ -257,6 +260,8 @@ var _ = Describe("Cluster lifecycle", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNS, Name: clusterName + ".placement"}, &ownedPlacement)).To(Succeed())
 		Expect(ownedPlacement.Labels[seaplanev1alpha1.ClusterUIDLabel]).To(Equal(string(cluster.UID)))
 		Expect(metav1.GetControllerOf(&ownedPlacement).UID).To(Equal(cluster.UID))
+		slotClaim := types.NamespacedName{Namespace: "hcp-slots-" + mc, Name: fmt.Sprintf("%02d", ownedPlacement.Spec.HCPSlot)}
+		Expect(k8sClient.Get(ctx, slotClaim, &seaplanev1alpha1.Index{})).To(Succeed())
 
 		By("creating a NodePool CR")
 		np := newTestNodePool(cluster)
@@ -307,6 +312,9 @@ var _ = Describe("Cluster lifecycle", func() {
 			}
 			return k8sClient.Get(ctx, nn, &seaplanev1alpha1.Placement{})
 		}).ShouldNot(Succeed())
+
+		By("verifying the HCP slot claim is released")
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, slotClaim, &seaplanev1alpha1.Index{}))).To(BeTrue())
 
 		By("verifying Cluster CR is fully gone")
 		Eventually(func() error {

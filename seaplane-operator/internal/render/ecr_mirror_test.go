@@ -158,7 +158,7 @@ func TestClusterResources_ECRMirrorBaseSecretNameRedirectsESOTarget(t *testing.T
 		BaseSecretName:  "base-pull-secret",
 	}
 
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", cfg)
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", cfg, 0)
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestClusterResources_ECRMirrorBaseSecretNameRedirectsESOTarget(t *testing.T
 }
 
 func TestClusterResources_ECRMirrorDisabledESOTargetsPullSecretDirectly(t *testing.T) {
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{}, 0)
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestClusterResources_ECRMirrorEnabledWithoutBaseSecretNameKeepsPullSecret(t
 		Sources:         []string{"source-a.example.com/org/repo"},
 	}
 
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", cfg)
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", cfg, 0)
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestClusterResources_ECRMirrorSetsImageContentSources(t *testing.T) {
 	}
 	wantMirror := "123456789012.dkr.ecr.us-east-1.amazonaws.com/example-org/ocp-mirror"
 
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", cfg)
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", cfg, 0)
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestClusterResources_ECRMirrorSetsImageContentSources(t *testing.T) {
 }
 
 func TestClusterResources_ECRMirrorDisabledLeavesImageContentSourcesUnset(t *testing.T) {
-	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{})
+	resources, err := ClusterResources(testCluster(), false, "f7a3.0.example.com", "", ECRMirrorConfig{}, 0)
 	if err != nil {
 		t.Fatalf("ClusterResources: %v", err)
 	}
