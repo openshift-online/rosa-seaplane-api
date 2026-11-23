@@ -35,3 +35,30 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Build an image reference from registry/repository/tag values. Empty registry
+uses shared ECR; a legacy full IMAGE_REPO is split for existing Quay CI overrides.
+*/}}
+{{- define "seaplane-operator.image" -}}
+{{- $registry := .Values.image.registry | default "" -}}
+{{- $repository := .Values.image.repository -}}
+{{- if and (not $registry) (contains "/" $repository) -}}
+{{- $parts := splitList "/" $repository -}}
+{{- $host := first $parts -}}
+{{- if or (contains "." $host) (contains ":" $host) (eq $host "localhost") -}}
+{{- $registry = $host -}}
+{{- $repository = join "/" (rest $parts) -}}
+{{- end -}}
+{{- end -}}
+{{- if not $registry -}}
+{{- $registry = printf "%s.dkr.ecr.us-east-1.amazonaws.com" .Values.global.image_registry_account_id -}}
+{{- end -}}
+{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
+{{- $image := printf "%s/%s" $registry $repository -}}
+{{- if regexMatch "^sha[0-9]+:" $tag -}}
+{{- printf "%s@%s" $image $tag -}}
+{{- else -}}
+{{- printf "%s:%s" $image $tag -}}
+{{- end -}}
+{{- end }}

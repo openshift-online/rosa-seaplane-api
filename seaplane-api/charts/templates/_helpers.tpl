@@ -47,3 +47,31 @@ Selector labels
 app.kubernetes.io/name: {{ include "platform-api.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Build an image reference from registry/repository/tag values. Empty registry
+uses the shared ECR account. A legacy full IMAGE_REPO value is split so the
+existing Quay-based component pre-merge override continues to work.
+*/}}
+{{- define "platform-api.image" -}}
+{{- $registry := .Values.platformApi.app.image.registry | default "" -}}
+{{- $repository := .Values.platformApi.app.image.repository -}}
+{{- if and (not $registry) (contains "/" $repository) -}}
+{{- $parts := splitList "/" $repository -}}
+{{- $host := first $parts -}}
+{{- if or (contains "." $host) (contains ":" $host) (eq $host "localhost") -}}
+{{- $registry = $host -}}
+{{- $repository = join "/" (rest $parts) -}}
+{{- end -}}
+{{- end -}}
+{{- if not $registry -}}
+{{- $registry = printf "%s.dkr.ecr.us-east-1.amazonaws.com" .Values.global.image_registry_account_id -}}
+{{- end -}}
+{{- $image := printf "%s/%s" $registry $repository -}}
+{{- $tag := .Values.platformApi.app.image.tag -}}
+{{- if regexMatch "^sha[0-9]+:" $tag -}}
+{{- printf "%s@%s" $image $tag -}}
+{{- else -}}
+{{- printf "%s:%s" $image $tag -}}
+{{- end -}}
+{{- end -}}

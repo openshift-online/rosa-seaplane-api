@@ -36,7 +36,7 @@ spec:
               app: {{ .Values.platformApi.app.name }}
       containers:
         - name: {{ .Values.platformApi.app.name }}
-          image: {{ .Values.platformApi.app.image.repository }}:{{ .Values.platformApi.app.image.tag }}
+          image: {{ include "platform-api.image" . | quote }}
           imagePullPolicy: {{ .Values.platformApi.app.image.pullPolicy }}
           args:
             - serve
