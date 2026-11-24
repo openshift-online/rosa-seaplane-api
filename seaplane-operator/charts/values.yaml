@@ -1,7 +1,11 @@
 replicaCount: 2
 
+global:
+  image_registry_account_id: ""
+
 image:
-  repository: quay.io/cbusse_openshift/seaplane-operator
+  registry: ""
+  repository: rosa-seaplane-operator
   tag: ""
   pullPolicy: IfNotPresent
 

@@ -27,13 +27,18 @@ platformApi:
   app:
     name: platform-api
     image:
-      repository: quay.io/cdoan0/rosa-seaplane-api
-      tag: nodb
+      registry: "" # Empty selects the shared ECR registry using global.image_registry_account_id.
+      repository: rosa-seaplane-api
+      tag: "<tag-or-digest>"
 
   targetGroup:
     arn: "PLACEHOLDER" # AWS Target Group ARN
     targetType: ip
 ```
+
+For compatibility, a full registry/path in `repository` (the existing
+`IMAGE_REPO` pre-merge input) is split by the chart when `registry` is empty.
+The `tag` value may be a tag, a digest, or a tag followed by a digest.
 
 ## Installation
 
@@ -112,8 +117,9 @@ kubectl delete namespace platform-api
 | ---------------------------------- | ------------------------------------ | ---------------------------------- |
 | `platformApi.namespace`            | Namespace to deploy into             | `platform-api`                     |
 | `platformApi.app.name`             | Application name                     | `platform-api`                     |
-| `platformApi.app.image.repository` | Container image repository           | `quay.io/cdoan0/rosa-seaplane-api` |
-| `platformApi.app.image.tag`        | Container image tag                  | `nodb`                             |
+| `platformApi.app.image.registry`   | Explicit registry override; empty uses shared ECR | `""`              |
+| `platformApi.app.image.repository` | Repository path without registry    | `rosa-seaplane-api`                |
+| `platformApi.app.image.tag`        | Container image tag or digest ref   | Set by release                     |
 | `platformApi.app.args.logLevel`    | Log level (debug, info, warn, error) | `info`                             |
 | `platformApi.deployment.replicas`  | Number of replicas                   | `1`                                |
 
