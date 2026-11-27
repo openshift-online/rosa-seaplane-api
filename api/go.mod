@@ -3,10 +3,10 @@ module github.com/openshift-online/rosa-seaplane-api/api
 go 1.26.3
 
 require (
-	github.com/openshift/api v0.0.0-20261028163820-1f109e9eefc7
+	github.com/openshift/api v0.0.0-20261126211652-889c1f5c276a
 	github.com/openshift/hypershift/api v0.0.0-20261114214040-8401e2dc80dc
-	k8s.io/api v0.37.1
-	k8s.io/apimachinery v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
 )
 
 require (
