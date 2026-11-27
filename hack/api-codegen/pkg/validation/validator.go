@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openshift-online/rosa-seaplane-api/hack/api-codegen/pkg/featuregate"
+	"github.com/openshift-online/rosa-seaplane-api/featuregate"
 	"github.com/openshift-online/rosa-seaplane-api/hack/api-codegen/pkg/registry"
 )
 

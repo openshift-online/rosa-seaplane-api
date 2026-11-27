@@ -33,7 +33,7 @@ spec:
   - name: hermetic
     value: "true"
   - name: prefetch-input
-    value: '[{"type": "gomod", "path": "seaplane-db"}, {"type": "gomod", "path": "api"}, {"type": "gomod", "path": "hack/api-codegen"}, {"type": "gomod", "path": "seaplane-api"}]'
+    value: '[{"type": "gomod", "path": "seaplane-db"}, {"type": "gomod", "path": "api"}, {"type": "gomod", "path": "hack/api-codegen"}, {"type": "gomod", "path": "featuregate"}, {"type": "gomod", "path": "seaplane-api"}]'
   - name: build-source-image
     value: "true"
   pipelineSpec:

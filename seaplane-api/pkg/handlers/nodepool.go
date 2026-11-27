@@ -22,7 +22,7 @@ import (
 
 	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 	public "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1/public"
-	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/internal/codegen/featuregate"
+	"github.com/openshift-online/rosa-seaplane-api/featuregate"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/api"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
