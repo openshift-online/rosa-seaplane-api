@@ -1,5 +1,11 @@
 # Changes
 
+## 0.1.30 Nov 19 2026
+
+- feat: manage default ingress DNS and serving cert for hosted clusters
+- chore: bump to k8s 0.37 and pin released openshift/hypershift deps
+
+
 ## 0.1.29 Nov 12 2026
 
 - Remove Manifest API/controller and dead k8s RBAC scaffold
