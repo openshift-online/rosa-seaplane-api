@@ -27,7 +27,7 @@ func (send storeTransport) RoundTrip(request *http.Request) (*http.Response, err
 func interceptedStore(t *testing.T, client *dynamodb.Client, cfg authz.StoreConfig, send storeTransport) *authz.Store {
 	t.Helper()
 	wrapped := dynamodb.New(client.Options(), func(o *dynamodb.Options) { o.HTTPClient = &http.Client{Transport: send} })
-	store, err := authz.NewStore(wrapped, cfg)
+	store, err := authz.NewTestStore(wrapped, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestStoredReadFailures(t *testing.T) {
 			}
 		})
 	}
-	for _, id := range []authz.Identity{{AccountID: "222222222222", CallerARN: "arn:aws:iam::222222222222:user/alice"}, {AccountID: account, CallerARN: caller, IsAllowlisted: true}} {
+	for _, id := range []authz.Identity{{AccountID: "222222222222", CallerARN: "arn:aws:iam::222222222222:user/alice"}} {
 		if resolved, err := store.Resolve(ctx, id); err == nil || resolved != nil {
 			t.Fatalf("identity bypass = %+v, %v", resolved, err)
 		}
@@ -125,10 +125,6 @@ func TestStoredTransactionRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	caller := "arn:aws:iam::111111111111:user/alice"
-	binding, err := store.CreateAttachment(t.Context(), authz.AttachmentSpec{PrincipalARN: caller, Policy: authz.PolicyRef{ID: policy.ID, Kind: policy.Kind}, Scope: authz.GlobalScope})
-	if err != nil {
-		t.Fatal(err)
-	}
 	wrapped := interceptedStore(t, client, cfg, func(request *http.Request) (*http.Response, error) {
 		if strings.HasSuffix(request.Header.Get("X-Amz-Target"), ".TransactWriteItems") {
 			// Change the referenced policy after validation but before the transaction.
@@ -138,16 +134,13 @@ func TestStoredTransactionRollback(t *testing.T) {
 		}
 		return http.DefaultTransport.RoundTrip(request)
 	})
-	if _, err := wrapped.UpdateAttachment(t.Context(), binding.Scope, binding.ID, binding.Revision, binding.Policy); !errors.Is(err, authz.ErrConflict) {
+	spec := authz.AttachmentSpec{PrincipalARN: caller, Policy: authz.PolicyRef{ID: policy.ID, Kind: policy.Kind}, Scope: authz.GlobalScope}
+	if _, err := wrapped.CreateAttachment(t.Context(), spec); !errors.Is(err, authz.ErrConflict) {
 		t.Fatalf("racing policy mutation = %v", err)
 	}
-	got, err := store.GetAttachment(t.Context(), binding.Scope, binding.ID)
-	if err != nil || got != binding {
-		t.Fatalf("primary row changed despite rollback: %+v, %v", got, err)
-	}
 	resolved, err := store.Resolve(t.Context(), authz.Identity{AccountID: account, CallerARN: caller})
-	if err != nil || len(resolved) != 1 || resolved[0].Attachment != binding {
-		t.Fatalf("lookup row changed despite rollback: %+v, %v", resolved, err)
+	if err != nil || len(resolved) != 0 {
+		t.Fatalf("rows written despite rollback: %+v, %v", resolved, err)
 	}
 }
 

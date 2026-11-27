@@ -31,13 +31,3 @@ func isRegionalAction(action Action) bool {
 		return false
 	}
 }
-
-// isGlobalMutation reports whether an action must run at the account's writer.
-func isGlobalMutation(action Action) bool {
-	switch action {
-	case CreatePolicy, UpdatePolicy, DeletePolicy, CreateAttachment, DeleteAttachment:
-		return true
-	default:
-		return false
-	}
-}

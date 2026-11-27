@@ -1,36 +1,27 @@
 # Authorization management HTTP contract
 
 Management uses gateway-authenticated AWS identity and account-local DynamoDB.
-It requires neither Red Hat linking nor legacy `/accounts` enrollment. The
-allowlist grants no management authority. Bootstrap grants no resource access.
-[Resource authorization](README.md) still uses the startup bundle.
+Management routes require [enrollment](README.md#enrollment-and-first-grants), like
+resource routes. Administrative authority grants no resource access.
 
 ## Startup configuration
 
-`--authz-management-config-file` overrides `AUTHZ_MANAGEMENT_CONFIG_FILE`, even
-when explicitly empty. Empty disables routes. Invalid supplied config fails before
-database connections or listeners. The SDK uses existing AWS configuration,
-including `AWS_ENDPOINT_URL_DYNAMODB` for local testing.
+| Env var                                                            | Meaning                                        |
+| ------------------------------------------------------------------ | ---------------------------------------------- |
+| `AUTHZ_POLICY_TABLE`, `AUTHZ_GLOBAL_TABLE`, `AUTHZ_REGIONAL_TABLE` | Required. Three distinct DynamoDB table names. |
 
-```yaml
-formatVersion: 1
-policyTable: authz-policies
-globalTable: authz-global-attachments
-regionalTable: authz-regional-attachments
-accounts:
-  "111111111111":
-    writerRegion: us-east-1
-    administratorARNs:
-      - arn:aws:iam::111111111111:role/customer-policy-admin
-```
+Invalid configuration fails before database connections or listeners. The SDK
+uses existing AWS configuration, including `AWS_ENDPOINT_URL_DYNAMODB` for local
+testing.
 
-Config provisions no tables. Platform setup lives in
-`rosa-seaplane/docs/platform-api-authorization.md`. Administrators manage only
-their account and bypass broken grants for repair. [Role/session matching](README.md#principal-matching)
-applies. Other callers need Cedar delegation. `PolicyAdmin` includes all management
+Every caller needs Cedar grants; there is no bypass. The first grants are
+[seeded directly](storage-contract.md#pre-production-seed), and a broken grant
+is repaired the same way.
+[Role/session matching](README.md#principal-matching) applies. `PolicyAdmin` includes all management
 actions. `RegionalAttachmentAdmin` includes only regional attachment actions.
-Global grants require global attachments. Regional grants accept global or
-current-region attachments. Resource `AllActions` and `ReadOnly` exclude management.
+Global management actions require global attachments; regional actions also accept
+current-region attachments. Global attachment scope is not region-filtered.
+Resource `AllActions` and `ReadOnly` exclude management.
 
 ## Routes and payloads
 
@@ -53,10 +44,7 @@ from the service region. An unfiltered list requires both list permissions and
 returns global plus local attachments. Regional-only delegates must request
 `?scope=regional`. No scope is silently omitted.
 
-Policies return `id`, `type`, `ownerAccountId`, `content`, and `revision`.
-Attachments return `id`, `ownerAccountId`, `policy`, `principalArn`, `scope`,
-`revision`, and regional-only `region`. Lists return `kind`, `total`, and `items`.
-Managed policy PUT/DELETE returns 403. Item policy routes accept the `type` query.
+Response fields are defined in OpenAPI. Managed policy PUT/DELETE returns 403.
 
 ## Revisions and consistency
 
@@ -65,14 +53,7 @@ Updates/deletes require one strong double-quoted nonzero UUID, for example
 preconditions return 400. Stale revisions return 409.
 
 Creates/updates return the committed revision. Deletes return
-`{id,deletedRevision,committedRegion}`. Success confirms a local commit, not
-replication. Other regions may authorize old permissions even after revocation.
-
-Global mutations require the account's assigned writer. Wrong-writer 409 includes
-`X-Authz-Writer-Region` and `details.causes` field `writerRegion`. There is no proxy.
-Retry the original authenticated request there. The writer reauthorizes locally.
-Writer failure fails global writes. Never fail over. Regional writes stay local.
-See [storage guarantees and fencing requirements](storage-contract.md).
+`{id,deletedRevision,committedRegion}`. Success confirms a local commit.
 
 ## Errors
 
@@ -82,8 +63,8 @@ Errors use Kubernetes `Status` and platform error codes.
 | ------ | ---------------------------------------------------------------------------------- |
 | 400    | Malformed JSON, query, or revision precondition                                    |
 | 403    | Invalid identity, unregistered account, denied action, or immutable managed policy |
-| 404    | Missing record or removed `/api/v0/authz/check`                                    |
-| 409    | Revision conflict or wrong writer                                                  |
+| 404    | Missing record                                                                     |
+| 409    | Revision conflict                                                                  |
 | 422    | Invalid policy or attachment                                                       |
 | 500    | Authorization evaluation or resolution failure                                     |
 | 503    | Backend I/O failure                                                                |
