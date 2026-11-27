@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -13,7 +14,22 @@ const (
 	resourceTypeLabel = "seaplane.io/resource-type"
 	managedByLabel    = "seaplane.io/managed-by"
 	managedByOperator = "seaplane-operator"
+
+	// HCPSlotLabel carries the zero-padded HCP slot number, e.g. "07".
+	HCPSlotLabel = "seaplane.io/hcp-slot"
+	// controlPlaneNodeLabel marks the nodes HyperShift control plane pods run on.
+	controlPlaneNodeLabel = "hypershift.openshift.io/control-plane"
 )
+
+// HCPSlotName zero-pads a slot to two digits, matching Terraform and the hcp-slots chart.
+func HCPSlotName(slot int32) string {
+	return fmt.Sprintf("%02d", slot)
+}
+
+// hostedControlPlaneNamespace mirrors hypershift manifests.HostedControlPlaneNamespace.
+func hostedControlPlaneNamespace(hostedClusterNamespace, hostedClusterName string) string {
+	return fmt.Sprintf("%s-%s", hostedClusterNamespace, strings.ReplaceAll(hostedClusterName, ".", "-"))
+}
 
 // HostedClusterName resolves the internal management-cluster name persisted
 // by the platform API or operator. Legacy and automatic-DNS Clusters fall back

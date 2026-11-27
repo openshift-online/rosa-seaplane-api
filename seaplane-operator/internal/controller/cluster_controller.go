@@ -452,7 +452,7 @@ func (r *ClusterReconciler) reconcilePlacedCluster(ctx context.Context, req ctrl
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("resolve oidc signing key mode: %w", err)
 	}
-	resources, err := render.ClusterResources(cluster, oidcSigningKeyExternal, baseDomain, r.RegionalConfig.ControlPlaneOperatorImage, r.RegionalConfig.ECRMirror)
+	resources, err := render.ClusterResources(cluster, oidcSigningKeyExternal, baseDomain, r.RegionalConfig.ControlPlaneOperatorImage, r.RegionalConfig.ECRMirror, placement.Spec.HCPSlot)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("render cluster resources: %w", err)
 	}
@@ -636,7 +636,8 @@ func (r *ClusterReconciler) reconcileDelete(ctx context.Context, cluster *seapla
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("resolve oidc signing key mode: %w", err)
 	}
-	resources, err := render.ClusterResources(cluster, oidcSigningKeyExternal, baseDomain, r.RegionalConfig.ControlPlaneOperatorImage, r.RegionalConfig.ECRMirror)
+	// Slot 0: delete desires only use each resource's identity.
+	resources, err := render.ClusterResources(cluster, oidcSigningKeyExternal, baseDomain, r.RegionalConfig.ControlPlaneOperatorImage, r.RegionalConfig.ECRMirror, 0)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("render cluster resources: %w", err)
 	}
