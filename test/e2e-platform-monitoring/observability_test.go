@@ -20,6 +20,8 @@ var _ = Describe("Observability", FlakeAttempts(2), func() {
 
 	It("should deliver authorization allow and deny metrics to Thanos", Label("authz"), func() {
 		expectAuthzDelivery("/api/v0/oidc_configs", nil, "ListOIDCConfigs", "allow", http.StatusOK)
+		// Management calls are authorized against the CI-seeded e2e-policy-admin grant.
+		expectAuthzDelivery("/api/v0/authz/policies", nil, "ListPolicies", "allow", http.StatusOK)
 		// The e2e grants exclude requests carrying this tag (context.requestLabels), so Cedar denies the create.
 		probe := map[string]any{"metadata": map[string]any{"name": "authz-deny-probe", "annotations": map[string]string{"authz-deny-probe": "true"}}}
 		expectAuthzDelivery("/api/v0/dns_reservations", probe, "CreateDNSReservation", "deny", http.StatusForbidden)

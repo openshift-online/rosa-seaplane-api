@@ -78,12 +78,9 @@ func (s *Store) UpdatePolicy(ctx context.Context, id, revision, content string) 
 	return s.writePolicy(ctx, id, revision, content)
 }
 
-// writePolicy creates or updates a custom policy in the assigned writer region.
+// writePolicy creates or updates a custom policy in the service region.
 // Updates require the expected revision.
 func (s *Store) writePolicy(ctx context.Context, id, expected, content string) (StoredPolicy, error) {
-	if err := s.requireWriter(); err != nil {
-		return StoredPolicy{}, err
-	}
 	if !isStoreID(id) {
 		return StoredPolicy{}, fmt.Errorf("%w: invalid policy ID", ErrValidation)
 	}
@@ -111,9 +108,6 @@ func (s *Store) writePolicy(ctx context.Context, id, expected, content string) (
 // DeletePolicy deletes a custom policy only if revision matches the stored record.
 // Attachments referencing the policy are left unchanged.
 func (s *Store) DeletePolicy(ctx context.Context, id, revision string) error {
-	if err := s.requireWriter(); err != nil {
-		return err
-	}
 	if !isStoreID(id) || !isRevision(revision) {
 		return fmt.Errorf("%w: valid policy ID and expected revision required", ErrValidation)
 	}

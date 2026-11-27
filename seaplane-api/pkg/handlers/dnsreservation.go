@@ -24,11 +24,11 @@ var errDNSReservationClaimed = errors.New("DNS reservation is claimed")
 // DNSReservationHandler serves the customer-facing DNS reservation API.
 type DNSReservationHandler struct {
 	db         *seaplanedb.Client
-	authorizer *authz.Authorizer
+	authorizer authz.Resolver
 	logger     *slog.Logger
 }
 
-func NewDNSReservationHandler(db *seaplanedb.Client, authorizer *authz.Authorizer, logger *slog.Logger) *DNSReservationHandler {
+func NewDNSReservationHandler(db *seaplanedb.Client, authorizer authz.Resolver, logger *slog.Logger) *DNSReservationHandler {
 	if authorizer == nil {
 		panic("DNS reservation authorizer is required")
 	}

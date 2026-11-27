@@ -56,13 +56,13 @@ func TestManagementErrorPrivacy(t *testing.T) {
 	h := NewManagementHandler(nil, slog.New(slog.NewTextHandler(&logs, nil)))
 	w := httptest.NewRecorder()
 	content := "sensitive-policy-source"
-	h.writeError(w, fmt.Errorf("%w: %s", authz.ErrValidation, content))
+	h.writeError(w, httptest.NewRequest("GET", "/", nil), fmt.Errorf("%w: %s", authz.ErrValidation, content))
 	if strings.Contains(logs.String(), content) || strings.Contains(w.Body.String(), content) {
 		t.Fatalf("policy content leaked: logs=%s response=%s", &logs, w.Body)
 	}
 }
 
-// TestManagementErrors preserves typed service failures and writer guidance as structured Status responses.
+// TestManagementErrors preserves typed service failures as structured Status responses.
 func TestManagementErrors(t *testing.T) {
 	h := NewManagementHandler(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for _, tc := range []struct {
@@ -71,22 +71,37 @@ func TestManagementErrors(t *testing.T) {
 	}{
 		{authz.ErrValidation, 422}, {authz.ErrManagementDenied, 403}, {authz.ErrManagedPolicy, 403},
 		{authz.ErrNotFound, 404}, {authz.ErrConflict, 409}, {authz.ErrUnavailable, 503},
-		{&authz.WrongWriterError{Region: "us-west-2"}, 409},
 		{&authz.Failure{}, 500},
 		{&authz.Failure{Err: authz.ErrNotFound}, 500},
 		{&authz.Failure{Err: authz.ErrValidation}, 500},
 		{&authz.Failure{Err: authz.ErrConflict}, 500},
+		{&authz.Denial{}, 403},
 	} {
 		w := httptest.NewRecorder()
-		h.writeError(w, tc.err)
+		h.writeError(w, httptest.NewRequest("GET", "/", nil), tc.err)
 		if w.Code != tc.code {
 			t.Fatalf("%v: %d %s", tc.err, w.Code, w.Body)
 		}
-		if _, ok := tc.err.(*authz.WrongWriterError); ok {
-			var status metav1.Status
-			_ = json.Unmarshal(w.Body.Bytes(), &status)
-			if w.Header().Get("X-Authz-Writer-Region") != "us-west-2" || status.Details == nil || status.Details.Causes[0].Field != "writerRegion" {
-				t.Fatalf("missing guidance: %s", w.Body)
+	}
+}
+
+// TestManagementAuthzLogs explains denials and failures with grant provenance, as resource requests do.
+func TestManagementAuthzLogs(t *testing.T) {
+	var logs bytes.Buffer
+	h := NewManagementHandler(nil, slog.New(slog.NewTextHandler(&logs, nil)))
+	source := []authz.Provenance{{PolicyID: "policy-1", PolicyRevision: "rev-1", AttachmentID: "attachment-1", AttachmentRevision: "rev-2"}}
+	for _, tc := range []struct {
+		err  error
+		want []string
+	}{
+		{&authz.Denial{Action: authz.ListPolicies, Provenance: source}, []string{"level=INFO", `msg="request authorization denied"`, "action=ListPolicies"}},
+		{&authz.Failure{Stage: authz.StageBinding, Action: authz.ListPolicies, Provenance: source}, []string{"level=ERROR", `msg="request authorization failed"`, "action=ListPolicies", "stage=binding"}},
+	} {
+		logs.Reset()
+		h.writeError(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil), tc.err)
+		for _, want := range append(tc.want, "caller_arn=", "policy-1", "rev-1", "attachment-1", "rev-2") {
+			if !strings.Contains(logs.String(), want) {
+				t.Errorf("%T log missing %q: %s", tc.err, want, &logs)
 			}
 		}
 	}

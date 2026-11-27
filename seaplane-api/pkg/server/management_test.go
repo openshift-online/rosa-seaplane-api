@@ -4,152 +4,61 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/internal/authztest"
+
+	seaplanev1alpha1 "github.com/openshift-online/rosa-seaplane-api/api/v1alpha1"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/authz"
+	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/clients/seaplanedb"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/config"
 	"github.com/openshift-online/rosa-seaplane-api/seaplane-api/pkg/middleware"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
-
-type dynamoRequest struct {
-	TableName                 string
-	Item, Key                 map[string]any
-	ConditionExpression       string
-	ExpressionAttributeValues map[string]any
-	TransactItems             []struct{ Put, Delete, ConditionCheck *dynamoRequest }
-	RequestItems              map[string]struct{ Keys []map[string]any }
-}
-
-// dynamoKey identifies the table and primary key in a DynamoDB request.
-func dynamoKey(in *dynamoRequest) string {
-	key := in.Key
-	if in.Item != nil {
-		key = in.Item
-	}
-	pk, _ := json.Marshal(key["pk"])
-	sk, _ := json.Marshal(key["sk"])
-	return in.TableName + string(pk) + string(sk)
-}
-
-// hasDynamoConflict checks the conditional expressions exercised by management mutations.
-func hasDynamoConflict(in *dynamoRequest, old map[string]any) bool {
-	if in.ConditionExpression == "attribute_not_exists(pk)" {
-		return old != nil
-	}
-	for _, token := range []string{":expected", ":policy"} {
-		if expected := in.ExpressionAttributeValues[token]; expected != nil {
-			return old == nil || !reflect.DeepEqual(old["revision"], expected)
-		}
-	}
-	return false
-}
-
-// managementDynamo runs a DynamoDB JSON transport fixture with conditional writes and partition queries.
-func managementDynamo(t *testing.T) *dynamodb.Client {
-	t.Helper()
-	var mu sync.Mutex
-	items := map[string]map[string]any{}
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		var in dynamoRequest
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			t.Error(err)
-			w.WriteHeader(400)
-			return
-		}
-		w.Header().Set("Content-Type", "application/x-amz-json-1.0")
-		operation := strings.TrimPrefix(r.Header.Get("X-Amz-Target"), "DynamoDB_20120810.")
-		id := dynamoKey(&in)
-		switch operation {
-		case "PutItem", "DeleteItem":
-			if hasDynamoConflict(&in, items[id]) {
-				w.WriteHeader(400)
-				_, _ = io.WriteString(w, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException"}`)
-				return
-			}
-			if operation == "PutItem" {
-				items[id] = in.Item
-			} else {
-				delete(items, id)
-			}
-			_, _ = io.WriteString(w, `{}`)
-		case "TransactWriteItems":
-			for _, write := range in.TransactItems {
-				for _, part := range []*dynamoRequest{write.Put, write.Delete, write.ConditionCheck} {
-					if part != nil && hasDynamoConflict(part, items[dynamoKey(part)]) {
-						w.WriteHeader(400)
-						_, _ = io.WriteString(w, `{"__type":"com.amazonaws.dynamodb.v20120810#TransactionCanceledException","CancellationReasons":[{"Code":"ConditionalCheckFailed"}]}`)
-						return
-					}
-				}
-			}
-			for _, write := range in.TransactItems {
-				if write.Put != nil {
-					items[dynamoKey(write.Put)] = write.Put.Item
-				}
-				if write.Delete != nil {
-					delete(items, dynamoKey(write.Delete))
-				}
-			}
-			_, _ = io.WriteString(w, `{}`)
-		case "GetItem":
-			_ = json.NewEncoder(w).Encode(map[string]any{"Item": items[id]})
-		case "BatchGetItem":
-			responses := map[string][]map[string]any{}
-			for table, request := range in.RequestItems {
-				responses[table] = []map[string]any{}
-				for _, key := range request.Keys {
-					if item := items[dynamoKey(&dynamoRequest{TableName: table, Key: key})]; item != nil {
-						responses[table] = append(responses[table], item)
-					}
-				}
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"Responses": responses})
-		case "Query":
-			found := []map[string]any{}
-			for id, item := range items {
-				if strings.HasPrefix(id, in.TableName+"{") && reflect.DeepEqual(item["pk"], in.ExpressionAttributeValues[":pk"]) {
-					found = append(found, item)
-				}
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"Items": found})
-		default:
-			t.Errorf("unexpected DynamoDB operation %s", operation)
-			w.WriteHeader(500)
-		}
-	}))
-	t.Cleanup(endpoint.Close)
-	return dynamodb.NewFromConfig(aws.Config{Region: "us-east-1", Credentials: credentials.NewStaticCredentialsProvider("local", "local", "")}, func(o *dynamodb.Options) { o.BaseEndpoint = aws.String(endpoint.URL) })
-}
 
 // newManagementServer builds a real Management service and HTTP router against the DynamoDB transport fixture.
 func newManagementServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := config.NewConfig()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authorizer := configuredAuthorizer(t, cfg)
-	client := managementDynamo(t)
+	cfg.Regional.AWSRegion = "us-east-1"
+	client := authztest.Dynamo(t)
 	if _, err := authz.PublishManagedPolicy(t.Context(), client, "policies", "read", `permit(principal, action in Seaplane::Action::"ReadOnly", resource);`); err != nil {
 		t.Fatal(err)
 	}
-	management, err := authz.NewManagement(client, authz.ManagementConfig{FormatVersion: 1, PolicyTable: "policies", GlobalTable: "global", RegionalTable: "regional", Accounts: map[string]authz.ManagementAccount{"999999999999": {WriterRegion: "us-east-1", AdministratorARNs: []string{"arn:aws:iam::999999999999:role/admin"}}}}, "us-east-1")
+	management, err := authz.NewService(client, authztest.Tables, "us-east-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := New(cfg, nil, authorizer, management, logger)
+	authztest.SeedAdmin(t, client, authztest.Tables, "999999999999")
+	srv, err := New(cfg, enrolledDB(t, logger, "999999999999"), management, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return srv
+}
+
+// enrolledDB returns a fake database in which the given accounts are enrolled.
+func enrolledDB(t *testing.T, logger *slog.Logger, accounts ...string) *seaplanedb.Client {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	if err := seaplanev1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	objects := make([]client.Object, 0, len(accounts))
+	for _, account := range accounts {
+		objects = append(objects, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "accounts", Name: account}})
+	}
+	return seaplanedb.NewClientFrom(fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build(), logger)
 }
 
 // managementHTTPRequest sends a gateway-authenticated request through the complete API middleware stack.
@@ -192,7 +101,7 @@ func TestManagementRoutes(t *testing.T) {
 	if err := json.Unmarshal(listed.Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
-	if list.Kind != "PolicyList" || list.Total != 2 || len(list.Items) != 2 {
+	if list.Kind != "PolicyList" || list.Total != 3 || len(list.Items) != 3 {
 		t.Fatalf("bad list: %s", listed.Body)
 	}
 	kinds := map[string]bool{}

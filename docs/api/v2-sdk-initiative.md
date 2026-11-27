@@ -125,12 +125,17 @@ The v2 SDK only needs to cover the Seaplane equivalents.
 | ------------------------- | -------------------------- | -------------------------------------------------------------------- | --------- |
 | ClustersMgmt (clusters)   | `/api/clusters_mgmt`       | **Cluster** CRD                                                      | Immediate |
 | ClustersMgmt (node pools) | `/api/clusters_mgmt`       | **NodePool** CRD                                                     | Immediate |
-| AccountsMgmt              | `/api/accounts_mgmt`       | Authz: accounts, policies, attachments (see [authorization design](../authz/design.md)) | Future    |
-| Authorizations            | `/api/authorizations`      | Authz: check endpoint (see [authorization design](../authz/design.md))                  | Future    |
+| AccountsMgmt              | `/api/accounts_mgmt`       | Account enrollment and policy/attachment management | SDK support deferred |
 | AccessTransparency        | `/api/access_transparency` | TBD — likely needed - SRE flows                                      | Future    |
 | ServiceLogs               | `/api/service_logs`        | Per-cluster logs — mechanism TBD                                     | Future    |
 
-The v2 SDK architecture must accommodate adding new resource types (authz, logs, etc.) as the Platform API grows, but the initial implementation covers only Cluster and NodePool.
+The v2 SDK architecture must accommodate additional API clients (authorization management, logs, etc.), but the initial implementation covers only Cluster and NodePool.
+
+The API already implements [account enrollment](../authz/README.md#enrollment-and-first-grants)
+and [policy/attachment management](../authz/management.md). SDK support for those
+endpoints is separate from resource authorization, which requires enrollment and
+stored Cedar grants for every resource caller. SigV4 authentication alone grants
+no resource permissions.
 
 ## V2 SDK Design
 
@@ -245,7 +250,7 @@ Because the generated core already produces the typed `Spec`/`Status` models fro
 
 ### Out of Scope
 
-- **Tenancy and authorization** — account linking, policy CRUD, attachment CRUD, and the authorization check surface (see [authorization design](../authz/design.md)) are deferred to a future iteration. This first iteration covers authentication (AWS SigV4) only, not authz.
+- **Authorization management clients**: SDK methods for account enrollment, policy CRUD, and attachment CRUD are deferred. These endpoints already exist in the API; resource authorization applies to SDK requests regardless of management-client support.
 - CI/prow integration (manual testing is sufficient)
 - Non-HCP cluster types (classic ROSA)
 - Full OCM API surface coverage (only cluster + node pool lifecycle)
@@ -314,7 +319,7 @@ Set up the `clientset/` module with:
 - AWS signing region (required; must match the region of the Platform API endpoint, e.g. `us-east-1`)
 - AWS signing service set to `execute-api` (the Platform API is fronted by API Gateway)
 - `X-Amz-Account-Id` header (required on every request; the AWS account ID of the calling principal)
-- `X-Amz-Caller-Arn` header (optional; the ARN of the IAM role or user making the request, passed when available for audit/authorization)
+- `X-Amz-Caller-Arn` header (optional in SDK configuration). The API requires both caller ARN and account ID; API Gateway supplies the authoritative values from the authenticated identity.
 - Transport wrapper stack (SigV4 signing, retry, logging)
 - Basic HTTP round-tripper that talks to the Seaplane Platform API
 
@@ -379,7 +384,7 @@ The rosa CLI supports **both** SDKs side by side — v1 (`ocm-sdk-go`) remains t
 
 1. **Generation approach**: CRD-types-first. Drop the proprietary OCM metamodel DSL. Generate the v2 SDK directly from the CRD type definitions using `client-gen` (standard Kubernetes tooling) plus a custom `bridge-gen` for platform-specific extensions (watch suppression, `WaitUntil` polling). This avoids the OpenAPI intermediary step and keeps generation aligned with the operator's type definitions as the single source of truth.
 2. **Auth model**: AWS SigV4 (IAM auth), not OCM SSO tokens. The Seaplane API authenticates all requests via AWS IAM credentials.
-3. **Initial surface**: Cluster + NodePool only. Tenancy and authz (account linking, policies, attachments, authorization check) are deferred to a future iteration, along with access transparency, service logs, etc.
+3. **Initial surface**: Cluster + NodePool only. SDK clients for existing account-enrollment and policy/attachment APIs are deferred, along with access transparency, service logs, etc.
 4. **Interface style**: Kubernetes-style, modeled on `client-go` — typed resource structs (`ObjectMeta`/`Spec`/`Status`) constructed as struct literals, and a typed client exposing `Create`/`Get`/`List`/`Update`/`Patch`/`Delete` verbs. No fluent builders.
 
 ## Typed vs. Dynamic Client
