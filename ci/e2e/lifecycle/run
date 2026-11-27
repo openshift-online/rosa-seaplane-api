@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# E2E suite entry point: `lifecycle`
+#
+# The core rosa-seaplane acceptance suite: provisions its own hosted cluster
+# through the platform API (Go clientset), using the rosa CLI for the
+# customer-account AWS prerequisites, and asserts the live-cluster behaviours
+# (DNS, managed ingress + DNS01 cert, KAS reachability, lifecycle alert
+# silencing, the availability metric, nodepool scaling) before tearing it down.
+#
+# Standard contract for the rosa-seaplane parallel e2e runner:
+#   - cwd may be anywhere; the repository root is resolved via git
+#   - inputs come from the environment (e2e.env / E2E_SUITE_ENV), e.g.:
+#       BASE_URL, CUSTOMER_AWS_PROFILE, OCP_IMAGE,
+#       ROSA_REPO_URL / ROSA_REPO_BRANCH (pin registry supplies these;
+#       Makefile defaults apply otherwise)
+#   - exit 0 = pass, non-zero = fail; junit/logs go to $ARTIFACT_DIR
+#     (TEST_OUTPUT_DIR honors ARTIFACT_DIR)
+#   - must be isolated: no reliance on other suites, no ordering assumptions
+#   - resources created here (cluster, operator roles, VPC) are named after the
+#     inherited CLUSTER_PREFIX and cleaned up by the suite's own teardown spec
+#
+# Silencing note: E2E_ALERTMANAGER_URL / ALERTMANAGER_URL / CLUSTER_PREFIX are
+# exported by the rosa-seaplane pre-suite hook (before-suites.sh) and inherited
+# here - this script must NOT reset them, or the lifecycle-silence specs skip.
+#
+# Requires: BASE_URL, CUSTOMER_AWS_PROFILE
+set -euo pipefail
+
+# Resolve the repository root via git (robust to any cwd/layout).
+REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+[[ -f Makefile ]] || { echo "ERROR: cannot find Makefile at $(pwd)" >&2; exit 1; }
+
+# Fail fast on missing required inputs.
+: "${BASE_URL:?BASE_URL is required}"
+export SEAPLANE_URL="${SEAPLANE_URL:-${BASE_URL}}"
+
+if [[ -z "${CUSTOMER_AWS_PROFILE:-}" ]]; then
+  echo "ERROR: CUSTOMER_AWS_PROFILE not set - lifecycle needs customer credentials" >&2
+  exit 1
+fi
+export AWS_PROFILE="${CUSTOMER_AWS_PROFILE}"
+
+# JUnit reports must land outside the temporary rosa clone this script builds:
+# resolve the output directory to an ABSOLUTE path (default when unset, and
+# caller-provided relative paths too).
+if [[ -z "${TEST_OUTPUT_DIR:-}" && -z "${ARTIFACT_DIR:-}" ]]; then
+  export TEST_OUTPUT_DIR="$(mktemp -d)"
+  echo "TEST_OUTPUT_DIR defaulting to ${TEST_OUTPUT_DIR}"
+else
+  for _dir_var in ARTIFACT_DIR TEST_OUTPUT_DIR; do
+    if [[ -n "${!_dir_var:-}" ]]; then
+      _dir="${!_dir_var}"
+      if [[ "${_dir}" != /* ]]; then
+        mkdir -p "${_dir}"
+        _dir="$(cd "${_dir}" && pwd)"
+        export "${_dir_var}=${_dir}"
+      fi
+    fi
+  done
+fi
+
+# Build the rosa CLI from the pinned ref (clone + build here so the suite just
+# consumes ROSA_CLI_BIN). ROSA_REPO_URL/ROSA_REPO_BRANCH come from the pin
+# registry under CI; Makefile-equivalent defaults apply otherwise.
+ROSA_REPO_URL="${ROSA_REPO_URL:-https://github.com/openshift/rosa}"
+ROSA_REPO_BRANCH="${ROSA_REPO_BRANCH:-seaplane-v2}"
+ROSA_TMPDIR="$(mktemp -d)"
+trap 'rm -rf "${ROSA_TMPDIR}"' EXIT
+echo "Building rosa CLI from ${ROSA_REPO_URL}@${ROSA_REPO_BRANCH}..."
+git init -q "${ROSA_TMPDIR}"
+git -C "${ROSA_TMPDIR}" fetch -q --depth 1 "${ROSA_REPO_URL}" "${ROSA_REPO_BRANCH}"
+git -C "${ROSA_TMPDIR}" checkout -q FETCH_HEAD
+( cd "${ROSA_TMPDIR}" && GOTOOLCHAIN=auto make rosa )
+export ROSA_CLI_BIN="${ROSA_TMPDIR}/rosa"
+[[ -x "${ROSA_CLI_BIN}" ]] || { echo "ERROR: rosa build did not produce ${ROSA_CLI_BIN}" >&2; exit 1; }
+
+# Not exec'd: this shell owns the EXIT trap that removes the rosa clone, so it
+# must stay alive to run cleanup. set -e preserves make's exit status.
+make test-e2e-lifecycle

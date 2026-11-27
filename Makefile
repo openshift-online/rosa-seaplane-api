@@ -1,8 +1,8 @@
 .PHONY: help build test test-unit test-integration lint clean \
 	build-seaplane-db build-operator build-api build-api-codegen \
 	test-seaplane-db test-operator test-operator-int test-api test-api-int test-api-codegen test-clientset \
-	test-e2e test-e2e-api test-e2e-authz test-e2e-cli test-e2e-platform-monitoring test-e2e-zoa test-e2e-sdk test-e2e-rosa-cli \
-	test-e2e test-e2e-api test-e2e-cli test-e2e-platform-monitoring test-e2e-sdk \
+	test-e2e test-e2e-api test-e2e-authz test-e2e-platform-monitoring test-e2e-lifecycle test-e2e-rosa-cli \
+	test-e2e test-e2e-api test-e2e-platform-monitoring test-e2e-lifecycle \
 	fmt vet verify verify-mod deps mod-tidy \
 	manifests generate generate-deepcopy generate-clientset verify-clientset setup-envtest \
 	codegen-passthrough codegen-registry codegen-verify codegen verify-codegen \
@@ -114,8 +114,7 @@ help:
 	@echo "  test-api-int         API handler integration tests (build tag: integration)"
 	@echo "  test-e2e-api         E2E API"
 	@echo "  test-e2e-authz       Local HTTP authorization (Podman PostgreSQL 16, no AWS credentials)"
-	@echo "  test-e2e-cli         E2E CLI"
-	@echo "  test-e2e-sdk         E2E SDK (Go clientset lifecycle)"
+	@echo "  test-e2e-lifecycle   E2E lifecycle (core: clientset HCP provision + rosa CLI infra)"
 	@echo "  test-e2e-rosa-cli    E2E rosa CLI (clones rosa repo, builds CLI, runs seaplane tests)"
 	@echo "                       Supports ROSA_FOCUS, ROSA_SKIP, ROSA_LABEL_FILTER"
 	@echo "  test-e2e-platform-monitoring  E2E monitoring"
@@ -222,15 +221,6 @@ test-e2e-api: $(GINKGO)
 		--junit-report=junit-api.xml --output-dir=$(TEST_OUTPUT_DIR) \
 		./test/e2e-api
 
-test-e2e-cli: $(GINKGO)
-	E2E_BASE_URL="$${BASE_URL}" E2E_ACCOUNT_ID="$${E2E_ACCOUNT_ID}" \
-	E2E_RHOBS_API_URL="$${RHOBS_API_URL}" \
-	E2E_ALERTMANAGER_URL="$${ALERTMANAGER_URL}" \
-	ROSACTL_BIN="$${ROSACTL_BIN}" AWS_REGION="$${AWS_REGION}" \
-	OCP_IMAGE="$${OCP_IMAGE}" \
-	$(GINKGO) -vv --junit-report=junit-cli.xml \
-		$(if $(E2E_LABEL_FILTER),--label-filter="$(E2E_LABEL_FILTER)") \
-		--output-dir=$(TEST_OUTPUT_DIR) ./test/e2e-cli
 
 test-e2e-platform-monitoring: $(GINKGO)
 	E2E_BASE_URL="$${BASE_URL}" E2E_ACCOUNT_ID="$${E2E_ACCOUNT_ID}" \
@@ -238,17 +228,19 @@ test-e2e-platform-monitoring: $(GINKGO)
 	$(GINKGO) -vv --junit-report=junit-platform-monitoring.xml \
 		--output-dir=$(TEST_OUTPUT_DIR) ./test/e2e-platform-monitoring
 
-test-e2e-sdk: $(GINKGO)
-	E2E_BASE_URL="$${BASE_URL}" \
+test-e2e-lifecycle: $(GINKGO)
+	E2E_BASE_URL="$${E2E_BASE_URL:-$${BASE_URL}}" \
 	E2E_ACCOUNT_ID="$${E2E_ACCOUNT_ID}" \
 	E2E_CUSTOMER_ACCOUNT_ID="$${E2E_CUSTOMER_ACCOUNT_ID}" \
 	CUSTOMER_AWS_PROFILE="$${CUSTOMER_AWS_PROFILE}" \
 	RC_AWS_PROFILE="$${RC_AWS_PROFILE}" \
 	AWS_REGION="$${AWS_REGION}" \
-	ROSACTL_BIN="$${ROSACTL_BIN}" \
+	ROSA_CLI_BIN="$${ROSA_CLI_BIN}" \
 	OCP_IMAGE="$${OCP_IMAGE}" \
-	$(GINKGO) -vv --timeout=3h --junit-report=junit-sdk.xml \
-		--output-dir=$(TEST_OUTPUT_DIR) ./test/e2e-sdk
+	E2E_ALERTMANAGER_URL="$${E2E_ALERTMANAGER_URL:-$${ALERTMANAGER_URL}}" \
+	E2E_RHOBS_API_URL="$${E2E_RHOBS_API_URL:-$${RHOBS_API_URL}}" \
+	$(GINKGO) -vv --timeout=3h --junit-report=junit-lifecycle.xml \
+		--output-dir=$(TEST_OUTPUT_DIR) ./test/e2e-lifecycle
 
 test-e2e-rosa-cli: $(GINKGO)
 	@ROSA_TMPDIR=$$(mktemp -d) && \
