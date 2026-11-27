@@ -304,6 +304,34 @@ func (h *ClusterHandler) decodeClusterCreateRequest(accountID string, body []byt
 		return nil, &apiErr
 	}
 
+	// Validate image configuration if provided
+	if req.Spec.HostedCluster.Configuration != nil && req.Spec.HostedCluster.Configuration.Image != nil {
+		if err := validation.ValidateImageConfiguration(req.Spec.HostedCluster.Configuration.Image); err != nil {
+			h.logger.Error("invalid image configuration", "error", err, "account_id", accountID, "cluster_name", req.Name)
+			validationErr := ErrClusterValidation.WithErrors(validation.ValidationErrors{
+				&validation.ValidationError{
+					Field:  "spec.hostedCluster.configuration.image",
+					Reason: err.Error(),
+				},
+			})
+			return nil, &validationErr
+		}
+	}
+
+	// Validate registry additional trusted CA if provided
+	if len(req.Spec.RegistryAdditionalTrustedCA) > 0 {
+		if err := validation.ValidateRegistryAdditionalTrustedCA(req.Spec.RegistryAdditionalTrustedCA); err != nil {
+			h.logger.Error("invalid registry additional trusted CA", "error", err, "account_id", accountID, "cluster_name", req.Name)
+			validationErr := ErrClusterValidation.WithErrors(validation.ValidationErrors{
+				&validation.ValidationError{
+					Field:  "spec.registryAdditionalTrustedCA",
+					Reason: err.Error(),
+				},
+			})
+			return nil, &validationErr
+		}
+	}
+
 	return &req, nil
 }
 
@@ -416,6 +444,34 @@ func (h *ClusterHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if err := api.Write(w, http.StatusOK, seaplanedb.InternalToPublicCluster(cr)); err != nil {
 		h.logger.Error("failed to write response", "error", err)
 	}
+}
+
+// validateRegistryConfigAfterMerge validates image configuration and registry CA after spec merge.
+func (h *ClusterHandler) validateRegistryConfigAfterMerge(current *seaplanev1alpha1.Cluster, validationErr *validation.ValidationErrors) error {
+	publicCluster := seaplanedb.InternalToPublicCluster(current)
+	if publicCluster.Spec.HostedCluster.Configuration != nil && publicCluster.Spec.HostedCluster.Configuration.Image != nil {
+		if err := validation.ValidateImageConfiguration(publicCluster.Spec.HostedCluster.Configuration.Image); err != nil {
+			*validationErr = validation.ValidationErrors{
+				&validation.ValidationError{
+					Field:  "spec.hostedCluster.configuration.image",
+					Reason: err.Error(),
+				},
+			}
+			return fmt.Errorf("invalid image configuration")
+		}
+	}
+	if len(publicCluster.Spec.RegistryAdditionalTrustedCA) > 0 {
+		if err := validation.ValidateRegistryAdditionalTrustedCA(publicCluster.Spec.RegistryAdditionalTrustedCA); err != nil {
+			*validationErr = validation.ValidationErrors{
+				&validation.ValidationError{
+					Field:  "spec.registryAdditionalTrustedCA",
+					Reason: err.Error(),
+				},
+			}
+			return fmt.Errorf("invalid registry additional trusted CA")
+		}
+	}
+	return nil
 }
 
 // Update handles PUT/PATCH /api/v0/clusters/{id}
@@ -549,6 +605,12 @@ func (h *ClusterHandler) updateOnce(w http.ResponseWriter, r *http.Request, clus
 			writeAPIError(w, ErrClusterUpdateFailed, h.logger)
 			return nil, errResponded
 		}
+	}
+
+	var registryErrors validation.ValidationErrors
+	if err := h.validateRegistryConfigAfterMerge(candidate, &registryErrors); err != nil {
+		writeAPIError(w, ErrClusterValidation.WithErrors(registryErrors), h.logger)
+		return nil, errResponded
 	}
 
 	// Preserve queue uniqueness checks without writing before authorization.

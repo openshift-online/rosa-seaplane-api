@@ -1,7 +1,10 @@
 package render
 
 import (
+	"encoding/json"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
@@ -806,5 +809,132 @@ func TestHostedClusterIgnoresPassthroughSystemTags(t *testing.T) {
 	}
 	if got["kubernetes.io/cluster/abc12345"] != "owned" {
 		t.Errorf("cluster ownership tag value = %q, want owned", got["kubernetes.io/cluster/abc12345"])
+	}
+}
+
+func TestRegistryAdditionalCANormalizesHostnames(t *testing.T) {
+	caCerts := map[string]string{
+		"registry.example.com":      "cert1",
+		"registry.example.com:5000": "cert2",
+		"localhost:8080":            "cert3",
+	}
+
+	resource := registryAdditionalCA("test-cluster-id", "test-namespace", caCerts)
+
+	cm, ok := resource.Object.(*corev1.ConfigMap)
+	if !ok {
+		t.Fatalf("expected *corev1.ConfigMap, got %T", resource.Object)
+	}
+
+	expectedKeys := []string{
+		"registry.example.com",
+		"registry.example.com..5000",
+		"localhost..8080",
+	}
+
+	if len(cm.Data) != len(expectedKeys) {
+		t.Fatalf("expected %d keys in ConfigMap data, got %d", len(expectedKeys), len(cm.Data))
+	}
+
+	for _, key := range expectedKeys {
+		if _, ok := cm.Data[key]; !ok {
+			t.Errorf("expected ConfigMap data to contain key %q, but it was missing", key)
+		}
+	}
+
+	// Verify original keys are NOT present (they should be normalized)
+	for originalKey := range caCerts {
+		if strings.Contains(originalKey, ":") {
+			if _, ok := cm.Data[originalKey]; ok {
+				t.Errorf("ConfigMap data should not contain unnormalized key %q", originalKey)
+			}
+		}
+	}
+}
+
+func TestClusterResourcesPreservesRegistryConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mirror ECRMirrorConfig
+	}{
+		{name: "without ECR mirror"},
+		{
+			name: "with ECR mirror",
+			mirror: ECRMirrorConfig{
+				RegistryAccount: "123456789012",
+				RegistryRegion:  "us-east-1",
+				Repository:      "example-org/ocp-mirror",
+				Sources:         []string{"quay.io/openshift-release-dev/ocp-release"},
+				BaseSecretName:  "base-pull-secret",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, imageJSON := range []string{
+				`{}`,
+				`{"registrySources":{"allowedRegistries":["quay.io","registry.redhat.io"],"insecureRegistries":["internal.example.com:5000"]}}`,
+				`{"registrySources":{"blockedRegistries":["blocked.example.com"]}}`,
+				`{"allowedRegistriesForImport":[{"domainName":"import.example.com:5000","insecure":true}]}`,
+			} {
+				t.Run(imageJSON, func(t *testing.T) {
+					cluster := testCluster()
+					if err := json.Unmarshal([]byte(`{"image":`+imageJSON+`}`), &cluster.Spec.HostedCluster.Configuration); err != nil {
+						t.Fatal(err)
+					}
+					cluster.Spec.RegistryAdditionalTrustedCA = map[string]string{"registry.example.com:5000": "certificate"}
+					resources, err := ClusterResources(cluster, false, "example.com", "", tc.mirror)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var hc *hypershiftv1beta1.HostedCluster
+					var cm *corev1.ConfigMap
+					var pullSecret *ExternalSecret
+					for _, resource := range resources {
+						if resource.Resource == "hostedclusters" {
+							hc = resource.Object.(*hypershiftv1beta1.HostedCluster)
+						}
+						if resource.Resource == "configmaps" && resource.Name == registryAdditionalCAName {
+							cm = resource.Object.(*corev1.ConfigMap)
+						}
+						if resource.Resource == "externalsecrets" && resource.Name == "pull-secret" {
+							pullSecret = resource.Object.(*ExternalSecret)
+						}
+					}
+					if hc == nil || hc.Spec.Configuration == nil || hc.Spec.Configuration.Image == nil {
+						t.Fatal("missing rendered image configuration")
+					}
+					var expected configv1.ImageSpec
+					if err := json.Unmarshal([]byte(imageJSON), &expected); err != nil {
+						t.Fatal(err)
+					}
+					expected.AdditionalTrustedCA = configv1.ConfigMapNameReference{Name: registryAdditionalCAName}
+					if !reflect.DeepEqual(*hc.Spec.Configuration.Image, expected) {
+						t.Errorf("rendered image = %#v, want %#v", *hc.Spec.Configuration.Image, expected)
+					}
+					if cm == nil || cm.Data["registry.example.com..5000"] != "certificate" {
+						t.Fatal("missing registry CA ConfigMap or normalized certificate")
+					}
+					if cm.Labels["seaplane.io/cluster-id"] != string(cluster.UID) {
+						t.Errorf("unexpected registry CA ownership labels: %v", cm.Labels)
+					}
+					if !reflect.DeepEqual(hc.Spec.ImageContentSources, ecrImageContentSources(tc.mirror)) {
+						t.Errorf("rendered image content sources = %#v", hc.Spec.ImageContentSources)
+					}
+					wantTarget := "pull-secret"
+					if tc.mirror.Enabled() {
+						wantTarget = tc.mirror.BaseSecretName
+					}
+					if pullSecret == nil || pullSecret.Spec.Target.Name != wantTarget {
+						t.Errorf("expected pull-secret ExternalSecret target %q, got %#v", wantTarget, pullSecret)
+					}
+					if hc.Spec.PullSecret.Name != "pull-secret" {
+						t.Errorf("HostedCluster pull secret = %q, want pull-secret", hc.Spec.PullSecret.Name)
+					}
+					if hc.Spec.Configuration.APIServer == nil {
+						t.Error("missing platform API server configuration")
+					}
+				})
+			}
+		})
 	}
 }

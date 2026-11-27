@@ -43,8 +43,6 @@ type ServiceSetFieldsHostedCluster struct {
 	Files string `json:"files,omitempty"`
 	// Fips is service-set (platform-managed, hidden from API)
 	Fips bool `json:"fips,omitempty"`
-	// Image is service-set (platform-managed, hidden from API)
-	Image string `json:"image,omitempty"`
 	// ImageContentSources is service-set (platform-managed, hidden from API)
 	ImageContentSources []hypershiftv1beta1.ImageContentSource `json:"imageContentSources,omitempty"`
 	// InfraID is service-set (platform-managed, hidden from API)
@@ -125,8 +123,6 @@ type ServiceSetFields struct {
 	HostedCluster *ServiceSetFieldsHostedCluster `json:"hostedCluster,omitempty"`
 	// HostedClusterName is service-set (platform-managed, hidden from API)
 	HostedClusterName string `json:"hostedClusterName,omitempty"`
-	// Image is service-set (platform-managed, hidden from API)
-	Image *v1alpha1.ImageConfiguration `json:"image,omitempty"`
 	// InternalPoolID is service-set (platform-managed, hidden from API)
 	InternalPoolID string `json:"internalPoolId,omitempty"`
 	// Iops is service-set (platform-managed, hidden from API)
